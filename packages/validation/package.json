@@ -1,0 +1,16 @@
+{
+  "name": "@aniresq/validation",
+  "version": "1.0.0",
+  "private": true,
+  "main": "./src/index.js",
+  "scripts": {
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "zod": "^3.23.8",
+    "@aniresq/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  }
+}

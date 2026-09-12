@@ -1,0 +1,17 @@
+{
+  "name": "aniresq",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "clean": "turbo clean",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "prettier": "^3.9.6",
+    "turbo": "^2.1.0"
+  },
+  "packageManager": "pnpm@9.9.0"
+}

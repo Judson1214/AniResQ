@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function getUserRole() {
+      return isAuthenticated() ? getUserData().role : null;
+    }
+    
+    function hasRole(role) {
+      return getUserRole() == role;
+    }
+    
+    function hasAnyRole(roles) {
+      return getUserRole() in roles;
+    }
+    
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || hasRole('ADMIN');
+      allow delete: if hasRole('ADMIN');
+    }
+    
+    match /rescueRequests/{requestId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if hasAnyRole(['VOLUNTEER', 'NGO', 'ADMIN']) || isOwner(resource.data.reporterId);
+      
+      match /timeline/{timelineId} {
+        allow read: if true;
+        allow create: if isAuthenticated();
+      }
+    }
+    
+    match /animals/{animalId} {
+      allow read: if true;
+      allow create: if hasAnyRole(['SHELTER', 'NGO', 'ADMIN']);
+      allow update: if hasAnyRole(['SHELTER', 'NGO', 'VET', 'ADMIN']);
+    }
+    
+    match /adoptionApplications/{applicationId} {
+      allow read: if isOwner(resource.data.applicantId) || hasAnyRole(['SHELTER', 'NGO', 'ADMIN']);
+      allow create: if isAuthenticated();
+      allow update: if hasAnyRole(['SHELTER', 'NGO', 'ADMIN']);
+    }
+    
+    match /lostFoundPosts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isOwner(resource.data.reporterId) || hasRole('ADMIN');
+    }
+    
+    match /notifications/{notificationId} {
+      allow read, update: if isOwner(resource.data.userId);
+      allow create: if isAuthenticated();
+    }
+    
+    match /hostelListings/{hostelId} {
+      allow read: if true;
+      allow create, update: if isAuthenticated();
+    }
+  }
+}
