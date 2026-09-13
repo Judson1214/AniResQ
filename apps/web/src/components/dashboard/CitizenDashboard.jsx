@@ -1,7 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { HeartHandshake, MapPin, Megaphone, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
-
+import { Button } from "@/components/ui/button";
 const CitizenDashboard = () => {
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto py-4">

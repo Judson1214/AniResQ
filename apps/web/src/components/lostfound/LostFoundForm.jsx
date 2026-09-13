@@ -69,8 +69,20 @@ const LostFoundForm = ({ onSuccess }) => {
   });
 
   React.useEffect(() => {
-    if (geoPosition) setPosition(geoPosition);
-  }, [geoPosition]);
+    if (geoPosition) {
+      setPosition(geoPosition);
+      // Auto-fill address from GPS coordinates
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${geoPosition.lat}&lon=${geoPosition.lng}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.display_name) {
+            const shortAddress = data.display_name.split(',').slice(0, 3).join(',');
+            setValue("lastSeenAddress", shortAddress);
+          }
+        })
+        .catch(err => console.error("Reverse geocoding failed", err));
+    }
+  }, [geoPosition, setValue]);
 
   const onSubmit = async (data) => {
     if (!user) {
@@ -96,7 +108,7 @@ const LostFoundForm = ({ onSuccess }) => {
         lastSeenAddress: data.lastSeenAddress,
         lastSeenDate: data.date || new Date().toISOString(),
         // Simplified
-        reporterId: user.uid
+        reporterId: user.id || user.uid
       }, photos.slice(0, 3));
       toast({ title: "Post Created Successfully" });
       if (onSuccess) onSuccess();

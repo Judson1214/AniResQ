@@ -23,7 +23,7 @@ const signUp = async (email, password, displayName, role, phone) => {
   // Create profile via Python backend
   await api.post("/users", newUser);
   
-  return { ...newUser, avatarUrl: "", isVerified: false, createdAt: new Date() };
+  return { ...newUser, id: user.uid, avatarUrl: "", isVerified: false, createdAt: new Date() };
 };
 const signIn = async (email, password) => {
   const userCredential = await signInWithEmailAndPassword(auth, email, password);

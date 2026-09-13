@@ -24,7 +24,7 @@ const useAuth = () => {
         if (firebaseUser) {
           const profile = await getUserProfile(firebaseUser.uid);
           if (profile) {
-            setUser(profile);
+            setUser({ ...profile, uid: firebaseUser.uid });
           } else {
             logout();
           }

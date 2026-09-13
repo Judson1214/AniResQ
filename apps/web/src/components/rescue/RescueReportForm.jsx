@@ -79,8 +79,20 @@ const RescueReportForm = () => {
   });
 
   useEffect(() => {
-    if (geoPosition) setPosition(geoPosition);
-  }, [geoPosition]);
+    if (geoPosition) {
+      setPosition(geoPosition);
+      // Auto-fill address from GPS coordinates
+      fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${geoPosition.lat}&lon=${geoPosition.lng}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.display_name) {
+            const shortAddress = data.display_name.split(',').slice(0, 3).join(',');
+            setValue("address", shortAddress);
+          }
+        })
+        .catch(err => console.error("Reverse geocoding failed", err));
+    }
+  }, [geoPosition, setValue]);
 
   // Attempt to auto-locate on mount for emergencies
   useEffect(() => {

@@ -15,6 +15,10 @@ const uploadFile = async (path, file, onProgress) => {
         const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
         resolve(downloadURL);
       }
+    );
+  });
+};
+
 const compressImage = (file, maxWidth = 800) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

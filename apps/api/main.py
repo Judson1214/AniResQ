@@ -21,6 +21,9 @@ app.include_router(lostfound.router)
 app.include_router(users.router)
 app.include_router(notifications.router)
 
+@app.get("/")
+async def root():
+    return {"message": "Welcome to AniResQ API", "docs": "/docs"}
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import logging
