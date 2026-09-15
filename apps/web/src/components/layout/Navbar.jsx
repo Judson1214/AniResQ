@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 const Navbar = () => {
   const { user, isAuthenticated, signOut } = useAuth();
   const location = useLocation();
@@ -84,12 +85,9 @@ const Navbar = () => {
 
         <div className="flex items-center gap-4">
           {isAuthenticated ? <>
-              <Button variant="ghost" size="icon" className="relative hidden md:flex">
-                <Bell className="w-5 h-5 text-gray-600" />
-                <Badge className="absolute top-0 right-0 h-4 w-4 p-0 flex items-center justify-center bg-red-500 text-[10px]">
-                  3
-                </Badge>
-              </Button>
+              <div className="hidden md:flex">
+                <NotificationBell buttonClassName="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors" iconClassName="w-5 h-5" />
+              </div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild className="hidden md:flex">
@@ -122,6 +120,10 @@ const Navbar = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              <Button onClick={signOut} variant="outline" className="hidden md:flex text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700">
+                Sign Out
+              </Button>
             </> : <div className="hidden md:flex items-center gap-2">
               <Button variant="ghost" asChild>
                 <Link to="/login">Sign In</Link>

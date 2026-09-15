@@ -26,7 +26,21 @@ const useAuth = () => {
           if (profile) {
             setUser({ ...profile, uid: firebaseUser.uid });
           } else {
-            logout();
+            // Auto-create missing profile (e.g. if previous registration failed halfway)
+            const { default: api } = await import("@/lib/api");
+            const newProfile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName || "Unknown User",
+              role: "CITIZEN"
+            };
+            try {
+              await api.post("/users", newProfile);
+              setUser({ ...newProfile, id: firebaseUser.uid, avatarUrl: "", isVerified: false });
+            } catch (e) {
+              console.error("Failed to auto-create missing profile:", e);
+              logout();
+            }
           }
         } else {
           logout();

@@ -17,11 +17,12 @@ import {
   Activity,
   MapPin,
   LifeBuoy,
-  UserCircle
+  UserCircle,
+  LogOut
 } from "lucide-react";
 
 const Sidebar = () => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const location = useLocation();
 
   // Fallback to Admin role for the demo if not logged in
@@ -115,7 +116,7 @@ const Sidebar = () => {
       </div>
       
       {/* Bottom Profile / Logout hook area */}
-      <div className="p-6 border-t border-slate-800 shrink-0">
+      <div className="p-6 border-t border-slate-800 shrink-0 flex flex-col gap-3">
         <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800 flex items-center gap-4 hover:bg-slate-800/50 cursor-pointer transition-colors">
            <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
              <UserCircle size={20} />
@@ -125,6 +126,13 @@ const Sidebar = () => {
              <p className="text-xs text-slate-500 truncate">{email}</p>
            </div>
         </div>
+        <button 
+          onClick={signOut}
+          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:text-red-300 transition-colors text-sm font-bold border border-red-500/20"
+        >
+          <LogOut size={16} />
+          Sign Out
+        </button>
       </div>
     </aside>
   );

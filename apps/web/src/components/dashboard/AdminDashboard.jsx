@@ -4,6 +4,7 @@ import { cn, formatDateTime } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useMemo } from "react";
+import { RescueMap } from "@/components/rescue/RescueMap";
 
 const AdminDashboard = () => {
   const { data: rescues, isLoading } = useQuery({
@@ -100,28 +101,8 @@ const AdminDashboard = () => {
               Live Fleet Tracking
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0 h-[450px] bg-[#06090F] relative">
-            {/* Map styling mock */}
-            <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'radial-gradient(#3b82f6 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
-            
-            {/* Mock Map Pins */}
-            <MapPinIndicator top="20%" left="30%" status="dispatched" label="Unit A-42" />
-            <MapPinIndicator top="50%" left="60%" status="pending" label="SOS-992" />
-            <MapPinIndicator top="70%" left="40%" status="resolved" label="Unit B-11" />
-            <MapPinIndicator top="30%" left="80%" status="dispatched" label="Unit C-09" />
-            
-            {/* Radar Sweep Effect */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] border border-emerald-500/20 rounded-full opacity-50" />
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] border border-emerald-500/30 rounded-full opacity-50" />
-            
-            <div className="absolute bottom-6 left-6 right-6 bg-[#131B2C]/90 backdrop-blur-md p-4 rounded-2xl border border-slate-700 shadow-2xl flex justify-between items-center">
-               <div className="flex gap-6">
-                 <div className="flex items-center gap-2 text-xs font-bold text-slate-300"><span className="w-3 h-3 rounded-full bg-[#3b82f6] shadow-[0_0_10px_rgba(59,130,246,0.6)]"></span> Dispatched</div>
-                 <div className="flex items-center gap-2 text-xs font-bold text-slate-300"><span className="w-3 h-3 rounded-full bg-[#ef4444] shadow-[0_0_10px_rgba(239,68,68,0.6)]"></span> Pending SOS</div>
-                 <div className="flex items-center gap-2 text-xs font-bold text-slate-300"><span className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.6)]"></span> Resolved</div>
-               </div>
-               <button className="text-xs font-black text-emerald-400 hover:text-emerald-300 uppercase tracking-wider">Expand Map &rarr;</button>
-            </div>
+          <CardContent className="p-0 h-[450px] relative">
+            <RescueMap rescues={rescues || []} />
           </CardContent>
         </Card>
 
@@ -184,24 +165,7 @@ function KpiCard({ title, value, trend, isPositive, icon }) {
   );
 }
 
-function MapPinIndicator({ top, left, status, label }) {
-  const colors = {
-    pending: "bg-[#ef4444] shadow-[0_0_15px_rgba(239,68,68,0.8)]",
-    dispatched: "bg-[#3b82f6] shadow-[0_0_15px_rgba(59,130,246,0.8)]",
-    resolved: "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)]"
-  };
 
-  return (
-    <div className="absolute flex flex-col items-center gap-2" style={{ top, left }}>
-      <div className="bg-[#131B2C] text-white text-[10px] font-bold px-3 py-1 rounded-lg border border-slate-700 shadow-xl">
-        {label}
-      </div>
-      <div className={cn("w-4 h-4 rounded-full border-2 border-white", colors[status])}>
-        {status === 'pending' && <div className="absolute inset-0 rounded-full animate-ping bg-inherit opacity-75" />}
-      </div>
-    </div>
-  );
-}
 
 function LogItem({ id, time, status, location }) {
   const statusColors = {

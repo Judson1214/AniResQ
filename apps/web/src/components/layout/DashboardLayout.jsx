@@ -1,10 +1,11 @@
 import { MainLayout } from "./MainLayout";
 import { Sidebar } from "./Sidebar";
-import { Bell, Search, Menu, UserCircle } from "lucide-react";
+import { Bell, Search, Menu, UserCircle, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const DashboardLayout = ({ children }) => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
 
   return (
     <div className="flex h-screen bg-[#06090F] overflow-hidden font-sans">
@@ -27,10 +28,7 @@ const DashboardLayout = ({ children }) => {
           </div>
           
           <div className="flex items-center gap-5">
-            <button className="relative text-slate-400 hover:text-white transition-colors">
-              <Bell size={22} />
-              <span className="absolute 0 top-0 right-0 w-2.5 h-2.5 bg-rose-500 border-2 border-[#0A0F1C] rounded-full"></span>
-            </button>
+            <NotificationBell buttonClassName="relative text-slate-400 hover:text-white transition-colors p-1" iconClassName="w-5 h-5" />
             <div className="h-8 w-px bg-slate-800 mx-1"></div>
             <div className="flex items-center gap-3 cursor-pointer group">
               <div className="text-right hidden sm:block">
@@ -45,6 +43,13 @@ const DashboardLayout = ({ children }) => {
                 </div>
               )}
             </div>
+            <button 
+              onClick={signOut}
+              className="ml-2 p-2 text-slate-400 hover:text-red-400 bg-slate-800/50 hover:bg-red-500/10 rounded-xl transition-colors border border-transparent hover:border-red-500/20"
+              title="Sign Out"
+            >
+              <LogOut size={20} />
+            </button>
           </div>
         </header>
 

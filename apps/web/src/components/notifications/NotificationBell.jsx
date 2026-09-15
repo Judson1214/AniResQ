@@ -3,7 +3,7 @@ import { Bell } from "lucide-react";
 import { useNotifications } from "@/hooks/useNotifications";
 import { NotificationPanel } from "./NotificationPanel";
 import { useAuth } from "@/hooks/useAuth";
-const NotificationBell = () => {
+const NotificationBell = ({ buttonClassName = "relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors", iconClassName = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { unreadCount } = useNotifications();
   const { isAuthenticated } = useAuth();
@@ -21,9 +21,9 @@ const NotificationBell = () => {
   return <div className="relative" ref={wrapperRef}>
       <button
     onClick={() => setIsOpen(!isOpen)}
-    className="relative p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-full transition-colors"
+    className={buttonClassName}
   >
-        <Bell size={20} />
+        <Bell size={20} className={iconClassName} />
         {unreadCount > 0 && <span className="absolute top-1 right-1 flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-red-500 rounded-full border-2 border-white">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>}

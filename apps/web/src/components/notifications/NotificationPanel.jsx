@@ -15,7 +15,7 @@ const NotificationPanel = () => {
       <div className="overflow-y-auto flex-1">
         {isLoading ? <div className="p-4 text-center text-gray-500 text-sm">Loading...</div> : notifications.length === 0 ? <div className="p-8 text-center text-gray-500">
             <Bell className="mx-auto h-8 w-8 text-gray-300 mb-2" />
-            <p className="text-sm">No new notifications</p>
+            <p className="text-sm">No notifications</p>
           </div> : <div className="divide-y">
             {notifications.map((notif) => <div
     key={notif.id}

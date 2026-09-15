@@ -30,7 +30,7 @@ def get_user_profile(uid: str):
     data["id"] = doc.id
     return data
 
-@router.post("/")
+@router.post("")
 def create_user_profile(profile: UserProfileCreate):
     data = profile.dict(exclude_unset=True)
     uid = data.pop("uid")
