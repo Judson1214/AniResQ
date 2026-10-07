@@ -5,7 +5,7 @@ AniResQ is a comprehensive, community-driven platform designed to streamline ani
 
 ## How the Project Works
 
-The application operates as a full-stack platform with a clear separation of concerns between the frontend client and the backend API, tied together by Firebase for core backend-as-a-service features.
+The application operates as a full-stack platform with a clear separation of concerns between the frontend client and the backend API, tied together by Supabase for core backend-as-a-service features.
 
 ### Core Workflows
 1. **Rescue Operations**: Citizens can report animals in distress (providing location via maps and images). Dispatchers and volunteers are notified, and rescue operations can be tracked from reporting to resolution.
@@ -44,14 +44,14 @@ The backend is a robust RESTful API designed to handle operations that shouldn't
 * **Framework**: [FastAPI](https://fastapi.tiangolo.com/), a high-performance web framework for building APIs with Python 3.
 * **Server**: [Uvicorn](https://www.uvicorn.org/), an ASGI web server implementation for Python.
 * **Data Validation**: [Pydantic](https://docs.pydantic.dev/) for data parsing and validation, seamlessly integrated with FastAPI.
-* **Database & Auth SDK**: [Firebase Admin SDK](https://firebase.google.com/docs/admin/setup) for server-side interaction with Firebase services.
+* **Database & Auth SDK**: [Supabase Python SDK](https://supabase.com/docs/reference/python/introduction) for server-side interaction with Supabase services.
 
 ### Database, Authentication & Cloud Services
-The platform heavily relies on Google's Firebase ecosystem.
-* **Database**: **Firebase Firestore** - A flexible, scalable NoSQL cloud database for storing user profiles, rescue reports, adoption listings, and application data.
-* **Authentication**: **Firebase Authentication** - Manages secure user sign-ups, logins, and session management.
-* **Storage**: **Firebase Storage** - Handles user uploads such as pet photos, medical records, and user avatars.
-* **Security Rules**: Custom `firestore.rules` and `storage.rules` ensure data access is strictly governed.
+The platform heavily relies on the Supabase ecosystem.
+* **Database**: **Supabase PostgreSQL** - A powerful, open-source relational database for storing user profiles, rescue reports, adoption listings, and application data.
+* **Authentication**: **Supabase Authentication** - Manages secure user sign-ups, logins, and session management using GoTrue.
+* **Storage**: **Supabase Storage** - Handles user uploads such as pet photos, medical records, and user avatars.
+* **Security Rules**: **PostgreSQL Row Level Security (RLS)** ensures data access is strictly governed directly at the database level.
 
 ### Monorepo Tooling
 * **Package Manager**: [pnpm](https://pnpm.io/) for fast, disk-space efficient dependency management.
