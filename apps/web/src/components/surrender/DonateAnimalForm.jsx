@@ -11,8 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import api from "@/lib/api";
-import { uploadMultipleFiles } from "@/services/storage.service";
+import { createAnimal } from "@/services/animal.service";
 
 // Simple schema for surrendering/donating an animal
 const donateSchema = z.object({
@@ -52,15 +51,6 @@ const DonateAnimalForm = () => {
     
     setIsSubmitting(true);
     try {
-      let photoUrls = [];
-      try {
-        const tempId = crypto.randomUUID();
-        photoUrls = await uploadMultipleFiles(`animal-photos/${tempId}`, photos);
-      } catch (err) {
-        console.error("Storage upload failed, falling back to dummy image", err);
-        photoUrls = ["https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=1000"];
-      }
-
       const payload = {
         name: data.name,
         species: data.species,
@@ -72,10 +62,10 @@ const DonateAnimalForm = () => {
         description: data.description + "\n\nReason for listing: " + data.reason,
         vaccinations: [],
         isNeutered: false,
-        photoUrls: photoUrls
+        shelterId: null // or user.uid if you want to track the donator
       };
 
-      await api.post('/animals/', payload);
+      await createAnimal(payload, photos);
       
       toast({ title: "Animal Listed", description: "The animal has been successfully listed for adoption." });
       navigate("/animals");
