@@ -32,8 +32,16 @@ class AssignVolunteerRequest(BaseModel):
     volunteerName: str
 
 @router.get("/")
-def get_all_rescues():
-    res = supabase.table("rescues").select("*").order("created_at", desc=True).execute()
+def get_all_rescues(status: Optional[str] = None, severity: Optional[str] = None, reporterId: Optional[str] = None):
+    query = supabase.table("rescues").select("*")
+    if status:
+        query = query.eq("status", status)
+    if severity:
+        query = query.eq("severity", severity)
+    if reporterId:
+        query = query.eq("reporter_id", reporterId)
+        
+    res = query.order("created_at", desc=True).execute()
     # Map snake_case back to camelCase if frontend expects it
     rescues = []
     for data in res.data:

@@ -1,8 +1,21 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { HeartHandshake, MapPin, Megaphone, ArrowRight } from "lucide-react";
+import { HeartHandshake, MapPin, Megaphone, ArrowRight, Clock, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { useQuery } from "@tanstack/react-query";
+import { getRescueRequests } from "@/services/rescue.service";
+import { RescueCard } from "@/components/rescue/RescueCard";
+
 const CitizenDashboard = () => {
+  const { user } = useAuth();
+
+  const { data: myRescues, isLoading } = useQuery({
+    queryKey: ["my-rescues", user?.uid],
+    queryFn: () => getRescueRequests({ reporterId: user?.uid }),
+    enabled: !!user?.uid,
+  });
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto py-4">
       
@@ -97,6 +110,30 @@ const CitizenDashboard = () => {
           </Button>
         </div>
       </Link>
+
+      {/* My Reported Rescues Section */}
+      <div className="mt-12">
+        <h2 className="text-2xl font-bold text-white mb-6">My Reported SOS Dispatches</h2>
+        
+        {isLoading ? (
+          <div className="flex justify-center p-12">
+            <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+          </div>
+        ) : myRescues && myRescues.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2">
+            {myRescues.map((rescue) => (
+              <RescueCard key={rescue.id} rescue={rescue} />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-[#131B2C] border border-slate-800 rounded-3xl p-12 text-center text-slate-400">
+            <Clock className="w-12 h-12 mx-auto text-slate-600 mb-4" />
+            <h3 className="text-lg font-bold text-slate-300">No SOS Alerts Reported</h3>
+            <p className="mt-2 text-sm">You haven't reported any animal emergencies yet. If you see an animal in need, use the Emergency SOS button above.</p>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 };
