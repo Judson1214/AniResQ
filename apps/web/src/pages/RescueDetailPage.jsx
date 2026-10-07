@@ -48,7 +48,8 @@ function RescueDetailPage() {
   };
   if (isLoading) return <MainLayout><div className="p-8 text-center">Loading...</div></MainLayout>;
   if (!rescue) return <MainLayout><div className="p-8 text-center">Rescue not found</div></MainLayout>;
-  const canAccept = user?.role === UserRole.VOLUNTEER && rescue.status === RescueStatus.PENDING;
+  const isResponder = [UserRole.VOLUNTEER, UserRole.SHELTER, UserRole.NGO, UserRole.VET, UserRole.ADMIN].includes(user?.role);
+  const canAccept = isResponder && rescue.status === RescueStatus.PENDING;
   const isAssigned = rescue.assignedTo === user?.uid;
   return <MainLayout>
       <div className="container mx-auto py-8 px-4 max-w-6xl">
@@ -108,7 +109,7 @@ function RescueDetailPage() {
               <h3 className="font-semibold mb-4">Actions</h3>
               
               {canAccept ? <Button className="w-full" onClick={handleAcceptRescue}>
-                  Accept Rescue Mission
+                  Dispatch Vehicle / Accept Mission
                 </Button> : isAssigned ? <div className="space-y-3">
                   <p className="text-sm font-medium text-green-600 mb-2">You are assigned to this rescue</p>
                   

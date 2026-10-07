@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpRight, ArrowDownRight, Activity, MapPin, Truck, CheckCircle2, Clock, Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -54,9 +55,9 @@ const AdminDashboard = () => {
           <button className="px-5 py-2.5 bg-[#131B2C] border border-slate-700 text-slate-300 rounded-xl text-sm font-bold hover:bg-[#1A2438] transition-colors shadow-lg">
             Export Report
           </button>
-          <button className="px-5 py-2.5 bg-emerald-500 text-emerald-950 rounded-xl text-sm font-black hover:bg-emerald-400 transition-colors shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+          <Link to="/rescue" className="px-5 py-2.5 bg-emerald-500 text-emerald-950 rounded-xl text-sm font-black hover:bg-emerald-400 transition-colors shadow-[0_0_20px_rgba(16,185,129,0.3)] block flex items-center">
             Dispatch Unit
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -112,26 +113,27 @@ const AdminDashboard = () => {
             <CardTitle className="text-base font-bold text-white">Recent Logs</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-             <div className="divide-y divide-slate-800">
-               {stats.recent.length > 0 ? (
-                 stats.recent.map(log => (
-                   <LogItem 
-                     key={log.id}
-                     id={log.id.slice(0, 8).toUpperCase()} 
-                     time={formatDateTime(log.updatedAt)} 
-                     status={log.status === "IN_PROGRESS" ? "Dispatched" : log.status.charAt(0).toUpperCase() + log.status.slice(1).toLowerCase()} 
-                     location={log.address || "Unknown Location"} 
-                   />
-                 ))
-               ) : (
-                 <div className="p-8 text-center text-slate-500 text-sm">No recent activity</div>
-               )}
-             </div>
-             <div className="p-6 border-t border-slate-800">
-               <button className="w-full py-3 bg-[#131B2C] text-slate-300 text-sm font-bold rounded-xl border border-slate-700 hover:bg-[#1A2438] transition-colors">
-                 View All Activity
-               </button>
-             </div>
+              <div className="divide-y divide-slate-800">
+                {stats.recent.length > 0 ? (
+                  stats.recent.map(log => (
+                    <LogItem 
+                      key={log.id}
+                      fullId={log.id}
+                      id={log.id.slice(0, 8).toUpperCase()} 
+                      time={formatDateTime(log.updatedAt)} 
+                      status={log.status === "IN_PROGRESS" ? "Dispatched" : log.status.charAt(0).toUpperCase() + log.status.slice(1).toLowerCase()} 
+                      location={log.address || "Unknown Location"} 
+                    />
+                  ))
+                ) : (
+                  <div className="p-8 text-center text-slate-500 text-sm">No recent activity</div>
+                )}
+              </div>
+              <div className="p-6 border-t border-slate-800">
+                <Link to="/rescue" className="flex items-center justify-center w-full py-3 bg-[#131B2C] text-slate-300 text-sm font-bold rounded-xl border border-slate-700 hover:bg-[#1A2438] transition-colors">
+                  View All Activity
+                </Link>
+              </div>
           </CardContent>
         </Card>
       </div>
@@ -167,7 +169,7 @@ function KpiCard({ title, value, trend, isPositive, icon }) {
 
 
 
-function LogItem({ id, time, status, location }) {
+function LogItem({ id, fullId, time, status, location }) {
   const statusColors = {
     Pending: "text-rose-400 bg-rose-500/10 border-rose-500/20",
     Dispatched: "text-blue-400 bg-blue-500/10 border-blue-500/20",
@@ -175,7 +177,7 @@ function LogItem({ id, time, status, location }) {
   };
 
   return (
-    <div className="p-5 hover:bg-[#131B2C] transition-colors flex justify-between items-center group cursor-pointer">
+    <Link to={`/rescue/${fullId}`} className="p-5 hover:bg-[#131B2C] transition-colors flex justify-between items-center group cursor-pointer block w-full">
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-black text-white">{id}</span>
         <span className="text-xs font-medium text-slate-500 flex items-center gap-1 group-hover:text-slate-400 transition-colors">
@@ -188,7 +190,7 @@ function LogItem({ id, time, status, location }) {
         </span>
         <span className="text-xs font-bold text-slate-600">{time}</span>
       </div>
-    </div>
+    </Link>
   );
 }
 

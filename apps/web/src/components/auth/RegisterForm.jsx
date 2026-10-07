@@ -40,6 +40,12 @@ const RegisterForm = () => {
       });
       navigate("/dashboard");
     } catch (error) {
+      console.error(error);
+      toast({
+        title: "Registration Failed",
+        description: error.message || "An error occurred during sign up.",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
