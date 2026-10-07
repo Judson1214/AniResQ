@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import rescues, animals, adoptions, lostfound, users, notifications
+from routers import rescues, users
 
 app = FastAPI(title="AniResQ API")
 
@@ -15,11 +15,13 @@ app.add_middleware(
 
 # Include routers
 app.include_router(rescues.router)
-app.include_router(animals.router)
-app.include_router(adoptions.router)
-app.include_router(lostfound.router)
 app.include_router(users.router)
-app.include_router(notifications.router)
+# Legacy Firebase routes commented out for now:
+# app.include_router(animals.router)
+# app.include_router(adoptions.router)
+# app.include_router(lostfound.router)
+# app.include_router(notifications.router)
+
 
 @app.get("/")
 async def root():

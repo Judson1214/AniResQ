@@ -1,49 +1,80 @@
-import { collection, doc, getDocs, addDoc, updateDoc, query, where, orderBy, limit, serverTimestamp, writeBatch } from "firebase/firestore";
-import { db } from "@/config/firebase";
-const COLLECTION_NAME = "notifications";
-const collectionRef = collection(db, COLLECTION_NAME);
+import { supabase } from "@/config/supabase";
+
+const mapNotificationToCamelCase = (dbData) => ({
+  id: dbData.id,
+  userId: dbData.user_id,
+  type: dbData.type,
+  title: dbData.title,
+  message: dbData.message,
+  isRead: dbData.is_read,
+  relatedEntityId: dbData.related_entity_id,
+  relatedEntityType: dbData.related_entity_type,
+  createdAt: dbData.created_at
+});
+
 const createNotification = async (userId, type, title, message, relatedEntityId, relatedEntityType) => {
-  const docRef = await addDoc(collectionRef, {
-    userId,
+  const dbData = {
+    user_id: userId,
     type,
     title,
     message,
-    isRead: false,
-    relatedEntityId,
-    relatedEntityType,
-    createdAt: serverTimestamp()
-  });
-  return docRef.id;
+    is_read: false,
+    related_entity_id: relatedEntityId,
+    related_entity_type: relatedEntityType
+  };
+
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert(dbData)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data.id;
 };
+
 const getNotifications = async (userId) => {
-  const q = query(
-    collectionRef,
-    where("userId", "==", userId),
-    orderBy("createdAt", "desc"),
-    limit(50)
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc2) => ({ id: doc2.id, ...doc2.data() }));
+  const { data, error } = await supabase
+    .from('notifications')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (error) throw error;
+  return data.map(mapNotificationToCamelCase);
 };
+
 const markAsRead = async (notificationId) => {
-  const docRef = doc(db, COLLECTION_NAME, notificationId);
-  await updateDoc(docRef, { isRead: true });
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('id', notificationId);
+
+  if (error) throw error;
 };
+
 const markAllAsRead = async (userId) => {
-  const q = query(collectionRef, where("userId", "==", userId), where("isRead", "==", false));
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return;
-  const batch = writeBatch(db);
-  snapshot.docs.forEach((document) => {
-    batch.update(document.ref, { isRead: true });
-  });
-  await batch.commit();
+  const { error } = await supabase
+    .from('notifications')
+    .update({ is_read: true })
+    .eq('user_id', userId)
+    .eq('is_read', false);
+
+  if (error) throw error;
 };
+
 const getUnreadCount = async (userId) => {
-  const q = query(collectionRef, where("userId", "==", userId), where("isRead", "==", false));
-  const snapshot = await getDocs(q);
-  return snapshot.size;
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('is_read', false);
+
+  if (error) throw error;
+  return count;
 };
+
 export {
   createNotification,
   getNotifications,

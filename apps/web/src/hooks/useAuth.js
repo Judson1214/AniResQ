@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { getUserProfile, onAuthChange, signIn, signOutUser, signUp } from "@/services/auth.service";
 import { useToast } from "@/components/ui/use-toast";
-// Global flag to ensure we only register the Firebase listener once across the entire app
+
 let isListenerRegistered = false;
 
 const useAuth = () => {
@@ -18,29 +18,24 @@ const useAuth = () => {
     
     isListenerRegistered = true;
     
-    const unsubscribe = onAuthChange(async (firebaseUser) => {
+    const unsubscribe = onAuthChange(async (sessionUser) => {
       setLoading(true);
       try {
-        if (firebaseUser) {
-          const profile = await getUserProfile(firebaseUser.uid);
+        if (sessionUser) {
+          const profile = await getUserProfile(sessionUser.id);
           if (profile) {
-            setUser({ ...profile, uid: firebaseUser.uid });
+            setUser({ ...profile, uid: sessionUser.id });
           } else {
-            // Auto-create missing profile (e.g. if previous registration failed halfway)
-            const { default: api } = await import("@/lib/api");
+            // Because we have a Postgres trigger for auto-creating public.users,
+            // this branch should rarely be hit unless there's a race condition.
+            // If it happens, we can construct a basic profile or wait for the trigger.
             const newProfile = {
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName || "Unknown User",
-              role: "CITIZEN"
+              uid: sessionUser.id,
+              email: sessionUser.email,
+              displayName: sessionUser.user_metadata?.display_name || "Unknown User",
+              role: sessionUser.user_metadata?.role || "CITIZEN"
             };
-            try {
-              await api.post("/users", newProfile);
-              setUser({ ...newProfile, id: firebaseUser.uid, avatarUrl: "", isVerified: false });
-            } catch (e) {
-              console.error("Failed to auto-create missing profile:", e);
-              logout();
-            }
+            setUser({ ...newProfile, id: sessionUser.id, avatarUrl: "", isVerified: false });
           }
         } else {
           logout();
@@ -54,9 +49,10 @@ const useAuth = () => {
       }
     });
 
-    // Note: We deliberately do not unsubscribe on unmount because we only want ONE global listener
-    // that persists for the lifetime of the application.
+    // onAuthChange returns an unsubscribe function. We can save it if needed,
+    // but typically we keep it alive for the app lifetime.
   }, [setUser, setLoading, logout]);
+
   const handleSignIn = async (...args) => {
     try {
       return await signIn(...args);
@@ -69,6 +65,7 @@ const useAuth = () => {
       throw error;
     }
   };
+
   const handleSignUp = async (...args) => {
     try {
       return await signUp(...args);
@@ -81,6 +78,7 @@ const useAuth = () => {
       throw error;
     }
   };
+
   const handleSignOut = async () => {
     try {
       await signOutUser();
@@ -93,6 +91,7 @@ const useAuth = () => {
       throw error;
     }
   };
+
   return {
     user,
     isLoading: isLoading || isInitializing,
@@ -102,6 +101,5 @@ const useAuth = () => {
     signOut: handleSignOut
   };
 };
-export {
-  useAuth
-};
+
+export { useAuth };

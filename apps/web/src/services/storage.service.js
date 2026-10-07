@@ -1,26 +1,27 @@
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { storage } from "@/config/firebase";
+import { supabase } from "@/config/supabase";
+
 const uploadFile = async (path, file, onProgress) => {
-  const storageRef = ref(storage, path);
-  const uploadTask = uploadBytesResumable(storageRef, file);
-  return new Promise((resolve, reject) => {
-    uploadTask.on(
-      "state_changed",
-      (snapshot) => {
-        const progress = snapshot.bytesTransferred / snapshot.totalBytes * 100;
-        if (onProgress) onProgress(progress);
-      },
-      (error) => reject(error),
-      async () => {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        resolve(downloadURL);
-      }
-    );
-  });
+  // Note: Ensure you have created a public bucket named 'uploads' in Supabase
+  const { data, error } = await supabase.storage
+    .from('uploads')
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: true // Overwrite if exists
+    });
+
+  if (error) throw error;
+  
+  if (onProgress) onProgress(100);
+
+  const { data: publicUrlData } = supabase.storage
+    .from('uploads')
+    .getPublicUrl(path);
+    
+  return publicUrlData.publicUrl;
 };
 
 const compressImage = (file, maxWidth = 800) => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
@@ -77,7 +78,7 @@ const uploadMultipleFiles = async (basePath, files, onProgress) => {
 
   // Wrap the entire compression AND upload in a strict timeout.
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("Storage upload timed out. Firebase Storage might be disabled.")), 8000);
+    setTimeout(() => reject(new Error("Storage upload timed out. Supabase Storage might be disabled or misconfigured.")), 8000);
   });
 
   return Promise.race([
@@ -85,15 +86,22 @@ const uploadMultipleFiles = async (basePath, files, onProgress) => {
     timeoutPromise
   ]);
 };
+
 const deleteFile = async (url) => {
   try {
-    const urlRef = ref(storage, url);
-    await deleteObject(urlRef);
+    // Extract the path from the public URL if possible
+    const matches = url.match(/\/storage\/v1\/object\/public\/uploads\/(.+)/);
+    if (matches && matches[1]) {
+      const path = matches[1];
+      const { error } = await supabase.storage.from('uploads').remove([path]);
+      if (error) throw error;
+    }
   } catch (error) {
     console.error("Error deleting file:", error);
     throw error;
   }
 };
+
 export {
   deleteFile,
   uploadFile,

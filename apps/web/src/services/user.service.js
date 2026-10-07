@@ -1,31 +1,65 @@
-import { collection, doc, getDoc, getDocs, updateDoc, query, where } from "firebase/firestore";
-import { db } from "@/config/firebase";
-const COLLECTION_NAME = "users";
-const collectionRef = collection(db, COLLECTION_NAME);
+import { supabase } from "@/config/supabase";
+
+const mapUserToCamelCase = (dbData) => ({
+  uid: dbData.id,
+  id: dbData.id,
+  email: dbData.email,
+  displayName: dbData.display_name,
+  role: dbData.role,
+  phone: dbData.phone,
+  avatarUrl: dbData.avatar_url || "",
+  createdAt: dbData.created_at
+});
+
 const getUserById = async (uid) => {
-  const docRef = doc(db, COLLECTION_NAME, uid);
-  const snapshot = await getDoc(docRef);
-  if (!snapshot.exists()) return null;
-  return { uid: snapshot.id, ...snapshot.data() };
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', uid)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null; // 404
+    throw error;
+  }
+  return mapUserToCamelCase(data);
 };
+
 const getUsersByRole = async (role) => {
-  const q = query(collectionRef, where("role", "==", role));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc2) => ({ uid: doc2.id, ...doc2.data() }));
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('role', role);
+
+  if (error) throw error;
+  return data.map(mapUserToCamelCase);
 };
+
 const updateUserProfile = async (uid, data) => {
-  const docRef = doc(db, COLLECTION_NAME, uid);
-  await updateDoc(docRef, data);
+  const updateData = {};
+  if (data.displayName !== undefined) updateData.display_name = data.displayName;
+  if (data.phone !== undefined) updateData.phone = data.phone;
+  if (data.role !== undefined) updateData.role = data.role;
+  if (data.avatarUrl !== undefined) updateData.avatar_url = data.avatarUrl;
+
+  const { error } = await supabase
+    .from('users')
+    .update(updateData)
+    .eq('id', uid);
+
+  if (error) throw error;
 };
+
 const searchUsers = async (searchQuery) => {
-  const q = query(
-    collectionRef,
-    where("displayName", ">=", searchQuery),
-    where("displayName", "<=", searchQuery + "\uF8FF")
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((doc2) => ({ uid: doc2.id, ...doc2.data() }));
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .ilike('display_name', `%${searchQuery}%`); // using case-insensitive search
+
+  if (error) throw error;
+  return data.map(mapUserToCamelCase);
 };
+
 export {
   getUserById,
   getUsersByRole,
