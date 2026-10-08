@@ -1,54 +1,73 @@
 # AniResQ - Project Overview & Architecture
 
 ## Introduction
-AniResQ is a comprehensive, community-driven platform designed to streamline animal rescue operations, facilitate pet adoptions, and manage lost & found pet reports. The project brings together citizens, NGOs, volunteers, shelters, veterinarians, and administrators into a cohesive ecosystem.
+AniResQ is a comprehensive, community-driven platform designed to streamline animal rescue operations, facilitate pet adoptions, and manage lost & found pet reports. By bridging the gap between citizens, NGOs, volunteers, shelters, veterinarians, and system administrators, AniResQ creates a unified ecosystem for animal welfare.
 
-## How the Project Works
+## Key Features & Workflows
 
-The application operates as a full-stack platform with a clear separation of concerns between the frontend client and the backend API, tied together by **Supabase** for core backend-as-a-service features (Database, Auth, Storage).
+1. **Rescue Operations (SOS)**
+   - Citizens can instantly report animals in distress with real-time location mapping and image uploads.
+   - Dispatchers and active volunteers receive localized alerts.
+   - The platform provides an end-to-end timeline tracking the rescue from reporting to resolution.
 
-### Core Workflows
-1. **Rescue Operations**: Citizens can report animals in distress (providing location via maps and images). Dispatchers and volunteers are notified, and rescue operations can be tracked from reporting to resolution.
-2. **Adoption Platform**: Shelters and rescues can post animals available for adoption. Prospective pet parents can browse, filter, and submit adoption applications.
-3. **Lost & Found**: A centralized board where users can post lost pets with locations (using Leaflet maps) or report found animals to facilitate reunions.
-4. **Role-Based Access Control**: The platform restricts and grants access based on user roles (Citizen, NGO, Volunteer, Shelter, Vet, Admin), ensuring users only see relevant dashboards and capabilities.
+2. **Adoption Platform**
+   - Verified shelters and rescue organizations can post animals that are ready for adoption.
+   - Prospective pet parents can seamlessly browse, filter, and submit comprehensive adoption applications directly through the platform.
 
-### Architecture Overview
-The project is structured as a **Monorepo** using **Turborepo** and **pnpm workspaces**. It is divided into distinct applications and shared packages:
+3. **Lost & Found Network**
+   - A centralized, interactive board utilizing geographic mapping (Leaflet) allows users to post reports of lost pets or animals they have found.
+   - The community can leave replies and coordinate reunions.
+   - **Gamification & Achievements**: Users are rewarded with "Achievements" on their dashboard (e.g., "Pet Reunited", "Hero Finder") when they successfully resolve a lost or found case, encouraging continued community engagement.
 
+4. **Role-Based Access Control (RBAC)**
+   - AniResQ provides tailored dashboards and capabilities based on user roles: *Citizen, NGO, Volunteer, Shelter, Vet, Admin*.
+   - Each role is strictly governed and validated at both the frontend UI level and the database level.
+
+## Architecture Overview
+
+AniResQ is structured as a modern **Monorepo** using **Turborepo** and **pnpm workspaces**, ensuring excellent code sharing, robust typing, and fast build times.
+
+### Monorepo Structure
 - **`apps/web`**: The user-facing React frontend application.
-- **`apps/api`**: The FastAPI backend service that handles specific business logic and rescues.
-- **`packages/shared-types`**: TypeScript interfaces and types shared across the ecosystem.
-- **`packages/validation`**: Zod schemas used for robust data validation.
+- **`apps/api`**: The Python FastAPI backend service, designed for specialized business logic, background processing, and complex queries.
+- **`packages/shared-types`**: Core TypeScript interfaces, enums, and types shared seamlessly across the ecosystem.
+- **`packages/validation`**: Centralized Zod schemas used for robust, unified data validation on both client and server.
 
 ## Technologies Used
 
 ### Frontend (`apps/web`)
-The frontend is a modern Single Page Application (SPA) built for performance and responsive design.
-* **Core Framework**: [React 18](https://react.dev/) initialized with [Vite](https://vitejs.dev/).
-* **Language**: [TypeScript](https://www.typescriptlang.org/) for static type safety.
-* **Styling**: [Tailwind CSS](https://tailwindcss.com/) for utility-first styling.
-* **UI Components**: [Radix UI](https://www.radix-ui.com/) provides accessible, unstyled primitives.
-* **State Management**:
-  * [React Query (@tanstack/react-query)](https://tanstack.com/query/latest) for server state.
-  * [Zustand](https://github.com/pmndrs/zustand) for client-side global state.
-* **Forms & Validation**: [React Hook Form](https://react-hook-form.com/) integrated with [Zod](https://zod.dev/).
-* **Mapping**: [Leaflet](https://leafletjs.com/) and [React-Leaflet](https://react-leaflet.js.org/).
+A highly responsive Single Page Application (SPA) designed for performance and accessibility.
+* **Core Framework**: [React 18](https://react.dev/) / [Vite](https://vitejs.dev/)
+* **Language**: [TypeScript](https://www.typescriptlang.org/)
+* **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [Radix UI](https://www.radix-ui.com/)
+* **State Management**: [React Query (@tanstack/react-query)](https://tanstack.com/query/latest) for server state caching; [Zustand](https://github.com/pmndrs/zustand) for client-side state.
+* **Forms & Validation**: [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/)
+* **Mapping**: [Leaflet](https://leafletjs.com/) and [React-Leaflet](https://react-leaflet.js.org/)
 
 ### Backend (`apps/api`)
-The backend is a RESTful API designed to handle operations that require admin-level processing.
-* **Framework**: [FastAPI](https://fastapi.tiangolo.com/), a high-performance Python 3 framework.
-* **Server**: [Uvicorn](https://www.uvicorn.org/), an ASGI web server.
-* **Database & Auth SDK**: [Supabase Python SDK](https://supabase.com/docs/reference/python/introduction) for interactions with Postgres and Auth.
+A RESTful API built for high performance and strict type checking.
+* **Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Python 3)
+* **Server**: [Uvicorn](https://www.uvicorn.org/)
+* **Integration**: Interacts dynamically with Supabase via the [Supabase Python SDK](https://supabase.com/docs/reference/python/introduction).
 
 ### Database, Authentication & Cloud Services
-The platform relies entirely on the open-source **Supabase** ecosystem.
-* **Database**: **Supabase PostgreSQL** - A powerful, relational database for storing users, rescues, adoptions, and timeline data.
-* **Authentication**: **Supabase Auth (GoTrue)** - Manages secure user sign-ups, JWT sessions, and row-level access.
-* **Storage**: **Supabase Storage** - Handles user uploads (pet photos, avatars) using public buckets.
-* **Security Rules**: **PostgreSQL Row Level Security (RLS)** ensures data access is strictly governed directly at the database level.
+The platform is powered entirely by the **Supabase** ecosystem, having recently completed a full migration from Firebase to establish a more robust, relational foundation.
+* **Database**: **Supabase PostgreSQL** - A powerful relational database storing users, complex rescue timelines, adoption applications, and the newly migrated Lost & Found system.
+* **Authentication**: **Supabase Auth (GoTrue)** - Handles user identities, JWT session management, and RBAC implementation.
+* **Storage**: **Supabase Storage** - Manages media uploads such as pet photos, avatars, and rescue evidence.
+* **Security Rules**: **PostgreSQL Row Level Security (RLS)** is heavily utilized to ensure data security directly at the database layer.
 
 ## Development Workflow
-1. **Frontend Development**: Run the frontend using `pnpm dev` at the root, which starts Vite on `http://localhost:3000`.
-2. **Backend Development**: Start the Python API inside `apps/api` using `uvicorn main:app --reload --port 8000`.
-3. **Database Migrations**: SQL scripts like `supabase_schema.sql` can be executed directly in the Supabase SQL Editor.
+
+1. **Frontend Development**
+   - From the repository root, run `pnpm dev`.
+   - Turborepo will start the Vite server, accessible at `http://localhost:3000`.
+
+2. **Backend Development**
+   - Navigate to `apps/api`.
+   - Ensure the virtual environment (`venv`) is active.
+   - Start the API using `uvicorn main:app --reload --port 8000`.
+   - Swagger documentation is automatically available at `http://localhost:8000/docs`.
+
+3. **Database Management**
+   - Schema definitions and migration scripts (e.g., `supabase_schema.sql`, `supabase_add_notifications.sql`) are available at the root level and can be executed via the Supabase Dashboard SQL Editor to keep environments synchronized.
