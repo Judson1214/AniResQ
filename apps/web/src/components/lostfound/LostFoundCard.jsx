@@ -137,7 +137,7 @@ const LostFoundCard = ({ post, onUpdate }) => {
 
           {isOwner && post.status === LostFoundStatus.ACTIVE && (
             <Button variant="secondary" className="bg-emerald-600 hover:bg-emerald-500 text-white" onClick={handleResolve}>
-              Resolve
+              {post.type === LostFoundType.LOST ? "Mark as Found" : "Mark as Returned"}
             </Button>
           )}
         </div>

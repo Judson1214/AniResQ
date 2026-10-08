@@ -16,10 +16,10 @@ app.add_middleware(
 # Include routers
 app.include_router(rescues.router)
 app.include_router(users.router)
-# Legacy Firebase routes commented out for now:
 # app.include_router(animals.router)
 # app.include_router(adoptions.router)
-# app.include_router(lostfound.router)
+from routers import lostfound
+app.include_router(lostfound.router)
 # app.include_router(notifications.router)
 
 
