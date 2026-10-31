@@ -150,7 +150,7 @@ pnpm install
 pnpm --filter @aniresq/web dev
 ```
 
-The application will be live at: **`http://localhost:3000`**  
+The application will be live at: **`http://localhost:5173`**  
 *(Vite proxies `/api` calls directly to `http://127.0.0.1:8000`).*
 
 ---
