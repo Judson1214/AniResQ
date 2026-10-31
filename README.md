@@ -35,8 +35,8 @@ AniResQ is structured as a Turborepo monorepo with a decoupled FastAPI Python ba
 ### 1. Database Setup
 
 1. In your Supabase dashboard, navigate to the **SQL Editor**.
-2. Run the initialization script from [`supabase_schema.sql`](./supabase_schema.sql).
-3. If upgrading an existing database, run [`supabase_migration_security_and_fixes.sql`](./supabase_migration_security_and_fixes.sql) to apply the latest security locks, missing tables, and RLS policies.
+2. Run the initialization script from [`supabase/migrations/20261031000000_init_aniresq_schema.sql`](./supabase/migrations/20261031000000_init_aniresq_schema.sql).
+3. If upgrading an existing database, run [`supabase/migrations/20261031000001_security_and_fixes.sql`](./supabase/migrations/20261031000001_security_and_fixes.sql) to apply the latest security locks, missing tables, and RLS policies.
 4. Ensure the `uploads` storage bucket is created (the script will configure public read and authenticated write policies automatically).
 
 ### 2. Environment Configuration

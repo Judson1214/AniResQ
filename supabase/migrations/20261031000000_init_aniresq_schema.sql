@@ -1,5 +1,7 @@
 -- =========================================================================
 -- AniResQ Complete Supabase PostgreSQL Schema
+-- Includes: Users, Animals, Adoptions, Lost & Found, Rescues, Timelines,
+--           Notifications, Storage, Triggers, and RLS Policies.
 -- =========================================================================
 
 -- 1. Create Enums based on @aniresq/shared-types
@@ -131,7 +133,7 @@ CREATE TABLE public.rescue_timeline (
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- 6c. Create Notifications Table
+-- 6c. Create Notifications Table (merged from supabase_add_notifications.sql)
 CREATE TABLE public.notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
@@ -344,7 +346,7 @@ CREATE POLICY "Authenticated users can insert rescue timelines"
   ON public.rescue_timeline FOR INSERT 
   WITH CHECK (auth.role() = 'authenticated' OR auth.role() = 'service_role');
 
--- 10h. Notifications RLS
+-- 10h. Notifications RLS (merged from supabase_add_notifications.sql)
 CREATE POLICY "Users can view their own notifications" 
   ON public.notifications FOR SELECT 
   USING (auth.uid() = user_id OR auth.role() = 'service_role');

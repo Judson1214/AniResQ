@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS public.lost_and_found_replies (
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
 
--- 3c. notifications
+-- 3c. notifications (merged from supabase_add_notifications.sql)
 CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES public.users(id) ON DELETE CASCADE NOT NULL,
@@ -148,15 +148,12 @@ ALTER TABLE public.rescues ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rescue_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
--- ----------------------------------------------------
 -- 6a. Users Policies (Stop PII exposure)
--- ----------------------------------------------------
 DROP POLICY IF EXISTS "Public profiles are viewable by everyone." ON public.users;
 DROP POLICY IF EXISTS "Users can view own profile or staff can view profiles" ON public.users;
 DROP POLICY IF EXISTS "Users can update own profile." ON public.users;
 DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 
--- Users can see their own profile, staff can see users, service_role has full access
 CREATE POLICY "Users can view own profile or staff can view profiles" 
   ON public.users FOR SELECT 
   USING (
@@ -165,7 +162,6 @@ CREATE POLICY "Users can view own profile or staff can view profiles"
     OR auth.role() = 'service_role'
   );
 
--- Users can update their own non-role fields (trigger protects role)
 CREATE POLICY "Users can update own profile" 
   ON public.users FOR UPDATE 
   USING (
@@ -174,9 +170,7 @@ CREATE POLICY "Users can update own profile"
     OR auth.role() = 'service_role'
   );
 
--- ----------------------------------------------------
 -- 6b. Animals Policies
--- ----------------------------------------------------
 DROP POLICY IF EXISTS "Animals are viewable by everyone." ON public.animals;
 DROP POLICY IF EXISTS "Animals are viewable by everyone" ON public.animals;
 DROP POLICY IF EXISTS "Staff can insert animals" ON public.animals;
@@ -199,9 +193,7 @@ CREATE POLICY "Staff can delete animals"
   ON public.animals FOR DELETE 
   USING (public.is_shelter_or_ngo() OR auth.role() = 'service_role');
 
--- ----------------------------------------------------
 -- 6c. Adoption Applications Policies
--- ----------------------------------------------------
 DROP POLICY IF EXISTS "Users can view own adoption applications." ON public.adoption_applications;
 DROP POLICY IF EXISTS "Users can view own applications or staff can view all" ON public.adoption_applications;
 DROP POLICY IF EXISTS "Authenticated users can apply for adoption." ON public.adoption_applications;
@@ -224,9 +216,7 @@ CREATE POLICY "Staff can review adoption applications"
   ON public.adoption_applications FOR UPDATE 
   USING (public.is_shelter_or_ngo() OR auth.role() = 'service_role');
 
--- ----------------------------------------------------
 -- 6d. Lost and Found Policies
--- ----------------------------------------------------
 DROP POLICY IF EXISTS "Lost and found viewable by everyone." ON public.lost_and_found;
 DROP POLICY IF EXISTS "Lost and found viewable by everyone" ON public.lost_and_found;
 DROP POLICY IF EXISTS "Authenticated users can report lost/found." ON public.lost_and_found;
@@ -251,9 +241,7 @@ CREATE POLICY "Users can delete own lost/found"
   ON public.lost_and_found FOR DELETE 
   USING (auth.uid() = reporter_id OR public.is_admin() OR auth.role() = 'service_role');
 
--- ----------------------------------------------------
 -- 6e. Lost and Found Replies Policies
--- ----------------------------------------------------
 DROP POLICY IF EXISTS "Replies are viewable by everyone" ON public.lost_and_found_replies;
 DROP POLICY IF EXISTS "Authenticated users can add replies" ON public.lost_and_found_replies;
 DROP POLICY IF EXISTS "Authors or admin can delete replies" ON public.lost_and_found_replies;
@@ -270,9 +258,7 @@ CREATE POLICY "Authors or admin can delete replies"
   ON public.lost_and_found_replies FOR DELETE 
   USING (auth.uid() = user_id OR public.is_admin() OR auth.role() = 'service_role');
 
--- ----------------------------------------------------
 -- 6f. Rescues & Rescue Timeline Policies
--- ----------------------------------------------------
 DROP POLICY IF EXISTS "Rescues viewable by everyone." ON public.rescues;
 DROP POLICY IF EXISTS "Rescues viewable by everyone" ON public.rescues;
 DROP POLICY IF EXISTS "Authenticated users can report rescues." ON public.rescues;
@@ -314,9 +300,7 @@ CREATE POLICY "Authenticated users can insert rescue timelines"
   ON public.rescue_timeline FOR INSERT 
   WITH CHECK (auth.role() = 'authenticated' OR auth.role() = 'service_role');
 
--- ----------------------------------------------------
 -- 6g. Notifications Policies
--- ----------------------------------------------------
 DROP POLICY IF EXISTS "Users can view their own notifications" ON public.notifications;
 DROP POLICY IF EXISTS "Users can update their own notifications (mark as read)" ON public.notifications;
 DROP POLICY IF EXISTS "Authenticated users or system can insert notifications" ON public.notifications;
@@ -333,9 +317,7 @@ CREATE POLICY "Authenticated users or system can insert notifications"
   ON public.notifications FOR INSERT 
   WITH CHECK (auth.role() = 'authenticated' OR auth.role() = 'service_role');
 
--- ----------------------------------------------------
 -- 7. Storage Bucket & Policies for 'uploads'
--- ----------------------------------------------------
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('uploads', 'uploads', true)
 ON CONFLICT (id) DO UPDATE SET public = true;
