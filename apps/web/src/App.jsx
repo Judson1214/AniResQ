@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { AuthInitializer } from "@/components/auth/AuthInitializer";
 
 const HomePage = lazy(() => import("@/pages/HomePage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
@@ -28,76 +29,79 @@ const PageLoader = () => (
 
 function App() {
   return (
-    <Suspense fallback={<PageLoader />}>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="/animals" element={<AnimalsPage />} />
-        <Route path="/animals/:id" element={<AnimalDetailPage />} />
-        <Route path="/rescue" element={<RescueListPage />} />
-        <Route path="/rescue/:id" element={<RescueDetailPage />} />
-        <Route path="/lost-found" element={<LostFoundPage />} />
-        <Route path="/donate" element={<DonationPage />} />
+    <>
+      <AuthInitializer />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/animals" element={<AnimalsPage />} />
+          <Route path="/animals/:id" element={<AnimalDetailPage />} />
+          <Route path="/rescue" element={<RescueListPage />} />
+          <Route path="/rescue/:id" element={<RescueDetailPage />} />
+          <Route path="/lost-found" element={<LostFoundPage />} />
+          <Route path="/donate" element={<DonationPage />} />
 
-        {/* Protected Routes - Any authenticated user */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <DashboardPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <ProfilePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/report-rescue"
-          element={
-            <ProtectedRoute>
-              <ReportRescuePage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/adoption/:animalId"
-          element={
-            <ProtectedRoute>
-              <AdoptionPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/surrender"
-          element={
-            <ProtectedRoute>
-              <SurrenderPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/my-applications"
-          element={
-            <ProtectedRoute>
-              <MyApplicationsPage />
-            </ProtectedRoute>
-          }
-        />
+          {/* Protected Routes - Any authenticated user */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/report-rescue"
+            element={
+              <ProtectedRoute>
+                <ReportRescuePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/adoption/:animalId"
+            element={
+              <ProtectedRoute>
+                <AdoptionPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/surrender"
+            element={
+              <ProtectedRoute>
+                <SurrenderPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-applications"
+            element={
+              <ProtectedRoute>
+                <MyApplicationsPage />
+              </ProtectedRoute>
+            }
+          />
 
-        {/* Authorization failure route */}
-        <Route path="/unauthorized" element={<UnauthorizedPage />} />
+          {/* Authorization failure route */}
+          <Route path="/unauthorized" element={<UnauthorizedPage />} />
 
-        {/* Catch-all 404 */}
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
-    </Suspense>
+          {/* Catch-all 404 */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
+    </>
   );
 }
 

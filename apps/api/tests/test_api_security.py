@@ -212,7 +212,7 @@ def test_citizen_can_surrender_animal(monkeypatch):
         })
         assert res_inv.status_code == 422
 
-        # Valid surrender succeeds and sets NOT_READY status
+        # Valid surrender succeeds and sets NOT_READY status with surrendered_by
         mock_animal_record = {
             "id": "animal-123",
             "name": "Rex",
@@ -228,6 +228,7 @@ def test_citizen_can_surrender_animal(monkeypatch):
             "is_neutered": False,
             "special_needs": None,
             "shelter_id": None,
+            "surrendered_by": "citizen-1",
             "images": [],
             "created_at": "2026-11-01T00:00:00Z",
             "updated_at": "2026-11-01T00:00:00Z",
@@ -247,5 +248,74 @@ def test_citizen_can_surrender_animal(monkeypatch):
         })
         assert res_surrender.status_code == 201
         assert res_surrender.json()["adoptionStatus"] == "NOT_READY"
+        assert res_surrender.json()["surrenderedBy"] == "citizen-1"
+    finally:
+        app.dependency_overrides.clear()
+
+def test_photo_url_validation():
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "citizen-1", "email": "cit@test.com", "name": "Citizen", "role": "CITIZEN"
+    }
+    try:
+        # External URL rejected with 422
+        res_ext = client.post("/api/rescues/", json={
+            "title": "Injured animal",
+            "description": "Needs help",
+            "severity": "HIGH",
+            "species": "CAT",
+            "location": {"latitude": 10.0, "longitude": 20.0},
+            "address": "Street",
+            "photoUrls": ["https://malicious-external-site.com/exploit.png"]
+        })
+        assert res_ext.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+def test_post_users_preserves_token_email(monkeypatch):
+    # Ensure client cannot forge another email in POST /api/users
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-real-uid", "email": "real@domain.com", "name": "Real User", "role": "CITIZEN"
+    }
+    try:
+        mock_query = MagicMock()
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.execute.return_value = MagicMock(data=[{"role": "CITIZEN", "email": "real@domain.com"}])
+        mock_query.upsert.return_value = mock_query
+        
+        captured_data = {}
+        def fake_upsert(data):
+            captured_data.update(data)
+            return mock_query
+        mock_query.upsert.side_effect = fake_upsert
+        
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+        res = client.post("/api/users", json={
+            "uid": "user-real-uid",
+            "email": "forged_victim@domain.com",
+            "displayName": "User",
+        })
+        assert res.status_code == 200
+        # Verified: backend enforces token email, ignoring forged body email
+        assert captured_data.get("email") == "real@domain.com"
+    finally:
+        app.dependency_overrides.clear()
+
+def test_demote_last_admin_prevented(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "sole-admin-id", "email": "admin@domain.com", "name": "Sole Admin", "role": "ADMIN"
+    }
+    try:
+        mock_query = MagicMock()
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.execute.return_value = MagicMock(data=[{"id": "sole-admin-id"}], count=1)
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+        # Trying to demote themselves when count == 1 should raise 400
+        res = client.patch("/api/users/sole-admin-id/role", json={"role": "CITIZEN"})
+        assert res.status_code == 400
+        assert "Cannot demote the last administrator" in res.json()["detail"]
     finally:
         app.dependency_overrides.clear()

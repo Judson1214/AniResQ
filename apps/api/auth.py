@@ -1,9 +1,11 @@
 import logging
+from typing import Optional
 from fastapi import HTTPException, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from supabase_config import supabase
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 logger = logging.getLogger("auth")
 
 def get_current_user(credentials: HTTPAuthorizationCredentials = Security(security)) -> dict:
@@ -40,6 +42,14 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
             detail="Invalid or expired authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+def get_optional_user(credentials: Optional[HTTPAuthorizationCredentials] = Security(optional_security)) -> Optional[dict]:
+    if not credentials:
+        return None
+    try:
+        return get_current_user(credentials)
+    except Exception:
+        return None
 
 def require_roles(allowed_roles: list[str]):
     def role_dependency(user: dict = Depends(get_current_user)) -> dict:

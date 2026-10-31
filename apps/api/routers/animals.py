@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 
 from supabase_config import supabase
-from auth import get_current_user, require_roles
+from auth import get_current_user, get_optional_user, require_roles
 
 router = APIRouter(prefix="/api/animals", tags=["animals"])
 logger = logging.getLogger("animals")
@@ -15,6 +15,21 @@ VALID_SPECIES = {"DOG", "CAT", "BIRD", "RABBIT", "OTHER"}
 VALID_ADOPTION_STATUSES = {"NOT_READY", "AVAILABLE", "PENDING", "ADOPTED"}
 VALID_HEALTH_STATUSES = {"HEALTHY", "INJURED", "SICK", "RECOVERING", "CRITICAL"}
 VALID_GENDERS = {"MALE", "FEMALE", "UNKNOWN"}
+
+def validate_photo_urls(urls: List[str]) -> List[str]:
+    valid = []
+    for u in urls:
+        if not u or not isinstance(u, str):
+            continue
+        u = u.strip()
+        if "/storage/v1/object/public/uploads/" in u or u.startswith("uploads/") or "/uploads/" in u:
+            valid.append(u)
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid photo URL '{u}'. Photos must be uploaded to the official AniResQ uploads storage bucket."
+            )
+    return valid
 
 class AnimalCreate(BaseModel):
     name: str
@@ -71,6 +86,7 @@ def map_animal(db_data: dict) -> dict:
         "isNeutered": db_data.get("is_neutered", False),
         "specialNeeds": db_data.get("special_needs"),
         "shelterId": db_data.get("shelter_id"),
+        "surrenderedBy": db_data.get("surrendered_by"),
         "photos": db_data.get("images", []),
         "createdAt": db_data.get("created_at"),
         "updatedAt": db_data.get("updated_at"),
@@ -82,11 +98,29 @@ def get_animals(
     species: Optional[str] = None,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    user: Optional[dict] = Depends(get_optional_user),
 ):
     try:
+        is_staff = user and user.get("role") in STAFF_ROLES
         query = supabase.table("animals").select("*")
+        
+        # Privacy & intake protection: Hide NOT_READY surrendered animals from public
         if status:
-            query = query.eq("adoption_status", status.upper())
+            target_status = status.upper()
+            if target_status == "NOT_READY":
+                if is_staff:
+                    query = query.eq("adoption_status", "NOT_READY")
+                elif user:
+                    query = query.eq("adoption_status", "NOT_READY").eq("surrendered_by", user["uid"])
+                else:
+                    return []
+            else:
+                query = query.eq("adoption_status", target_status)
+        else:
+            if not is_staff:
+                # By default, public queries only see ready animals (or their own surrendered animals)
+                query = query.neq("adoption_status", "NOT_READY")
+                
         if species:
             query = query.eq("species", species.upper())
             
@@ -97,12 +131,21 @@ def get_animals(
         raise HTTPException(status_code=500, detail="Failed to retrieve animals")
 
 @router.get("/{id}")
-def get_animal(id: str):
+def get_animal(id: str, user: Optional[dict] = Depends(get_optional_user)):
     try:
         res = supabase.table("animals").select("*").eq("id", id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Animal not found")
-        return map_animal(res.data[0])
+            
+        data = res.data[0]
+        is_staff = user and user.get("role") in STAFF_ROLES
+        is_owner = user and data.get("surrendered_by") == user.get("uid")
+        
+        # If animal is NOT_READY, only staff or the person who surrendered it can view it
+        if data.get("adoption_status") == "NOT_READY" and not (is_staff or is_owner):
+            raise HTTPException(status_code=404, detail="Animal not found")
+            
+        return map_animal(data)
     except HTTPException:
         raise
     except Exception as e:
@@ -127,6 +170,8 @@ def create_animal(payload: AnimalCreate, user: dict = Depends(require_roles(STAF
     if target_gender not in VALID_GENDERS:
         raise HTTPException(status_code=422, detail=f"Invalid gender '{target_gender}'")
         
+    valid_photos = validate_photo_urls(payload.photos)
+        
     try:
         data = {
             "name": payload.name,
@@ -142,7 +187,7 @@ def create_animal(payload: AnimalCreate, user: dict = Depends(require_roles(STAF
             "is_neutered": payload.isNeutered,
             "special_needs": payload.specialNeeds,
             "shelter_id": user["uid"],
-            "images": payload.photos,
+            "images": valid_photos,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         res = supabase.table("animals").insert(data).execute()
@@ -161,6 +206,8 @@ def surrender_animal(payload: AnimalSurrenderCreate, user: dict = Depends(get_cu
     target_species = payload.species.upper()
     if target_species not in VALID_SPECIES:
         raise HTTPException(status_code=422, detail=f"Invalid species '{payload.species}'. Must be one of {sorted(VALID_SPECIES)}")
+        
+    valid_photos = validate_photo_urls(payload.photos)
         
     try:
         description_text = payload.description
@@ -181,7 +228,8 @@ def surrender_animal(payload: AnimalSurrenderCreate, user: dict = Depends(get_cu
             "is_neutered": False,
             "special_needs": None,
             "shelter_id": None, # Unassigned pending shelter intake
-            "images": payload.photos,
+            "surrendered_by": user["uid"], # Links owner to prevent abuse & enable contact
+            "images": valid_photos,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         
@@ -231,7 +279,8 @@ def update_animal(id: str, payload: AnimalUpdate, user: dict = Depends(require_r
         if payload.vaccinations is not None: update_data["vaccinations"] = payload.vaccinations
         if payload.isNeutered is not None: update_data["is_neutered"] = payload.isNeutered
         if payload.specialNeeds is not None: update_data["special_needs"] = payload.specialNeeds
-        if payload.photos is not None: update_data["images"] = payload.photos
+        if payload.photos is not None: 
+            update_data["images"] = validate_photo_urls(payload.photos)
         
         if not update_data:
             return map_animal(existing.data[0])

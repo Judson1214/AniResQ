@@ -5,20 +5,10 @@ A community-driven animal rescue, adoption, and lost-and-found management platfo
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES2024-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Shared%20Types-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%26%20Auth-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
-
----
-
-## GitHub Repository Information
-
-To configure your GitHub repository page:
-
-- **Description**: `Community-driven animal rescue, adoption, and lost-and-found management platform built with React, FastAPI, Supabase (PostgreSQL & Auth), and Leaflet.`
-- **Topics / Tags**: `animal-rescue`, `supabase`, `fastapi`, `react`, `postgresql`, `turborepo`, `leaflet`, `python`, `tailwindcss`, `pnpm`
 
 ---
 
@@ -33,7 +23,7 @@ AniResQ is engineered as a Turborepo monorepo with a decoupled FastAPI Python ba
   - **GoTrue Auth**: Secure JWT-based authentication with role verification.
   - **Storage**: Storage bucket (`uploads`) with public read, authenticated upload, 10MB size limit, and image MIME type restrictions.
 - **Shared Packages**:
-  - `packages/shared-types`: TypeScript interfaces, enums, and domain types shared across the monorepo.
+  - `packages/shared-types`: Common interfaces, enums, and domain definitions shared across the monorepo.
   - `packages/validation`: Zod validation schemas for forms and API contracts.
 
 ---
@@ -171,14 +161,27 @@ The application will be live at: **`http://localhost:3000`**
 AniResQ includes automated pytest security and RBAC tests:
 
 ```bash
-# From workspace root
+# Linux / macOS:
+PYTHONPATH=apps/api pytest apps/api/tests/
+
+# Windows (PowerShell):
 $env:PYTHONPATH="apps/api"; apps\api\venv\Scripts\pytest apps/api/tests/
+
+# Windows (Command Prompt):
+set PYTHONPATH=apps/api && pytest apps/api/tests/
 ```
 
-### Frontend Production Build
-To verify type resolution and compile frontend assets:
-
+### Frontend Automated Test Suite
 ```bash
+pnpm --filter @aniresq/web test
+```
+
+### Frontend Linting & Production Build
+```bash
+# Run ESLint
+pnpm --filter @aniresq/web lint
+
+# Verify type resolution and compile frontend assets
 pnpm --filter @aniresq/web build
 ```
 
@@ -187,16 +190,17 @@ pnpm --filter @aniresq/web build
 ## Security Model & RBAC
 
 1. **Role Escalation Protection**:
-   - The PostgreSQL `handle_new_user()` trigger automatically enforces `role = 'CITIZEN'::user_role` for all new signups, ignoring user-provided metadata.
+   - The PostgreSQL `handle_new_user()` trigger automatically enforces `role = 'CITIZEN'::user_role` for all new signups, capturing any requested role in `requested_role` for administrator review.
    - The `protect_user_fields_update()` trigger rejects any role change, email change, or ID tampering unless executed by an authenticated administrator or the backend `service_role`.
-   - Admin-only role management endpoint `PATCH /api/users/{uid}/role` provides secure role transitions.
+   - Admin-only role management endpoint `PATCH /api/users/{uid}/role` provides secure role transitions with safeguards against demoting the sole administrator.
 2. **Rescue & Animal Authorization**:
-   - The `protect_rescue_update()` trigger ensures non-staff reporters cannot forge responder assignments or arbitrary status transitions.
-   - Animal surrenders start as `NOT_READY` pending shelter review and verification.
+   - The `protect_rescue_update()` trigger ensures non-staff reporters cannot forge responder assignments or arbitrary status transitions, and freezes incident details once responders are dispatched.
+   - Animal surrenders start as `NOT_READY` pending shelter review and are visible only to staff and the surrenderer.
 3. **PII Isolation**:
-   - Supabase Row Level Security restricts email addresses and phone numbers in `public.users` so that non-staff users can only query their own contact info.
-4. **Backend Route Guarding**:
+   - Supabase Row Level Security restricts user profiles (`public.users`) so that non-staff and volunteers can only query their own contact info; organization staff (`ADMIN`, `NGO`, `SHELTER`, `VET`) can access user contact details for rescue coordination.
+4. **Backend Route Guarding & Media Validation**:
    - All mutating API endpoints require valid Bearer JWT tokens via `Depends(get_current_user)`.
+   - Photo and avatar uploads are validated to ensure assets originate from the official AniResQ storage bucket.
    - Status updates, volunteer dispatching, and deletion routes verify authorized role claims before executing database modifications.
 
 ---

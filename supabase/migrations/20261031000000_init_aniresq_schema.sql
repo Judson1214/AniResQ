@@ -25,6 +25,7 @@ CREATE TABLE public.users (
   phone TEXT DEFAULT '',
   avatar_url TEXT DEFAULT '',
   role user_role DEFAULT 'CITIZEN'::user_role NOT NULL,
+  requested_role TEXT DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
@@ -45,6 +46,7 @@ CREATE TABLE public.animals (
   is_neutered BOOLEAN DEFAULT FALSE,
   special_needs TEXT,
   shelter_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  surrendered_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
   images TEXT[] DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
@@ -165,23 +167,25 @@ CREATE TRIGGER update_lost_and_found_modtime BEFORE UPDATE ON public.lost_and_fo
 CREATE TRIGGER update_rescues_modtime BEFORE UPDATE ON public.rescues FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 CREATE TRIGGER update_notifications_modtime BEFORE UPDATE ON public.notifications FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
--- 8. Auth Signup Trigger (Hardened: Always defaults to CITIZEN to prevent privilege escalation)
+-- 8. Auth Signup Trigger (Hardened: Always defaults to CITIZEN, captures requested_role)
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS TRIGGER 
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-  INSERT INTO public.users (id, email, display_name, phone, role)
+  INSERT INTO public.users (id, email, display_name, phone, role, requested_role)
   VALUES (
     NEW.id,
     COALESCE(NEW.email, ''),
     COALESCE(NEW.raw_user_meta_data->>'display_name', 'Unknown User'),
     COALESCE(NEW.raw_user_meta_data->>'phone', ''),
-    'CITIZEN'::public.user_role -- Force CITIZEN regardless of user input
+    'CITIZEN'::public.user_role, -- Force CITIZEN regardless of user input
+    NEW.raw_user_meta_data->>'requested_role'
   )
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
-    display_name = CASE WHEN public.users.display_name = 'Unknown User' THEN EXCLUDED.display_name ELSE public.users.display_name END;
+    display_name = CASE WHEN public.users.display_name = 'Unknown User' THEN EXCLUDED.display_name ELSE public.users.display_name END,
+    requested_role = COALESCE(EXCLUDED.requested_role, public.users.requested_role);
     
   RETURN NEW;
 END;
@@ -236,7 +240,7 @@ CREATE TRIGGER tr_protect_user_fields_update
   BEFORE UPDATE ON public.users
   FOR EACH ROW EXECUTE PROCEDURE public.protect_user_fields_update();
 
--- 8c. Rescue Update Protection Trigger (Protects status, assigned_to, and reporter_id)
+-- 8c. Rescue Update Protection Trigger (Protects status, assigned_to, reporter_id, and details after dispatch)
 CREATE OR REPLACE FUNCTION public.protect_rescue_update()
 RETURNS TRIGGER 
 SET search_path = public, pg_temp
@@ -270,6 +274,17 @@ BEGIN
       ELSE
         RAISE EXCEPTION 'Not authorized to change rescue status.';
       END IF;
+    END IF;
+  END IF;
+
+  -- If rescue is already dispatched or in progress, non-staff cannot alter core incident details
+  IF OLD.status != 'PENDING'::public.rescue_status AND NOT public.is_staff() THEN
+    IF NEW.latitude IS DISTINCT FROM OLD.latitude OR
+       NEW.longitude IS DISTINCT FROM OLD.longitude OR
+       NEW.severity IS DISTINCT FROM OLD.severity OR
+       NEW.title IS DISTINCT FROM OLD.title OR
+       NEW.description IS DISTINCT FROM OLD.description THEN
+      RAISE EXCEPTION 'Cannot modify incident details once responders have been dispatched.';
     END IF;
   END IF;
 
@@ -328,12 +343,12 @@ ALTER TABLE public.rescues ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rescue_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
--- 10a. Users RLS (PII protected: users only see own profile or organizational staff sees users)
-CREATE POLICY "Users can view own profile or staff can view profiles" 
+-- 10a. Users RLS (PII protected: users see own profile, only organization staff sees others; excludes volunteers)
+CREATE POLICY "Users can view own profile or organization staff can view profiles" 
   ON public.users FOR SELECT 
   USING (
     auth.uid() = id 
-    OR public.is_staff() 
+    OR public.is_shelter_or_ngo() 
     OR auth.role() = 'service_role'
   );
 
@@ -346,21 +361,18 @@ CREATE POLICY "Users can update own profile"
   );
 
 -- 10b. Animals RLS
-CREATE POLICY "Animals are viewable by everyone" 
+CREATE POLICY "Animals are viewable by everyone once ready" 
   ON public.animals FOR SELECT 
-  USING (true);
+  USING (
+    adoption_status != 'NOT_READY'::public.adoption_status 
+    OR auth.uid() = surrendered_by 
+    OR public.is_shelter_or_ngo() 
+    OR auth.role() = 'service_role'
+  );
 
 CREATE POLICY "Staff can insert animals" 
   ON public.animals FOR INSERT 
   WITH CHECK (public.is_shelter_or_ngo() OR auth.role() = 'service_role');
-
-CREATE POLICY "Citizens can surrender animals pending review" 
-  ON public.animals FOR INSERT 
-  WITH CHECK (
-    auth.role() = 'authenticated' 
-    AND adoption_status = 'NOT_READY'::public.adoption_status 
-    AND shelter_id IS NULL
-  );
 
 CREATE POLICY "Staff can update animals" 
   ON public.animals FOR UPDATE 
@@ -523,6 +535,7 @@ CREATE INDEX IF NOT EXISTS idx_lost_found_type_status ON public.lost_and_found (
 CREATE INDEX IF NOT EXISTS idx_animals_adoption_status ON public.animals (adoption_status);
 CREATE INDEX IF NOT EXISTS idx_animals_species ON public.animals (species);
 CREATE INDEX IF NOT EXISTS idx_animals_created_at ON public.animals (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_animals_surrendered_by ON public.animals (surrendered_by);
 
 CREATE INDEX IF NOT EXISTS idx_adoption_apps_applicant_id ON public.adoption_applications (applicant_id);
 CREATE INDEX IF NOT EXISTS idx_adoption_apps_animal_id ON public.adoption_applications (animal_id);

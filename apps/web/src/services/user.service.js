@@ -1,4 +1,5 @@
 import { supabase } from "@/config/supabase";
+import api from "@/lib/api";
 
 const mapUserToCamelCase = (dbData) => ({
   uid: dbData.id,
@@ -6,6 +7,7 @@ const mapUserToCamelCase = (dbData) => ({
   email: dbData.email,
   displayName: dbData.display_name,
   role: dbData.role,
+  requestedRole: dbData.requested_role,
   phone: dbData.phone,
   avatarUrl: dbData.avatar_url || "",
   createdAt: dbData.created_at
@@ -60,9 +62,21 @@ const searchUsers = async (searchQuery) => {
   return data.map(mapUserToCamelCase);
 };
 
+const getUsers = async (params) => {
+  const response = await api.get('/users', { params });
+  return response.data;
+};
+
+const updateUserRole = async (uid, role) => {
+  const response = await api.patch(`/users/${uid}/role`, { role });
+  return response.data;
+};
+
 export {
   getUserById,
+  getUsers,
   getUsersByRole,
   searchUsers,
-  updateUserProfile
+  updateUserProfile,
+  updateUserRole
 };

@@ -14,6 +14,21 @@ STAFF_ROLES = {"ADMIN", "NGO", "VOLUNTEER", "SHELTER", "VET"}
 VALID_STATUSES = {"PENDING", "DISPATCHED", "IN_PROGRESS", "RESOLVED", "CANCELLED"}
 VALID_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
 
+def validate_photo_urls(urls: List[str]) -> List[str]:
+    valid = []
+    for u in urls:
+        if not u or not isinstance(u, str):
+            continue
+        u = u.strip()
+        if "/storage/v1/object/public/uploads/" in u or u.startswith("uploads/") or "/uploads/" in u:
+            valid.append(u)
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid photo URL '{u}'. Photos must be uploaded to the official AniResQ uploads storage bucket."
+            )
+    return valid
+
 class Location(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude must be between -90 and 90")
     longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude must be between -180 and 180")
@@ -113,6 +128,8 @@ def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get
     if target_sev not in VALID_SEVERITIES:
         raise HTTPException(status_code=422, detail=f"Invalid severity '{request.severity}'. Must be one of {sorted(VALID_SEVERITIES)}")
         
+    valid_photos = validate_photo_urls(request.photoUrls)
+        
     try:
         new_rescue = {
             "title": request.title,
@@ -121,7 +138,7 @@ def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get
             "latitude": request.location.latitude,
             "longitude": request.location.longitude,
             "address": request.address,
-            "images": request.photoUrls,
+            "images": valid_photos,
             "severity": target_sev,
             "status": "PENDING",
             "reporter_id": user["uid"],

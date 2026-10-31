@@ -1,6 +1,6 @@
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from supabase_config import supabase
 from auth import get_current_user
@@ -10,9 +10,20 @@ logger = logging.getLogger("users")
 
 VALID_ROLES = {"CITIZEN", "NGO", "VOLUNTEER", "SHELTER", "VET", "ADMIN"}
 
+def validate_avatar_url(url: Optional[str]) -> Optional[str]:
+    if not url:
+        return url
+    u = url.strip()
+    if "/storage/v1/object/public/uploads/" in u or u.startswith("uploads/") or "/uploads/" in u:
+        return u
+    raise HTTPException(
+        status_code=422,
+        detail="Invalid avatar URL. Avatars must be uploaded to the official AniResQ uploads storage bucket."
+    )
+
 class UserProfileCreate(BaseModel):
     uid: str
-    email: str
+    email: Optional[str] = None
     displayName: str
     role: Optional[str] = "CITIZEN"
     phoneNumber: Optional[str] = None
@@ -26,6 +37,44 @@ class UserProfileUpdate(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     role: str
+
+@router.get("")
+def list_users(
+    role: Optional[str] = None,
+    has_requested_role: Optional[bool] = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: dict = Depends(get_current_user),
+):
+    """Allows staff/administrators to query users and view pending role requests."""
+    if current_user.get("role") not in ["ADMIN", "NGO", "SHELTER", "VET"]:
+        raise HTTPException(status_code=403, detail="Forbidden: Only staff and administrators can list users")
+        
+    try:
+        query = supabase.table("users").select("id, display_name, email, phone, role, requested_role, avatar_url, created_at")
+        if role:
+            query = query.eq("role", role.upper())
+        if has_requested_role:
+            query = query.not_.is_("requested_role", "null")
+            
+        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        return [
+            {
+                "id": d["id"],
+                "uid": d["id"],
+                "displayName": d.get("display_name", ""),
+                "email": d.get("email", ""),
+                "phoneNumber": d.get("phone", ""),
+                "role": d.get("role", "CITIZEN"),
+                "requestedRole": d.get("requested_role"),
+                "avatarUrl": d.get("avatar_url", ""),
+                "createdAt": d.get("created_at"),
+            }
+            for d in res.data
+        ]
+    except Exception as e:
+        logger.error(f"Error listing users: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve users")
 
 @router.get("/{uid}")
 def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
@@ -45,6 +94,7 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
             "uid": data["id"],
             "displayName": data.get("display_name", ""),
             "role": data.get("role", "CITIZEN"),
+            "requestedRole": data.get("requested_role") if (is_self or is_staff_admin) else None,
             "avatarUrl": data.get("avatar_url", ""),
             "createdAt": data.get("created_at"),
             "email": data["email"] if (is_self or is_staff_admin) else "",
@@ -64,7 +114,7 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         
     try:
         # Prevent unauthorized role changes or demoting existing staff members
-        existing = supabase.table("users").select("role").eq("id", profile.uid).execute()
+        existing = supabase.table("users").select("role, email").eq("id", profile.uid).execute()
         if existing.data and current_user.get("role") != "ADMIN":
             target_role = existing.data[0].get("role", "CITIZEN")
         else:
@@ -73,9 +123,16 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         if target_role not in VALID_ROLES:
             target_role = "CITIZEN"
         
+        # Security: Derive verified email strictly from authenticated JWT token
+        verified_email = current_user.get("email")
+        if not verified_email and existing.data:
+            verified_email = existing.data[0].get("email")
+        if not verified_email:
+            verified_email = profile.email or ""
+            
         data = {
             "id": profile.uid,
-            "email": profile.email,
+            "email": verified_email,
             "display_name": profile.displayName,
             "role": target_role,
             "phone": profile.phoneNumber or ""
@@ -86,6 +143,7 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
             raise HTTPException(status_code=500, detail="Failed to create user profile")
             
         dumped = profile.model_dump()
+        dumped["email"] = verified_email
         dumped["role"] = target_role
         return {"id": profile.uid, "uid": profile.uid, **dumped}
     except HTTPException:
@@ -103,7 +161,8 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
     update_data = {}
     if profile.displayName is not None: update_data["display_name"] = profile.displayName
     if profile.phoneNumber is not None: update_data["phone"] = profile.phoneNumber
-    if profile.avatarUrl is not None: update_data["avatar_url"] = profile.avatarUrl
+    if profile.avatarUrl is not None: 
+        update_data["avatar_url"] = validate_avatar_url(profile.avatarUrl)
     
     try:
         if not update_data:
@@ -132,8 +191,19 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
     if target_role not in VALID_ROLES:
         raise HTTPException(status_code=422, detail=f"Invalid role '{req.role}'. Must be one of {sorted(VALID_ROLES)}")
         
+    # Guard against demoting the last remaining administrator
+    if current_user["uid"] == uid and target_role != "ADMIN":
+        admin_check = supabase.table("users").select("id", count="exact").eq("role", "ADMIN").execute()
+        if admin_check.count is not None and admin_check.count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot demote the last administrator.")
+            
     try:
-        res = supabase.table("users").update({"role": target_role}).eq("id", uid).execute()
+        # Update role and clear pending requested_role
+        res = supabase.table("users").update({
+            "role": target_role,
+            "requested_role": None
+        }).eq("id", uid).execute()
+        
         if not res.data:
             raise HTTPException(status_code=404, detail="User not found")
             
@@ -141,6 +211,7 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             "id": uid,
             "uid": uid,
             "role": target_role,
+            "requestedRole": None,
             "displayName": res.data[0].get("display_name", "")
         }
     except HTTPException:

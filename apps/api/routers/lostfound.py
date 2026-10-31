@@ -13,6 +13,21 @@ logger = logging.getLogger("lostfound")
 VALID_TYPES = {"LOST", "FOUND"}
 VALID_STATUSES = {"ACTIVE", "RESOLVED"}
 
+def validate_photo_urls(urls: List[str]) -> List[str]:
+    valid = []
+    for u in urls:
+        if not u or not isinstance(u, str):
+            continue
+        u = u.strip()
+        if "/storage/v1/object/public/uploads/" in u or u.startswith("uploads/") or "/uploads/" in u:
+            valid.append(u)
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid photo URL '{u}'. Photos must be uploaded to the official AniResQ uploads storage bucket."
+            )
+    return valid
+
 class Location(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude must be between -90 and 90")
     longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude must be between -180 and 180")
@@ -101,6 +116,8 @@ def create_lost_found(report: LostFoundCreate, user: dict = Depends(get_current_
     if target_type not in VALID_TYPES:
         raise HTTPException(status_code=422, detail=f"Invalid type '{report.type}'. Must be one of {sorted(VALID_TYPES)}")
         
+    valid_photos = validate_photo_urls(report.photoUrls)
+        
     try:
         new_post = {
             "type": target_type,
@@ -116,7 +133,7 @@ def create_lost_found(report: LostFoundCreate, user: dict = Depends(get_current_
             "last_seen_address": report.lastSeenAddress,
             "last_seen_date": report.lastSeenDate,
             "reporter_id": user["uid"],
-            "images": report.photoUrls,
+            "images": valid_photos,
             "status": "ACTIVE",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
