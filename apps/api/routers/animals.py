@@ -1,8 +1,9 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from datetime import datetime
+
 from supabase_config import supabase
 from auth import get_current_user, require_roles
 
@@ -64,7 +65,12 @@ def map_animal(db_data: dict) -> dict:
     }
 
 @router.get("/")
-def get_animals(status: Optional[str] = None, species: Optional[str] = None):
+def get_animals(
+    status: Optional[str] = None,
+    species: Optional[str] = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
     try:
         query = supabase.table("animals").select("*")
         if status:
@@ -72,7 +78,7 @@ def get_animals(status: Optional[str] = None, species: Optional[str] = None):
         if species:
             query = query.eq("species", species.upper())
             
-        res = query.order("created_at", desc=True).execute()
+        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         return [map_animal(item) for item in res.data]
     except Exception as e:
         logger.error(f"Error fetching animals: {e}")
@@ -109,6 +115,7 @@ def create_animal(payload: AnimalCreate, user: dict = Depends(require_roles(STAF
             "special_needs": payload.specialNeeds,
             "shelter_id": user["uid"],
             "images": payload.photos,
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         res = supabase.table("animals").insert(data).execute()
         if not res.data:

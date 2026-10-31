@@ -1,6 +1,6 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from supabase_config import supabase
 from auth import get_current_user
@@ -72,7 +72,9 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to create user profile")
             
-        return {"id": profile.uid, "uid": profile.uid, **data}
+        dumped = profile.model_dump()
+        dumped["role"] = target_role
+        return {"id": profile.uid, "uid": profile.uid, **dumped}
     except HTTPException:
         raise
     except Exception as e:

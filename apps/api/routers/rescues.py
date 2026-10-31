@@ -1,8 +1,8 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from datetime import datetime, timezone
 from typing import List, Optional
-from pydantic import BaseModel
-from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
 from supabase_config import supabase
 from auth import get_current_user
@@ -13,8 +13,8 @@ logger = logging.getLogger("rescues")
 STAFF_ROLES = {"ADMIN", "NGO", "VOLUNTEER", "SHELTER", "VET"}
 
 class Location(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude must be between -90 and 90")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude must be between -180 and 180")
 
 class RescueRequestCreate(BaseModel):
     title: str
@@ -39,7 +39,9 @@ def get_all_rescues(
     status: Optional[str] = None,
     severity: Optional[str] = None,
     species: Optional[str] = None,
-    reporterId: Optional[str] = None
+    reporterId: Optional[str] = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
     try:
         query = supabase.table("rescues").select("*")
@@ -52,7 +54,7 @@ def get_all_rescues(
         if reporterId:
             query = query.eq("reporter_id", reporterId)
             
-        res = query.order("created_at", desc=True).execute()
+        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         rescues = []
         for data in res.data:
             rescues.append({
@@ -133,6 +135,7 @@ def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get
                 "message": "Rescue request submitted",
                 "updated_by": user["uid"],
                 "updated_by_name": user.get("name") or "Citizen Reporter",
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
             supabase.table("rescue_timeline").insert(timeline_entry).execute()
         except Exception as te_err:
@@ -148,7 +151,6 @@ def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get
 @router.patch("/{rescue_id}/status")
 def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user: dict = Depends(get_current_user)):
     try:
-        # Check existing rescue
         existing = supabase.table("rescues").select("*").eq("id", rescue_id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Rescue request not found")
@@ -158,9 +160,6 @@ def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user
         is_reporter = current_rescue.get("reporter_id") == user["uid"]
         is_staff = user_role in STAFF_ROLES
         
-        # Authorization check:
-        # Reporter can only cancel or mark resolved
-        # Staff can update to any valid status
         if not is_staff:
             if not (is_reporter and update.status in ["CANCELLED", "RESOLVED"]):
                 raise HTTPException(
@@ -181,6 +180,7 @@ def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user
                 "message": status_msg,
                 "updated_by": user["uid"],
                 "updated_by_name": user.get("name") or user_role,
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
             supabase.table("rescue_timeline").insert(timeline_entry).execute()
         except Exception as te_err:
@@ -209,7 +209,6 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
         if not res.data:
             raise HTTPException(status_code=404, detail="Rescue request not found")
             
-        # Securely record timeline entry
         try:
             timeline_entry = {
                 "rescue_id": rescue_id,
@@ -217,6 +216,7 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
                 "message": f"Assigned to volunteer {req.volunteerName} by {user.get('name', 'Staff')}",
                 "updated_by": user["uid"],
                 "updated_by_name": user.get("name") or user_role,
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
             supabase.table("rescue_timeline").insert(timeline_entry).execute()
         except Exception as te_err:
@@ -252,9 +252,20 @@ def delete_rescue(rescue_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail="Failed to delete rescue request")
 
 @router.get("/{rescue_id}/timeline")
-def get_rescue_timeline(rescue_id: str):
+def get_rescue_timeline(
+    rescue_id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
     try:
-        res = supabase.table("rescue_timeline").select("*").eq("rescue_id", rescue_id).order("created_at", desc=False).execute()
+        res = (
+            supabase.table("rescue_timeline")
+            .select("*")
+            .eq("rescue_id", rescue_id)
+            .order("created_at", desc=False)
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
         return [
             {
                 "id": d["id"], 

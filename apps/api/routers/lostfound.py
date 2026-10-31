@@ -1,8 +1,9 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from datetime import datetime, timezone
 from typing import Optional, List
-from pydantic import BaseModel
-from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+
 from supabase_config import supabase
 from auth import get_current_user
 
@@ -10,8 +11,8 @@ router = APIRouter(prefix="/api/lostfound", tags=["lostfound"])
 logger = logging.getLogger("lostfound")
 
 class Location(BaseModel):
-    latitude: float
-    longitude: float
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude must be between -90 and 90")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude must be between -180 and 180")
 
 class LostFoundCreate(BaseModel):
     type: str
@@ -56,7 +57,13 @@ def map_post_to_camel(data: dict) -> dict:
     }
 
 @router.get("/")
-def get_lost_found(type: Optional[str] = None, status: Optional[str] = None, reporterId: Optional[str] = None):
+def get_lost_found(
+    type: Optional[str] = None,
+    status: Optional[str] = None,
+    reporterId: Optional[str] = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
     try:
         query = supabase.table("lost_and_found").select("*")
         if type:
@@ -66,7 +73,7 @@ def get_lost_found(type: Optional[str] = None, status: Optional[str] = None, rep
         if reporterId:
             query = query.eq("reporter_id", reporterId)
         
-        res = query.order("created_at", desc=True).execute()
+        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         return [map_post_to_camel(d) for d in res.data]
     except Exception as e:
         logger.error(f"Error fetching lost/found posts: {e}")
@@ -103,7 +110,8 @@ def create_lost_found(report: LostFoundCreate, user: dict = Depends(get_current_
             "last_seen_date": report.lastSeenDate,
             "reporter_id": user["uid"],
             "images": report.photoUrls,
-            "status": "ACTIVE"
+            "status": "ACTIVE",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         
         res = supabase.table("lost_and_found").insert(new_post).execute()
@@ -175,7 +183,8 @@ def add_lost_found_reply(id: str, reply: LostFoundReply, user: dict = Depends(ge
             "lost_and_found_id": id,
             "user_id": user["uid"],
             "user_name": user.get("name") or user.get("email", "Anonymous"),
-            "text": reply.text.strip()
+            "text": reply.text.strip(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         
         if not new_reply["text"]:
@@ -200,13 +209,24 @@ def add_lost_found_reply(id: str, reply: LostFoundReply, user: dict = Depends(ge
         raise HTTPException(status_code=500, detail="Failed to add reply")
 
 @router.get("/{id}/replies")
-def get_lost_found_replies(id: str):
+def get_lost_found_replies(
+    id: str,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
     try:
         post_res = supabase.table("lost_and_found").select("id").eq("id", id).execute()
         if not post_res.data:
             raise HTTPException(status_code=404, detail="Report not found")
             
-        res = supabase.table("lost_and_found_replies").select("*").eq("lost_and_found_id", id).order("created_at").execute()
+        res = (
+            supabase.table("lost_and_found_replies")
+            .select("*")
+            .eq("lost_and_found_id", id)
+            .order("created_at")
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
         return [
             {
                 "id": data["id"],

@@ -97,6 +97,49 @@ def test_animals_mutations_require_staff_auth():
     finally:
         app.dependency_overrides.clear()
 
+def test_latitude_longitude_range_validation():
+    def mock_user():
+        return {"uid": "user-1", "email": "user@test.com", "name": "User", "role": "CITIZEN"}
+    
+    app.dependency_overrides[get_current_user] = mock_user
+    try:
+        # Latitude exceeds 90 degrees
+        res_lat = client.post("/api/rescues/", json={
+            "title": "Out of bounds latitude",
+            "description": "Invalid coordinates",
+            "severity": "LOW",
+            "species": "DOG",
+            "location": {"latitude": 95.0, "longitude": 10.0},
+            "address": "North Pole"
+        })
+        assert res_lat.status_code == 422
+
+        # Longitude exceeds 180 degrees
+        res_lon = client.post("/api/rescues/", json={
+            "title": "Out of bounds longitude",
+            "description": "Invalid coordinates",
+            "severity": "LOW",
+            "species": "DOG",
+            "location": {"latitude": 10.0, "longitude": 185.0},
+            "address": "Date line"
+        })
+        assert res_lon.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+def test_pagination_query_parameters():
+    # Verify pagination parameters are accepted and validated
+    res_valid = client.get("/api/rescues/?limit=10&offset=20")
+    assert res_valid.status_code == 200
+
+    # Limit must be >= 1
+    res_invalid_limit = client.get("/api/rescues/?limit=0")
+    assert res_invalid_limit.status_code == 422
+
+    # Offset must be >= 0
+    res_invalid_offset = client.get("/api/rescues/?offset=-5")
+    assert res_invalid_offset.status_code == 422
+
 def test_validation_exception_does_not_leak_body():
     def mock_user():
         return {"uid": "user-1", "email": "user@test.com", "name": "User", "role": "CITIZEN"}

@@ -1,8 +1,9 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from datetime import datetime, timezone
 from typing import Optional, List
-from pydantic import BaseModel
-from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+
 from supabase_config import supabase
 from auth import get_current_user, require_roles
 
@@ -54,6 +55,8 @@ def get_adoptions(
     applicantId: Optional[str] = None,
     animalId: Optional[str] = None,
     status: Optional[str] = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     user: dict = Depends(get_current_user)
 ):
     try:
@@ -73,7 +76,7 @@ def get_adoptions(
         if status:
             query = query.eq("status", status.upper())
             
-        res = query.order("created_at", desc=True).execute()
+        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         return [map_adoption(d) for d in res.data]
     except Exception as e:
         logger.error(f"Error fetching adoption applications: {e}")
@@ -116,7 +119,8 @@ def submit_adoption_application(payload: AdoptionCreate, user: dict = Depends(ge
             "has_children": payload.hasChildren,
             "work_schedule": payload.workSchedule,
             "why_adopt": payload.whyAdopt,
-            "status": "SUBMITTED"
+            "status": "SUBMITTED",
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
         res = supabase.table("adoption_applications").insert(new_app).execute()
         if not res.data:
@@ -138,7 +142,7 @@ def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = 
         update_data = {
             "status": payload.status.upper(),
             "reviewer_id": user["uid"],
-            "reviewed_at": datetime.utcnow().isoformat(),
+            "reviewed_at": datetime.now(timezone.utc).isoformat(),
         }
         if payload.screeningNotes is not None:
             update_data["screening_notes"] = payload.screeningNotes

@@ -1,8 +1,9 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timezone
 from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from datetime import datetime
+
 from supabase_config import supabase
 from auth import get_current_user
 
@@ -23,14 +24,18 @@ def map_notification(db_data: dict) -> dict:
     }
 
 @router.get("/")
-def get_notifications(user: dict = Depends(get_current_user)):
+def get_notifications(
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    user: dict = Depends(get_current_user),
+):
     try:
         res = (
             supabase.table("notifications")
             .select("*")
             .eq("user_id", user["uid"])
             .order("created_at", desc=True)
-            .limit(50)
+            .range(offset, offset + limit - 1)
             .execute()
         )
         return [map_notification(d) for d in res.data]
