@@ -1,6 +1,7 @@
 import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+
 const HomePage = lazy(() => import("@/pages/HomePage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
 const RegisterPage = lazy(() => import("@/pages/RegisterPage"));
@@ -16,16 +17,20 @@ const SurrenderPage = lazy(() => import("@/pages/SurrenderPage"));
 const MyApplicationsPage = lazy(() => import("@/pages/MyApplicationsPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const UnauthorizedPage = lazy(() => import("@/pages/UnauthorizedPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
-const PageLoader = () => <div className="flex h-screen w-full items-center justify-center">
+
+const PageLoader = () => (
+  <div className="flex h-screen w-full items-center justify-center">
     <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
-  </div>;
+  </div>
+);
+
 function App() {
-  return <Suspense fallback={<PageLoader />}>
+  return (
+    <Suspense fallback={<PageLoader />}>
       <Routes>
-        {
-    /* Public Routes */
-  }
+        {/* Public Routes */}
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
@@ -34,57 +39,66 @@ function App() {
         <Route path="/rescue" element={<RescueListPage />} />
         <Route path="/rescue/:id" element={<RescueDetailPage />} />
         <Route path="/lost-found" element={<LostFoundPage />} />
+        <Route path="/donate" element={<DonationPage />} />
 
-        {
-    /* Protected Routes - Any authenticated user */
-  }
+        {/* Protected Routes - Any authenticated user */}
         <Route
-    path="/dashboard"
-    element={<ProtectedRoute>
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
               <DashboardPage />
-            </ProtectedRoute>}
-  />
+            </ProtectedRoute>
+          }
+        />
         <Route
-    path="/profile"
-    element={<ProtectedRoute>
+          path="/profile"
+          element={
+            <ProtectedRoute>
               <ProfilePage />
-            </ProtectedRoute>}
-  />
+            </ProtectedRoute>
+          }
+        />
         <Route
-    path="/report-rescue"
-    element={<ProtectedRoute>
+          path="/report-rescue"
+          element={
+            <ProtectedRoute>
               <ReportRescuePage />
-            </ProtectedRoute>}
-  />
+            </ProtectedRoute>
+          }
+        />
         <Route
-    path="/adoption/:animalId"
-    element={<ProtectedRoute>
+          path="/adoption/:animalId"
+          element={
+            <ProtectedRoute>
               <AdoptionPage />
-            </ProtectedRoute>}
-  />
+            </ProtectedRoute>
+          }
+        />
         <Route
-    path="/donate"
-    element={<DonationPage />}
-  />
+          path="/surrender"
+          element={
+            <ProtectedRoute>
+              <SurrenderPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
-    path="/surrender"
-    element={<ProtectedRoute><SurrenderPage /></ProtectedRoute>}
-  />
-        <Route
-    path="/my-applications"
-    element={<ProtectedRoute>
+          path="/my-applications"
+          element={
+            <ProtectedRoute>
               <MyApplicationsPage />
-            </ProtectedRoute>}
-  />
+            </ProtectedRoute>
+          }
+        />
 
-        {
-    /* Catch-all 404 */
-  }
+        {/* Authorization failure route */}
+        <Route path="/unauthorized" element={<UnauthorizedPage />} />
+
+        {/* Catch-all 404 */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-    </Suspense>;
+    </Suspense>
+  );
 }
-var stdin_default = App;
-export {
-  stdin_default as default
-};
+
+export default App;

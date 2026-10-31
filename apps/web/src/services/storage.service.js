@@ -28,6 +28,12 @@ const compressImage = (file, maxWidth = 800) => {
       const img = new Image();
       img.src = event.target.result;
       img.onload = () => {
+        // Only scale down if image exceeds maxWidth; never upscale smaller images
+        if (img.width <= maxWidth) {
+          resolve(file);
+          return;
+        }
+
         const canvas = document.createElement('canvas');
         const scaleSize = maxWidth / img.width;
         canvas.width = maxWidth;
@@ -43,7 +49,7 @@ const compressImage = (file, maxWidth = 800) => {
           } else {
             resolve(file); // fallback to original if compression fails
           }
-        }, 'image/jpeg', 0.7);
+        }, 'image/jpeg', 0.8);
       };
       img.onerror = () => resolve(file); // fallback to original
     };
@@ -53,16 +59,17 @@ const compressImage = (file, maxWidth = 800) => {
 
 const uploadMultipleFiles = async (basePath, files, onProgress) => {
   const totalFiles = files.length;
+  if (totalFiles === 0) return [];
   let overallProgress = 0;
   const progressPerFile = 100 / totalFiles;
   
-  const uploadProcess = async () => {
-    // 1. Compress all files
-    const compressedFiles = await Promise.all(
-      files.map(f => f.type.startsWith('image/') ? compressImage(f) : f)
-    );
+  // 1. Compress images first
+  const compressedFiles = await Promise.all(
+    files.map(f => f.type.startsWith('image/') ? compressImage(f) : f)
+  );
 
-    // 2. Upload files
+  // 2. Upload files with generous 30s network timeout
+  const uploadProcess = async () => {
     const uploadPromises = compressedFiles.map(async (file, index) => {
       const extension = "jpg";
       const filename = `${Date.now()}-${index}.${extension}`;
@@ -76,9 +83,8 @@ const uploadMultipleFiles = async (basePath, files, onProgress) => {
     return Promise.all(uploadPromises);
   };
 
-  // Wrap the entire compression AND upload in a strict timeout.
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error("Storage upload timed out. Supabase Storage might be disabled or misconfigured.")), 8000);
+    setTimeout(() => reject(new Error("Storage upload timed out. Please check your network connection.")), 30000);
   });
 
   return Promise.race([

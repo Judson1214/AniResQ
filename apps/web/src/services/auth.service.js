@@ -1,13 +1,12 @@
 import { supabase } from "@/config/supabase";
 
-const signUp = async (email, password, displayName, role, phone) => {
+const signUp = async (email, password, displayName, role = "CITIZEN", phone = "") => {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: {
         display_name: displayName,
-        role: role,
         phone: phone || ""
       }
     }
@@ -20,12 +19,9 @@ const signUp = async (email, password, displayName, role, phone) => {
     uid: user.id,
     email: user.email,
     displayName,
-    role,
+    role: "CITIZEN", // Default role enforced by backend database trigger
     phone: phone || "",
   };
-  
-  // The PostgreSQL trigger will automatically create the user row in public.users
-  // We no longer need to call the Python backend to bypass Firestore rules.
   
   return { ...newUser, id: user.id, avatarUrl: "", isVerified: false, createdAt: new Date() };
 };
@@ -77,8 +73,9 @@ const updateUserProfile = async (uid, updateData) => {
   const dbData = {};
   if (updateData.displayName !== undefined) dbData.display_name = updateData.displayName;
   if (updateData.phone !== undefined) dbData.phone = updateData.phone;
-  if (updateData.role !== undefined) dbData.role = updateData.role;
-  
+  if (updateData.avatarUrl !== undefined) dbData.avatar_url = updateData.avatarUrl;
+  // NOTE: role is strictly excluded to prevent privilege escalation from the browser
+
   const { data, error } = await supabase
     .from('users')
     .update(dbData)
@@ -92,7 +89,6 @@ const updateUserProfile = async (uid, updateData) => {
 
 const onAuthChange = (callback) => {
   const { data } = supabase.auth.onAuthStateChange((event, session) => {
-    // Return session.user or null
     callback(session?.user || null);
   });
   

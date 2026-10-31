@@ -1,77 +1,155 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import Optional
+import logging
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Optional, List
 from pydantic import BaseModel
 from datetime import datetime
-from firebase_config import db
-from auth import get_current_user
+from supabase_config import supabase
+from auth import get_current_user, require_roles
 
 router = APIRouter(prefix="/api/adoptions", tags=["adoptions"])
+logger = logging.getLogger("adoptions")
+
+STAFF_ROLES = ["ADMIN", "NGO", "SHELTER"]
 
 class AdoptionCreate(BaseModel):
     animalId: str
-    reason: str
-    experience: Optional[str] = None
+    livingEnvironment: str = "APARTMENT"
+    hasYard: bool = False
+    hasOtherPets: bool = False
+    otherPetDetails: Optional[str] = None
+    priorPetExperience: str
+    familyMembers: int = 1
+    hasChildren: bool = False
+    workSchedule: str
+    whyAdopt: str
 
 class AdoptionStatusUpdate(BaseModel):
     status: str
+    screeningNotes: Optional[str] = None
+
+def map_adoption(db_data: dict) -> dict:
+    return {
+        "id": db_data["id"],
+        "animalId": db_data["animal_id"],
+        "applicantId": db_data["applicant_id"],
+        "livingEnvironment": db_data.get("living_environment"),
+        "hasYard": db_data.get("has_yard", False),
+        "hasOtherPets": db_data.get("has_other_pets", False),
+        "otherPetDetails": db_data.get("other_pet_details"),
+        "priorPetExperience": db_data.get("prior_pet_experience"),
+        "familyMembers": db_data.get("family_members"),
+        "hasChildren": db_data.get("has_children", False),
+        "workSchedule": db_data.get("work_schedule"),
+        "whyAdopt": db_data.get("why_adopt"),
+        "status": db_data.get("status"),
+        "reviewerId": db_data.get("reviewer_id"),
+        "screeningNotes": db_data.get("screening_notes"),
+        "reviewedAt": db_data.get("reviewed_at"),
+        "createdAt": db_data.get("created_at"),
+        "updatedAt": db_data.get("updated_at"),
+    }
 
 @router.get("/")
 def get_adoptions(
     applicantId: Optional[str] = None,
     animalId: Optional[str] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    user: dict = Depends(get_current_user)
 ):
-    adoptions_ref = db.collection("adoptions")
-    query = adoptions_ref
-    if applicantId:
-        query = query.where("applicantId", "==", applicantId)
-    if animalId:
-        query = query.where("animalId", "==", animalId)
-    if status:
-        query = query.where("status", "==", status)
-    
-    docs = query.stream()
-    result = []
-    for doc in docs:
-        data = doc.to_dict()
-        data["id"] = doc.id
-        result.append(data)
-    return result
+    try:
+        user_role = user.get("role", "CITIZEN")
+        is_staff = user_role in STAFF_ROLES
+        
+        query = supabase.table("adoption_applications").select("*")
+        
+        # Non-staff can ONLY query their own applications
+        if not is_staff:
+            query = query.eq("applicant_id", user["uid"])
+        elif applicantId:
+            query = query.eq("applicant_id", applicantId)
+            
+        if animalId:
+            query = query.eq("animal_id", animalId)
+        if status:
+            query = query.eq("status", status.upper())
+            
+        res = query.order("created_at", desc=True).execute()
+        return [map_adoption(d) for d in res.data]
+    except Exception as e:
+        logger.error(f"Error fetching adoption applications: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve adoption applications")
 
 @router.get("/{id}")
-def get_adoption(id: str):
-    doc_ref = db.collection("adoptions").document(id)
-    doc = doc_ref.get()
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail="Adoption application not found")
-    data = doc.to_dict()
-    data["id"] = doc.id
-    return data
+def get_adoption(id: str, user: dict = Depends(get_current_user)):
+    try:
+        res = supabase.table("adoption_applications").select("*").eq("id", id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Adoption application not found")
+            
+        data = res.data[0]
+        user_role = user.get("role", "CITIZEN")
+        is_owner = data.get("applicant_id") == user["uid"]
+        is_staff = user_role in STAFF_ROLES
+        
+        if not (is_owner or is_staff):
+            raise HTTPException(status_code=403, detail="Forbidden: You cannot view this application")
+            
+        return map_adoption(data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching application {id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve adoption application")
 
-@router.post("/")
-def create_adoption(adoption: AdoptionCreate, user: dict = Depends(get_current_user)):
-    data = adoption.dict(exclude_unset=True)
-    data["applicantId"] = user["uid"]
-    data["status"] = "pending"
-    data["createdAt"] = datetime.utcnow().isoformat()
-    
-    doc_ref = db.collection("adoptions").document()
-    doc_ref.set(data)
-    data["id"] = doc_ref.id
-    return data
+@router.post("/", status_code=status.HTTP_201_CREATED)
+def submit_adoption_application(payload: AdoptionCreate, user: dict = Depends(get_current_user)):
+    try:
+        new_app = {
+            "animal_id": payload.animalId,
+            "applicant_id": user["uid"],
+            "living_environment": payload.livingEnvironment.upper(),
+            "has_yard": payload.hasYard,
+            "has_other_pets": payload.hasOtherPets,
+            "other_pet_details": payload.otherPetDetails,
+            "prior_pet_experience": payload.priorPetExperience,
+            "family_members": payload.familyMembers,
+            "has_children": payload.hasChildren,
+            "work_schedule": payload.workSchedule,
+            "why_adopt": payload.whyAdopt,
+            "status": "SUBMITTED"
+        }
+        res = supabase.table("adoption_applications").insert(new_app).execute()
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to submit application")
+        return map_adoption(res.data[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating adoption application: {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit application")
 
 @router.patch("/{id}/status")
-def update_adoption_status(id: str, status_update: AdoptionStatusUpdate, user: dict = Depends(get_current_user)):
-    doc_ref = db.collection("adoptions").document(id)
-    if not doc_ref.get().exists:
-        raise HTTPException(status_code=404, detail="Adoption application not found")
-    
-    update_data = {
-        "status": status_update.status,
-        "updatedAt": datetime.utcnow().isoformat()
-    }
-    doc_ref.update(update_data)
-    
-    updated_doc = doc_ref.get().to_dict()
-    updated_doc["id"] = id
-    return updated_doc
+def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = Depends(require_roles(STAFF_ROLES))):
+    try:
+        existing = supabase.table("adoption_applications").select("id").eq("id", id).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Adoption application not found")
+            
+        update_data = {
+            "status": payload.status.upper(),
+            "reviewer_id": user["uid"],
+            "reviewed_at": datetime.utcnow().isoformat(),
+        }
+        if payload.screeningNotes is not None:
+            update_data["screening_notes"] = payload.screeningNotes
+            
+        res = supabase.table("adoption_applications").update(update_data).eq("id", id).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Adoption application not found")
+            
+        return map_adoption(res.data[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating adoption status {id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update adoption status")

@@ -39,8 +39,8 @@ const updateUserProfile = async (uid, data) => {
   const updateData = {};
   if (data.displayName !== undefined) updateData.display_name = data.displayName;
   if (data.phone !== undefined) updateData.phone = data.phone;
-  if (data.role !== undefined) updateData.role = data.role;
   if (data.avatarUrl !== undefined) updateData.avatar_url = data.avatarUrl;
+  // NOTE: role is strictly excluded to prevent privilege escalation from the browser
 
   const { error } = await supabase
     .from('users')
@@ -54,7 +54,7 @@ const searchUsers = async (searchQuery) => {
   const { data, error } = await supabase
     .from('users')
     .select('*')
-    .ilike('display_name', `%${searchQuery}%`); // using case-insensitive search
+    .ilike('display_name', `%${searchQuery}%`);
 
   if (error) throw error;
   return data.map(mapUserToCamelCase);

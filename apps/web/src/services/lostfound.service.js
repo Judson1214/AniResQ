@@ -4,13 +4,8 @@ import { uploadMultipleFiles } from "./storage.service";
 const createPost = async (data, photos) => {
   let photoUrls = [];
   if (photos && photos.length > 0) {
-    try {
-      const tempId = crypto.randomUUID();
-      photoUrls = await uploadMultipleFiles(`lostfound-photos/${tempId}`, photos);
-    } catch (err) {
-      console.warn("Storage upload failed for lost/found", err);
-      photoUrls = ["https://images.unsplash.com/photo-1543466835-00a7907e9de1?auto=format&fit=crop&q=80&w=1000"];
-    }
+    const tempId = crypto.randomUUID();
+    photoUrls = await uploadMultipleFiles(`lostfound-photos/${tempId}`, photos);
   }
 
   const payload = {
