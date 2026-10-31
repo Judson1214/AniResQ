@@ -2,125 +2,180 @@
 
 A community-driven animal rescue, adoption, and lost-and-found management platform.
 
+[![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![JavaScript](https://img.shields.io/badge/JavaScript-ES2024-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%26%20Auth-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
+[![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+
+---
+
+## GitHub Repository Information
+
+To configure your GitHub repository page:
+
+- **Description**: `Community-driven animal rescue, adoption, and lost-and-found management platform built with React, FastAPI, Supabase (PostgreSQL & Auth), and Leaflet.`
+- **Topics / Tags**: `animal-rescue`, `supabase`, `fastapi`, `react`, `postgresql`, `turborepo`, `leaflet`, `python`, `tailwindcss`, `pnpm`
+
+---
+
 ## Architecture & Technology Stack
 
-AniResQ is structured as a Turborepo monorepo with a decoupled FastAPI Python backend, a Vite + React modern frontend, and a Supabase (PostgreSQL) database, authentication, and object storage layer.
+AniResQ is engineered as a Turborepo monorepo with a decoupled FastAPI Python backend, a Vite + React modern frontend, and a managed Supabase database, authentication, and object storage layer:
 
-- **Frontend (`apps/web`)**: React 18, Vite, Tailwind CSS, TanStack React Query, Zustand, React Hook Form, Leaflet, Lucide icons.
-- **Backend API (`apps/api`)**: FastAPI, Pydantic, Supabase Python Client, HTTPBearer JWT token authentication, Pytest.
-- **Data & Auth (`Supabase`)**: PostgreSQL with Row-Level Security (RLS), custom triggers, JWT authentication, and Storage buckets.
-- **Monorepo Packages**:
-  - `packages/shared-types`: Shared TypeScript definitions and domain models.
-  - `packages/validation`: Zod schemas for shared form and payload validation.
+- **Frontend (`apps/web`)**: Single-page application built with React 18, Vite, Tailwind CSS, TanStack React Query, Zustand, React Hook Form, Leaflet, and Lucide icons.
+- **Backend API (`apps/api`)**: High-performance RESTful API built with FastAPI, Pydantic v2, HTTPBearer JWT token authentication, Pytest, and the Supabase Python SDK.
+- **Database & Auth (`Supabase`)**:
+  - **PostgreSQL**: Relational schema with strict foreign keys, enum types, automatic timestamp triggers, and Row-Level Security (RLS).
+  - **GoTrue Auth**: Secure JWT-based authentication with role verification.
+  - **Storage**: Storage bucket (`uploads`) with public read and authenticated write access for rescue/animal photos.
+- **Shared Packages**:
+  - `packages/shared-types`: TypeScript interfaces, enums, and domain types shared across the monorepo.
+  - `packages/validation`: Zod validation schemas for forms and API contracts.
+
+---
 
 ## Key Features
 
-- **Emergency Rescue Reporting**: SOS report submission with GPS geolocation mapping, severity tagging, status updates, and chronological timeline logging.
-- **Responder Dispatch**: Automated and manual assignment of rescue alerts to registered volunteers and NGOs.
-- **Adoption Center**: Animal listing directory with medical records, vaccination logs, and adoption application screening.
-- **Lost & Found Network**: Community reporting for lost and found pets with interactive comment and reply threads.
-- **Role-Based Access Control (RBAC)**: Fine-grained permissions across 6 distinct roles: `CITIZEN`, `VOLUNTEER`, `NGO`, `SHELTER`, `VET`, and `ADMIN`.
+1. **Emergency Rescue Operations (SOS)**
+   - Real-time incident reporting with GPS reverse geocoding and image attachments.
+   - Interactive Leaflet live map showing nearby rescues and priority color tags.
+   - Dispatch system for assigning volunteers and logging chronological timeline events.
+2. **Adoption Center**
+   - Listings directory with health status, medical history, age estimates, and vaccination records.
+   - Comprehensive multi-step adoption application submission and staff review screening.
+3. **Lost & Found Network**
+   - Community bulletin board for missing and found animals with location coordinates.
+   - Interactive comment and update threads for coordinating reunions.
+4. **Role-Based Access Control (RBAC)**
+   - 6 distinct roles: `CITIZEN`, `VOLUNTEER`, `NGO`, `SHELTER`, `VET`, and `ADMIN`.
+   - Hardened with database-level trigger locks against unauthorized privilege escalation.
+
+---
 
 ## Prerequisites
 
-- **Node.js**: 18+
-- **pnpm**: 9+
-- **Python**: 3.10+
-- **Supabase**: A free Supabase cloud project or local Supabase instance.
+- **Node.js**: 18.0.0 or higher
+- **pnpm**: 9.0.0 or higher
+- **Python**: 3.10 or higher
+- **Supabase Account**: A free project hosted on [supabase.com](https://supabase.com) (or a local Supabase CLI instance).
 
 ---
 
 ## Getting Started
 
-### 1. Database Setup
-
-1. In your Supabase dashboard, navigate to the **SQL Editor**.
-2. Run the initialization script from [`supabase/migrations/20261031000000_init_aniresq_schema.sql`](./supabase/migrations/20261031000000_init_aniresq_schema.sql).
-3. If upgrading an existing database, run [`supabase/migrations/20261031000001_security_and_fixes.sql`](./supabase/migrations/20261031000001_security_and_fixes.sql) to apply the latest security locks, missing tables, and RLS policies.
-4. Ensure the `uploads` storage bucket is created (the script will configure public read and authenticated write policies automatically).
-
-### 2. Environment Configuration
-
-Copy `.env.example` to both `apps/web/.env` and `apps/api/.env`:
+### 1. Clone the Repository
 
 ```bash
-# Frontend (apps/web/.env)
-VITE_SUPABASE_URL=https://<your-project-id>.supabase.co
-VITE_SUPABASE_ANON_KEY=<your-anon-key>
+git clone https://github.com/Judson1214/AniResQ.git
+cd AniResQ
+```
 
-# Backend (apps/api/.env)
+### 2. Supabase Setup
+
+1. Log in to [supabase.com](https://supabase.com) and create a new project.
+2. Navigate to the **SQL Editor** in the Supabase dashboard.
+3. Open and run the complete database initialization script:
+   - [`supabase/migrations/20261031000000_init_aniresq_schema.sql`](./supabase/migrations/20261031000000_init_aniresq_schema.sql)
+   *(Note: This creates all enums, tables, triggers, helper functions, and RLS policies).*
+4. Navigate to **Storage** in the Supabase dashboard:
+   - Verify that the `uploads` bucket exists and is set to **Public** (the migration script provisions this automatically).
+5. From **Project Settings -> API**, copy your **Project URL**, **anon public key**, and **service_role secret key**.
+
+### 3. Environment Configuration
+
+#### Backend Environment (`apps/api/.env`)
+Copy the backend template:
+```bash
+cp apps/api/.env.example apps/api/.env
+```
+Fill in your Supabase credentials:
+```env
 SUPABASE_URL=https://<your-project-id>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-secret-key>
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
 > [!CAUTION]
-> Never expose `SUPABASE_SERVICE_ROLE_KEY` in `apps/web` or any client-facing code. It must only reside in `apps/api/.env`.
+> The `SUPABASE_SERVICE_ROLE_KEY` bypasses all Row Level Security. Never expose it in client code or commit `.env` files to git.
 
-### 3. Backend Setup & Run
+#### Frontend Environment (`apps/web/.env`)
+Copy the frontend template:
+```bash
+cp apps/web/.env.example apps/web/.env
+```
+Fill in your public Supabase credentials:
+```env
+VITE_SUPABASE_URL=https://<your-project-id>.supabase.co
+VITE_SUPABASE_ANON_KEY=<your-anon-public-key>
+```
+
+---
+
+### 4. Backend Setup & Run
+
+Navigate to `apps/api` and set up the Python virtual environment:
 
 ```bash
 cd apps/api
 
-# Create and activate virtual environment (if not already created)
+# Create virtual environment
 python -m venv venv
-# On Windows:
-venv\Scripts\activate
-# On Linux/macOS:
+
+# Activate virtual environment
+# Windows (PowerShell):
+venv\Scripts\Activate.ps1
+# Windows (Command Prompt):
+venv\Scripts\activate.bat
+# Linux/macOS:
 source venv/bin/activate
 
-# Install dependencies
+# Install required dependencies
 pip install -r requirements.txt
 
-# Run the API server
+# (Optional) Seed initial administrator and demo citizen accounts:
+python seed_users.py --admin-password "YourSecureAdminPassword123!"
+
+# Start the FastAPI development server
 uvicorn main:app --reload --port 8000
 ```
 
-The interactive OpenAPI documentation will be available at: `http://127.0.0.1:8000/docs`
+The interactive OpenAPI (Swagger) documentation is available at: **`http://127.0.0.1:8000/docs`**
 
-### 4. Frontend Setup & Run
+---
 
-From the root directory:
+### 5. Frontend Setup & Run
+
+From the repository root:
 
 ```bash
-# Install monorepo dependencies
+# Install all workspace dependencies
 pnpm install
 
 # Start Vite development server
 pnpm --filter @aniresq/web dev
 ```
 
-The web application runs at: `http://localhost:3000` (API calls to `/api` are automatically proxied to port 8000).
-
----
-
-## Security Model & RBAC
-
-1. **Role Escalation Lockdown**:
-   - The PostgreSQL `handle_new_user()` trigger strictly forces `role = 'CITIZEN'::user_role` upon signup, ignoring any client-sent metadata.
-   - The `protect_user_role_update()` trigger rejects role modifications unless initiated by an verified administrator or the backend `service_role`.
-   - Frontend services do not allow submitting role changes from user profile forms.
-
-2. **PII Protection**:
-   - `public.users` table Row Level Security restricts email and phone visibility so that regular users can only access their own contact details.
-   - Responders and staff access contact info strictly within authorized rescue and adoption scopes.
-
-3. **Backend Authorization**:
-   - Every mutating route validates the caller's JWT through `Depends(get_current_user)`.
-   - Timeline log entries and rescue status changes derive identity strictly from the verified JWT token, preventing request body spoofing.
+The application will be live at: **`http://localhost:3000`**  
+*(Vite proxies `/api` calls directly to `http://127.0.0.1:8000`).*
 
 ---
 
 ## Running Tests
 
-To run the backend test suite:
+### Backend Automated Test Suite
+AniResQ includes automated pytest security and RBAC tests:
 
 ```bash
-# From workspace root (or apps/api with virtualenv activated)
+# From workspace root
 $env:PYTHONPATH="apps/api"; apps\api\venv\Scripts\pytest apps/api/tests/
 ```
 
-To build and verify the web frontend:
+### Frontend Production Build
+To verify type resolution and compile frontend assets:
 
 ```bash
 pnpm --filter @aniresq/web build
@@ -128,6 +183,19 @@ pnpm --filter @aniresq/web build
 
 ---
 
+## Security Model & RBAC
+
+1. **Role Escalation Protection**:
+   - The PostgreSQL `handle_new_user()` trigger automatically enforces `role = 'CITIZEN'::user_role` for all new signups, ignoring user-provided metadata.
+   - The `protect_user_role_update()` trigger rejects any role change unless executed by an authenticated administrator or the backend `service_role`.
+2. **PII Isolation**:
+   - Supabase Row Level Security restricts email addresses and phone numbers in `public.users` so that non-staff users can only query their own contact info.
+3. **Backend Route Guarding**:
+   - All mutating API endpoints require valid Bearer JWT tokens via `Depends(get_current_user)`.
+   - Status updates, volunteer dispatching, and deletion routes verify authorized role claims before executing database modifications.
+
+---
+
 ## License
 
-MIT License
+This project is licensed under the MIT License.

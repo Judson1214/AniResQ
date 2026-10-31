@@ -1,73 +1,149 @@
 # AniResQ - Project Overview & Architecture
 
-## Introduction
-AniResQ is a comprehensive, community-driven platform designed to streamline animal rescue operations, facilitate pet adoptions, and manage lost & found pet reports. By bridging the gap between citizens, NGOs, volunteers, shelters, veterinarians, and system administrators, AniResQ creates a unified ecosystem for animal welfare.
+## 1. Introduction
+AniResQ is a full-stack, community-driven animal welfare platform designed to streamline emergency rescue operations, facilitate pet adoptions, and manage lost-and-found pet reports. By bridging the gap between citizens, NGOs, volunteers, shelters, veterinarians, and system administrators, AniResQ provides a unified, real-time ecosystem for animal rescue and care.
 
-## Key Features & Workflows
+---
 
-1. **Rescue Operations (SOS)**
-   - Citizens can instantly report animals in distress with real-time location mapping and image uploads.
-   - Dispatchers and active volunteers receive localized alerts.
-   - The platform provides an end-to-end timeline tracking the rescue from reporting to resolution.
+## 2. Core Modules & Workflows
 
-2. **Adoption Platform**
-   - Verified shelters and rescue organizations can post animals that are ready for adoption.
-   - Prospective pet parents can seamlessly browse, filter, and submit comprehensive adoption applications directly through the platform.
+### 2.1 Rescue Operations (SOS)
+- **Reporting**: Citizens can report animals in distress with real-time GPS geolocation reverse geocoding, severity classifications (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`), and photo uploads.
+- **Interactive Map**: Responders view emergency requests on an interactive Leaflet live map with color-coded severity markers.
+- **Dispatching**: Shelters, NGOs, and administrators can assign responders and volunteers to active rescues.
+- **Timeline Tracking**: Every status transition (`PENDING`, `DISPATCHED`, `IN_PROGRESS`, `RESOLVED`, `CANCELLED`) automatically creates an immutable, chronological timeline event attributing the action to the authenticated user.
 
-3. **Lost & Found Network**
-   - A centralized, interactive board utilizing geographic mapping (Leaflet) allows users to post reports of lost pets or animals they have found.
-   - The community can leave replies and coordinate reunions.
-   - **Gamification & Achievements**: Users are rewarded with "Achievements" on their dashboard (e.g., "Pet Reunited", "Hero Finder") when they successfully resolve a lost or found case, encouraging continued community engagement.
+### 2.2 Adoption Center
+- **Listings Directory**: Verified shelters and NGOs can post animals available for adoption, including species, breed, medical history, vaccination records, neuter status, and special needs.
+- **Application Process**: Prospective pet parents submit multi-step adoption applications covering living environment, household details, prior experience, and schedule.
+- **Screening Workflow**: Authorized shelter staff and administrators review applications, record internal screening notes, and update application statuses (`SUBMITTED`, `UNDER_REVIEW`, `APPROVED`, `REJECTED`).
 
-4. **Role-Based Access Control (RBAC)**
-   - AniResQ provides tailored dashboards and capabilities based on user roles: *Citizen, NGO, Volunteer, Shelter, Vet, Admin*.
-   - Each role is strictly governed and validated at both the frontend UI level and the database level.
+### 2.3 Lost & Found Network
+- **Community Board**: Users report lost pets or found animals with last-seen locations, physical descriptions, and contact info.
+- **Interactive Threads**: Community members can post comment updates and sightings to coordinate reunions.
+- **Gamification**: Citizens receive milestone badges and dashboard achievements when a case is marked resolved.
 
-## Architecture Overview
+### 2.4 Notifications & Real-Time Alerts
+- **Notification Inbox**: Users receive notifications on rescue updates, adoption application reviews, and community sightings.
+- **Mark as Read**: Integrated endpoints support marking individual or all notifications as read.
 
-AniResQ is structured as a modern **Monorepo** using **Turborepo** and **pnpm workspaces**, ensuring excellent code sharing, robust typing, and fast build times.
+---
 
-### Monorepo Structure
-- **`apps/web`**: The user-facing React frontend application.
-- **`apps/api`**: The Python FastAPI backend service, designed for specialized business logic, background processing, and complex queries.
-- **`packages/shared-types`**: Core TypeScript interfaces, enums, and types shared seamlessly across the ecosystem.
-- **`packages/validation`**: Centralized Zod schemas used for robust, unified data validation on both client and server.
+## 3. Architecture & Monorepo Structure
 
-## Technologies Used
+AniResQ is organized as a Turborepo monorepo with pnpm workspaces, maintaining a clean boundary between frontend presentation, backend business logic, and shared schemas:
 
-### Frontend (`apps/web`)
-A highly responsive Single Page Application (SPA) designed for performance and accessibility.
-* **Core Framework**: [React 18](https://react.dev/) / [Vite](https://vitejs.dev/)
-* **Language**: [TypeScript](https://www.typescriptlang.org/)
-* **Styling**: [Tailwind CSS](https://tailwindcss.com/) & [Radix UI](https://www.radix-ui.com/)
-* **State Management**: [React Query (@tanstack/react-query)](https://tanstack.com/query/latest) for server state caching; [Zustand](https://github.com/pmndrs/zustand) for client-side state.
-* **Forms & Validation**: [React Hook Form](https://react-hook-form.com/) + [Zod](https://zod.dev/)
-* **Mapping**: [Leaflet](https://leafletjs.com/) and [React-Leaflet](https://react-leaflet.js.org/)
+```
+AniResQ/
+├── apps/
+│   ├── api/                       # FastAPI REST backend service (Python 3.10+)
+│   │   ├── routers/               # Modular route handlers (rescues, users, animals, etc.)
+│   │   ├── tests/                 # Automated pytest security and regression suite
+│   │   ├── auth.py                # JWT Bearer token authentication & RBAC dependencies
+│   │   ├── main.py                # FastAPI app initialization, CORS, and middleware
+│   │   ├── seed_users.py          # Secure Supabase Auth & user profile seeder
+│   │   ├── supabase_config.py     # Supabase client initialization (service-role)
+│   │   └── requirements.txt       # Python dependencies
+│   │
+│   └── web/                       # React 18 single-page application (Vite)
+│       ├── src/
+│       │   ├── components/        # Reusable UI & layout components (Radix UI, Tailwind)
+│       │   ├── hooks/             # Custom React hooks (useAuth, useGeolocation, etc.)
+│       │   ├── pages/             # Lazy-loaded route views (Dashboard, Rescue, etc.)
+│       │   ├── services/          # Supabase client and backend API abstraction layer
+│       │   └── store/             # Zustand client-side application state
+│       ├── package.json
+│       └── vite.config.js
+│
+├── packages/
+│   ├── shared-types/              # Shared TypeScript definitions, interfaces, and enums
+│   └── validation/                # Centralized Zod schemas for forms and API contracts
+│
+├── supabase/
+│   └── migrations/                # Versioned PostgreSQL migrations
+│       ├── 20261031000000_init_aniresq_schema.sql      # Full unified base schema
+│       └── 20261031000001_security_and_fixes.sql       # Hardened RLS & trigger patch
+│
+├── .env.example                   # Root environment configuration template
+├── package.json                   # Monorepo root scripts & dev tools
+├── pnpm-workspace.yaml            # Monorepo workspace configuration
+└── turbo.json                     # Turborepo task pipeline configuration
+```
 
-### Backend (`apps/api`)
-A RESTful API built for high performance and strict type checking.
-* **Framework**: [FastAPI](https://fastapi.tiangolo.com/) (Python 3)
-* **Server**: [Uvicorn](https://www.uvicorn.org/)
-* **Integration**: Interacts dynamically with Supabase via the [Supabase Python SDK](https://supabase.com/docs/reference/python/introduction).
+---
 
-### Database, Authentication & Cloud Services
-The platform is powered entirely by the **Supabase** ecosystem, having recently completed a full migration from Firebase to establish a more robust, relational foundation.
-* **Database**: **Supabase PostgreSQL** - A powerful relational database storing users, complex rescue timelines, adoption applications, and the newly migrated Lost & Found system.
-* **Authentication**: **Supabase Auth (GoTrue)** - Handles user identities, JWT session management, and RBAC implementation.
-* **Storage**: **Supabase Storage** - Manages media uploads such as pet photos, avatars, and rescue evidence.
-* **Security Rules**: **PostgreSQL Row Level Security (RLS)** is heavily utilized to ensure data security directly at the database layer.
+## 4. Technology Stack
 
-## Development Workflow
+### 4.1 Frontend (`apps/web`)
+- **Framework**: React 18 with Vite
+- **Styling**: Tailwind CSS & Radix UI primitives
+- **Server State & Caching**: TanStack React Query v5
+- **Client State**: Zustand
+- **Form Management**: React Hook Form with Zod resolvers
+- **Mapping**: Leaflet and React-Leaflet
+- **Icons**: Lucide React
 
-1. **Frontend Development**
-   - From the repository root, run `pnpm dev`.
-   - Turborepo will start the Vite server, accessible at `http://localhost:3000`.
+### 4.2 Backend (`apps/api`)
+- **Framework**: FastAPI (Python 3.10+)
+- **Validation**: Pydantic v2
+- **Database Client**: Supabase Python SDK (`supabase>=2.0.0`)
+- **Server**: Uvicorn ASGI
+- **Testing**: Pytest with HTTPX
 
-2. **Backend Development**
-   - Navigate to `apps/api`.
-   - Ensure the virtual environment (`venv`) is active.
-   - Start the API using `uvicorn main:app --reload --port 8000`.
-   - Swagger documentation is automatically available at `http://localhost:8000/docs`.
+### 4.3 Database, Auth & Storage (`Supabase`)
+- **PostgreSQL**: Relational storage utilizing native ENUMs, cascading foreign keys, and automatic `updated_at` triggers.
+- **GoTrue Auth**: Secure JWT-based user session management and user metadata handling.
+- **Supabase Storage**: Managed object storage bucket (`uploads`) with configured public read and authenticated upload policies.
+- **Row Level Security (RLS)**: Enforced across all tables to isolate user data and restrict operations by role.
 
-3. **Database Management**
-   - Schema definitions and migration scripts (e.g., `supabase_schema.sql`, `supabase_add_notifications.sql`) are available at the root level and can be executed via the Supabase Dashboard SQL Editor to keep environments synchronized.
+---
+
+## 5. Security & RBAC Model
+
+### 5.1 Role-Based Access Control (6 Distinct Roles)
+1. **`CITIZEN`**: Default role on signup. Can report rescues, apply for adoption, post lost/found notices, and update their own profile.
+2. **`VOLUNTEER`**: Responds to rescue alerts, accepts dispatch assignments, and updates rescue incident statuses.
+3. **`NGO`**: Coordinates rescue missions, manages adoptable animals, and reviews adoption applications.
+4. **`SHELTER`**: Creates animal profiles, screens adoption applications, and coordinates animal care.
+5. **`VET`**: Provides medical assessments and updates health records for rescued/sheltered animals.
+6. **`ADMIN`**: Full administrative access across all records, user role management, and system-wide dispatch.
+
+### 5.2 Key Security Controls
+- **Privilege Escalation Prevention**: The database trigger `handle_new_user()` strictly sets `role = 'CITIZEN'::user_role` for all signups, ignoring client-submitted metadata. The `protect_user_role_update()` trigger rejects client role changes unless initiated by a verified administrator or backend `service_role`.
+- **PII Isolation**: `public.users` table RLS restricts sensitive columns (email, phone number) so they are only readable by the profile owner or authorized staff.
+- **JWT Verification & Timeline Integrity**: FastAPI routes verify Bearer JWT tokens via `get_current_user`. Timeline entries derive author identifiers strictly from the verified token rather than request bodies.
+- **CORS Hardening**: CORS origins are restricted to configured frontend domains rather than wildcard origins with credentials.
+
+---
+
+## 6. Development & Operational Commands
+
+### 6.1 Database Migration
+Execute in the Supabase Dashboard SQL Editor:
+- Base Schema: [`supabase/migrations/20261031000000_init_aniresq_schema.sql`](./supabase/migrations/20261031000000_init_aniresq_schema.sql)
+- Security Updates: [`supabase/migrations/20261031000001_security_and_fixes.sql`](./supabase/migrations/20261031000001_security_and_fixes.sql)
+
+### 6.2 Running Backend Services
+```bash
+cd apps/api
+python -m venv venv
+venv\Scripts\activate       # Windows PowerShell: venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+```
+
+### 6.3 Running Frontend Application
+```bash
+# From workspace root
+pnpm install
+pnpm --filter @aniresq/web dev
+```
+
+### 6.4 Verification & Testing
+```bash
+# Run backend pytest suite
+$env:PYTHONPATH="apps/api"; apps\api\venv\Scripts\pytest apps/api/tests/
+
+# Verify web build
+pnpm --filter @aniresq/web build
+```
