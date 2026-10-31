@@ -2,10 +2,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { UserRole } from "@aniresq/shared-types";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { CitizenDashboard } from "@/components/dashboard/CitizenDashboard";
-import { VolunteerDashboard } from "@/components/dashboard/VolunteerDashboard";
-import { ShelterDashboard } from "@/components/dashboard/ShelterDashboard";
-import { NGODashboard } from "@/components/dashboard/NGODashboard";
-import { VetDashboard } from "@/components/dashboard/VetDashboard";
 import { AdminDashboard } from "@/components/dashboard/AdminDashboard";
 
 function DashboardPage() {

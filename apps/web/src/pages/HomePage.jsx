@@ -1,7 +1,7 @@
 import { MainLayout } from "@/components/layout/MainLayout";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import { Eye, Heart, Home, Radio, ArrowRight, ShieldCheck, MapPin, Search } from "lucide-react";
+import { Heart, Home, Radio, ArrowRight, ShieldCheck, MapPin, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getFeaturedAnimals } from "@/services/animal.service";
 import { AnimalCard } from "@/components/animals/AnimalCard";

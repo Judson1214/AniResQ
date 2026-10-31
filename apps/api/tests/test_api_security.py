@@ -1,7 +1,9 @@
 import pytest
+from unittest.mock import MagicMock
 from starlette.testclient import TestClient
 from main import app
 from auth import get_current_user
+import supabase_config
 
 client = TestClient(app)
 
@@ -13,7 +15,7 @@ def test_root_endpoint():
 def test_users_api_requires_auth():
     # Unauthenticated GET
     res_get = client.get("/api/users/non-existent-uid")
-    assert res_get.status_code == 401 or res_get.status_code == 403
+    assert res_get.status_code in [401, 403]
 
     # Unauthenticated POST
     res_post = client.post("/api/users", json={
@@ -22,11 +24,11 @@ def test_users_api_requires_auth():
         "displayName": "Hacker",
         "role": "ADMIN"
     })
-    assert res_post.status_code == 401 or res_post.status_code == 403
+    assert res_post.status_code in [401, 403]
 
     # Unauthenticated PATCH
     res_patch = client.patch("/api/users/test-uid", json={"displayName": "Hacker"})
-    assert res_patch.status_code == 401 or res_patch.status_code == 403
+    assert res_patch.status_code in [401, 403]
 
 def test_rescues_mutations_require_auth():
     # Unauthenticated POST rescue
@@ -87,7 +89,7 @@ def test_animals_mutations_require_staff_auth():
     
     app.dependency_overrides[get_current_user] = mock_citizen_user
     try:
-        # A CITIZEN should NOT be allowed to insert an animal
+        # A CITIZEN should NOT be allowed to directly insert an animal into shelter inventory
         res = client.post("/api/animals/", json={
             "name": "Buddy",
             "species": "DOG",
@@ -127,7 +129,17 @@ def test_latitude_longitude_range_validation():
     finally:
         app.dependency_overrides.clear()
 
-def test_pagination_query_parameters():
+def test_pagination_query_parameters(monkeypatch):
+    # Mock Supabase table select so tests succeed in offline CI runners
+    mock_execute = MagicMock(return_value=MagicMock(data=[]))
+    mock_query = MagicMock()
+    mock_query.select.return_value = mock_query
+    mock_query.order.return_value = mock_query
+    mock_query.range.return_value = mock_query
+    mock_query.execute = mock_execute
+    mock_table = MagicMock(return_value=mock_query)
+    monkeypatch.setattr(supabase_config.supabase, "table", mock_table)
+
     # Verify pagination parameters are accepted and validated
     res_valid = client.get("/api/rescues/?limit=10&offset=20")
     assert res_valid.status_code == 200
@@ -151,5 +163,89 @@ def test_validation_exception_does_not_leak_body():
         assert res.status_code == 422
         data = res.json()
         assert "body" not in data # Verified: sensitive request body not leaked back
+    finally:
+        app.dependency_overrides.clear()
+
+def test_user_role_assignment_admin_only(monkeypatch):
+    # 1. Citizen cannot update role (403)
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "citizen-1", "email": "cit@test.com", "name": "Cit", "role": "CITIZEN"
+    }
+    try:
+        res_cit = client.patch("/api/users/target-user/role", json={"role": "ADMIN"})
+        assert res_cit.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+    # 2. Admin with invalid role receives 422
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "admin-1", "email": "admin@test.com", "name": "Admin", "role": "ADMIN"
+    }
+    try:
+        res_invalid = client.patch("/api/users/target-user/role", json={"role": "SUPERUSER"})
+        assert res_invalid.status_code == 422
+
+        # 3. Admin with valid role succeeds (mock Supabase response)
+        mock_execute = MagicMock(return_value=MagicMock(data=[{"id": "target-user", "display_name": "Target"}]))
+        mock_query = MagicMock()
+        mock_query.update.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.execute = mock_execute
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+        res_ok = client.patch("/api/users/target-user/role", json={"role": "VOLUNTEER"})
+        assert res_ok.status_code == 200
+        assert res_ok.json()["role"] == "VOLUNTEER"
+    finally:
+        app.dependency_overrides.clear()
+
+def test_citizen_can_surrender_animal(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "citizen-1", "email": "cit@test.com", "name": "Citizen Jane", "role": "CITIZEN"
+    }
+    try:
+        # Invalid species receives 422
+        res_inv = client.post("/api/animals/surrender", json={
+            "name": "Rex",
+            "species": "DRAGON",
+            "description": "Found pet"
+        })
+        assert res_inv.status_code == 422
+
+        # Valid surrender succeeds and sets NOT_READY status
+        mock_animal_record = {
+            "id": "animal-123",
+            "name": "Rex",
+            "species": "DOG",
+            "breed": "Unknown",
+            "age_estimate": "2 years",
+            "gender": "UNKNOWN",
+            "weight": None,
+            "health_status": "HEALTHY",
+            "adoption_status": "NOT_READY",
+            "description": "Found pet",
+            "vaccinations": [],
+            "is_neutered": False,
+            "special_needs": None,
+            "shelter_id": None,
+            "images": [],
+            "created_at": "2026-11-01T00:00:00Z",
+            "updated_at": "2026-11-01T00:00:00Z",
+        }
+        mock_execute = MagicMock(return_value=MagicMock(data=[mock_animal_record]))
+        mock_query = MagicMock()
+        mock_query.insert.return_value = mock_query
+        mock_query.execute = mock_execute
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+        res_surrender = client.post("/api/animals/surrender", json={
+            "name": "Rex",
+            "species": "DOG",
+            "ageEstimate": "2 years",
+            "description": "Found pet",
+            "reason": "Moving abroad"
+        })
+        assert res_surrender.status_code == 201
+        assert res_surrender.json()["adoptionStatus"] == "NOT_READY"
     finally:
         app.dependency_overrides.clear()

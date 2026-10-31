@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -11,9 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import { createAnimal } from "@/services/animal.service";
+import { surrenderAnimal } from "@/services/animal.service";
 
-// Simple schema for surrendering/donating an animal
+// Schema for surrendering/donating an animal
 const donateSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   species: z.nativeEnum(Species),
@@ -51,27 +51,16 @@ const DonateAnimalForm = () => {
     
     setIsSubmitting(true);
     try {
-      const payload = {
-        name: data.name,
-        species: data.species,
-        breed: "Unknown",
-        ageEstimate: data.ageEstimate,
-        gender: "UNKNOWN",
-        healthStatus: "HEALTHY",
-        adoptionStatus: "AVAILABLE",
-        description: data.description + "\n\nReason for listing: " + data.reason,
-        vaccinations: [],
-        isNeutered: false,
-        shelterId: null // or user.uid if you want to track the donator
-      };
-
-      await createAnimal(payload, photos);
+      await surrenderAnimal(data, photos);
       
-      toast({ title: "Animal Listed", description: "The animal has been successfully listed for adoption." });
+      toast({ 
+        title: "Surrender Request Submitted", 
+        description: "The animal has been submitted for shelter intake and review." 
+      });
       navigate("/animals");
     } catch (error) {
       console.error(error);
-      toast({ title: "Error", description: "Failed to list animal.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to submit animal surrender request.", variant: "destructive" });
     } finally {
       setIsSubmitting(false);
     }

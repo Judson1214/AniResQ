@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -157,7 +157,7 @@ const RescueReportForm = () => {
         reporterId: user.uid
       };
       
-      const rescueId = await createRescueRequest(rescueData, photos);
+      await createRescueRequest(rescueData, photos);
       toast({ title: "SOS Dispatched!", description: "Emergency rescue units have been notified." });
       navigate(`/rescue`);
     } catch (error) {

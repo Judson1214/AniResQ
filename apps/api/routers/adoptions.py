@@ -2,7 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from supabase_config import supabase
 from auth import get_current_user, require_roles
@@ -11,6 +11,8 @@ router = APIRouter(prefix="/api/adoptions", tags=["adoptions"])
 logger = logging.getLogger("adoptions")
 
 STAFF_ROLES = ["ADMIN", "NGO", "SHELTER"]
+VALID_APP_STATUSES = {"SUBMITTED", "UNDER_REVIEW", "APPROVED", "REJECTED"}
+VALID_ENVIRONMENTS = {"APARTMENT", "HOUSE", "FARM", "OTHER"}
 
 class AdoptionCreate(BaseModel):
     animalId: str
@@ -106,11 +108,15 @@ def get_adoption(id: str, user: dict = Depends(get_current_user)):
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def submit_adoption_application(payload: AdoptionCreate, user: dict = Depends(get_current_user)):
+    env = payload.livingEnvironment.upper()
+    if env not in VALID_ENVIRONMENTS:
+        raise HTTPException(status_code=422, detail=f"Invalid living environment '{payload.livingEnvironment}'")
+        
     try:
         new_app = {
             "animal_id": payload.animalId,
             "applicant_id": user["uid"],
-            "living_environment": payload.livingEnvironment.upper(),
+            "living_environment": env,
             "has_yard": payload.hasYard,
             "has_other_pets": payload.hasOtherPets,
             "other_pet_details": payload.otherPetDetails,
@@ -134,13 +140,18 @@ def submit_adoption_application(payload: AdoptionCreate, user: dict = Depends(ge
 
 @router.patch("/{id}/status")
 def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = Depends(require_roles(STAFF_ROLES))):
+    target_status = payload.status.upper()
+    if target_status not in VALID_APP_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid status '{payload.status}'. Must be one of {sorted(VALID_APP_STATUSES)}")
+        
     try:
-        existing = supabase.table("adoption_applications").select("id").eq("id", id).execute()
+        existing = supabase.table("adoption_applications").select("id, animal_id").eq("id", id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Adoption application not found")
             
+        app_record = existing.data[0]
         update_data = {
-            "status": payload.status.upper(),
+            "status": target_status,
             "reviewer_id": user["uid"],
             "reviewed_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -151,9 +162,16 @@ def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = 
         if not res.data:
             raise HTTPException(status_code=404, detail="Adoption application not found")
             
+        # Automatically update animal adoption status when approved
+        if target_status == "APPROVED" and app_record.get("animal_id"):
+            try:
+                supabase.table("animals").update({"adoption_status": "ADOPTED"}).eq("id", app_record["animal_id"]).execute()
+            except Exception as anim_err:
+                logger.warning(f"Failed to auto-update animal adoption status: {anim_err}")
+                
         return map_adoption(res.data[0])
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error updating adoption status {id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update adoption status")
+        raise HTTPException(status_code=500, detail="Failed to update adoption application status")

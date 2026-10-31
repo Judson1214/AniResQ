@@ -1,8 +1,8 @@
 import logging
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from supabase_config import supabase
 from auth import get_current_user, require_roles
@@ -11,6 +11,10 @@ router = APIRouter(prefix="/api/animals", tags=["animals"])
 logger = logging.getLogger("animals")
 
 STAFF_ROLES = ["ADMIN", "NGO", "SHELTER", "VET"]
+VALID_SPECIES = {"DOG", "CAT", "BIRD", "RABBIT", "OTHER"}
+VALID_ADOPTION_STATUSES = {"NOT_READY", "AVAILABLE", "PENDING", "ADOPTED"}
+VALID_HEALTH_STATUSES = {"HEALTHY", "INJURED", "SICK", "RECOVERING", "CRITICAL"}
+VALID_GENDERS = {"MALE", "FEMALE", "UNKNOWN"}
 
 class AnimalCreate(BaseModel):
     name: str
@@ -26,6 +30,14 @@ class AnimalCreate(BaseModel):
     vaccinations: List[str] = []
     isNeutered: bool = False
     specialNeeds: Optional[str] = None
+    photos: List[str] = []
+
+class AnimalSurrenderCreate(BaseModel):
+    name: str
+    species: str
+    description: str
+    ageEstimate: Optional[str] = "Unknown"
+    reason: Optional[str] = None
     photos: List[str] = []
 
 class AnimalUpdate(BaseModel):
@@ -74,7 +86,7 @@ def get_animals(
     try:
         query = supabase.table("animals").select("*")
         if status:
-            query = query.eq("adoption_status", status)
+            query = query.eq("adoption_status", status.upper())
         if species:
             query = query.eq("species", species.upper())
             
@@ -99,16 +111,32 @@ def get_animal(id: str):
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_animal(payload: AnimalCreate, user: dict = Depends(require_roles(STAFF_ROLES))):
+    target_species = payload.species.upper()
+    if target_species not in VALID_SPECIES:
+        raise HTTPException(status_code=422, detail=f"Invalid species '{payload.species}'. Must be one of {sorted(VALID_SPECIES)}")
+        
+    target_adopt_status = (payload.adoptionStatus or payload.status or "AVAILABLE").upper()
+    if target_adopt_status not in VALID_ADOPTION_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid adoption status '{target_adopt_status}'")
+        
+    target_health = (payload.healthStatus or "HEALTHY").upper()
+    if target_health not in VALID_HEALTH_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid health status '{target_health}'")
+        
+    target_gender = (payload.gender or "UNKNOWN").upper()
+    if target_gender not in VALID_GENDERS:
+        raise HTTPException(status_code=422, detail=f"Invalid gender '{target_gender}'")
+        
     try:
         data = {
             "name": payload.name,
-            "species": payload.species.upper(),
+            "species": target_species,
             "breed": payload.breed,
             "age_estimate": payload.ageEstimate or "1 year",
-            "gender": (payload.gender or "UNKNOWN").upper(),
+            "gender": target_gender,
             "weight": payload.weight,
-            "health_status": (payload.healthStatus or "HEALTHY").upper(),
-            "adoption_status": (payload.adoptionStatus or payload.status or "AVAILABLE").upper(),
+            "health_status": target_health,
+            "adoption_status": target_adopt_status,
             "description": payload.description,
             "vaccinations": payload.vaccinations,
             "is_neutered": payload.isNeutered,
@@ -127,6 +155,46 @@ def create_animal(payload: AnimalCreate, user: dict = Depends(require_roles(STAF
         logger.error(f"Error creating animal: {e}")
         raise HTTPException(status_code=500, detail="Failed to create animal record")
 
+@router.post("/surrender", status_code=status.HTTP_201_CREATED)
+def surrender_animal(payload: AnimalSurrenderCreate, user: dict = Depends(get_current_user)):
+    """Allows citizens to surrender or donate an animal for shelter intake review."""
+    target_species = payload.species.upper()
+    if target_species not in VALID_SPECIES:
+        raise HTTPException(status_code=422, detail=f"Invalid species '{payload.species}'. Must be one of {sorted(VALID_SPECIES)}")
+        
+    try:
+        description_text = payload.description
+        if payload.reason:
+            description_text += f"\n\nSurrender Reason: {payload.reason}"
+            
+        data = {
+            "name": payload.name,
+            "species": target_species,
+            "breed": "Unknown",
+            "age_estimate": payload.ageEstimate or "Unknown",
+            "gender": "UNKNOWN",
+            "weight": None,
+            "health_status": "HEALTHY",
+            "adoption_status": "NOT_READY", # Surrendered animals start as NOT_READY pending intake
+            "description": description_text,
+            "vaccinations": [],
+            "is_neutered": False,
+            "special_needs": None,
+            "shelter_id": None, # Unassigned pending shelter intake
+            "images": payload.photos,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        
+        res = supabase.table("animals").insert(data).execute()
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to submit surrender request")
+        return map_animal(res.data[0])
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error surrendering animal: {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit animal surrender request")
+
 @router.patch("/{id}")
 def update_animal(id: str, payload: AnimalUpdate, user: dict = Depends(require_roles(STAFF_ROLES))):
     try:
@@ -136,13 +204,29 @@ def update_animal(id: str, payload: AnimalUpdate, user: dict = Depends(require_r
             
         update_data = {}
         if payload.name is not None: update_data["name"] = payload.name
-        if payload.species is not None: update_data["species"] = payload.species.upper()
+        if payload.species is not None: 
+            sp = payload.species.upper()
+            if sp not in VALID_SPECIES:
+                raise HTTPException(status_code=422, detail=f"Invalid species '{payload.species}'")
+            update_data["species"] = sp
         if payload.breed is not None: update_data["breed"] = payload.breed
         if payload.ageEstimate is not None: update_data["age_estimate"] = payload.ageEstimate
-        if payload.gender is not None: update_data["gender"] = payload.gender.upper()
+        if payload.gender is not None: 
+            g = payload.gender.upper()
+            if g not in VALID_GENDERS:
+                raise HTTPException(status_code=422, detail=f"Invalid gender '{payload.gender}'")
+            update_data["gender"] = g
         if payload.weight is not None: update_data["weight"] = payload.weight
-        if payload.healthStatus is not None: update_data["health_status"] = payload.healthStatus.upper()
-        if payload.adoptionStatus is not None: update_data["adoption_status"] = payload.adoptionStatus.upper()
+        if payload.healthStatus is not None: 
+            hs = payload.healthStatus.upper()
+            if hs not in VALID_HEALTH_STATUSES:
+                raise HTTPException(status_code=422, detail=f"Invalid health status '{payload.healthStatus}'")
+            update_data["health_status"] = hs
+        if payload.adoptionStatus is not None: 
+            ads = payload.adoptionStatus.upper()
+            if ads not in VALID_ADOPTION_STATUSES:
+                raise HTTPException(status_code=422, detail=f"Invalid adoption status '{payload.adoptionStatus}'")
+            update_data["adoption_status"] = ads
         if payload.description is not None: update_data["description"] = payload.description
         if payload.vaccinations is not None: update_data["vaccinations"] = payload.vaccinations
         if payload.isNeutered is not None: update_data["is_neutered"] = payload.isNeutered

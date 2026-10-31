@@ -3,8 +3,8 @@ import { uploadMultipleFiles } from './storage.service';
 
 const createRescueRequest = async (data, photos) => {
   let photoUrls = [];
-  // Still upload to Firebase Storage directly from frontend for efficiency,
-  // but send the resulting URLs to our Python backend to save in Firestore.
+  // Upload photos directly to Supabase Storage,
+  // and send the resulting URLs to the backend API.
   if (photos && photos.length > 0) {
     const tempId = crypto.randomUUID();
     photoUrls = await uploadMultipleFiles(`rescue-photos/${tempId}`, photos);

@@ -7,7 +7,8 @@ const signUp = async (email, password, displayName, role = "CITIZEN", phone = ""
     options: {
       data: {
         display_name: displayName,
-        phone: phone || ""
+        phone: phone || "",
+        requested_role: role,
       }
     }
   });
@@ -41,32 +42,28 @@ const signOutUser = async () => {
 };
 
 const getUserProfile = async (uid) => {
-  try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', uid)
-      .single();
-    
-    if (error) {
-      if (error.code === 'PGRST116') return null; // 404 Not Found equivalent
-      throw error;
-    }
-    
-    return {
-      uid: data.id,
-      id: data.id,
-      email: data.email,
-      displayName: data.display_name,
-      role: data.role,
-      phone: data.phone,
-      avatarUrl: data.avatar_url || "",
-      isVerified: data.is_verified || false,
-      createdAt: data.created_at
-    };
-  } catch (error) {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', uid)
+    .single();
+  
+  if (error) {
+    if (error.code === 'PGRST116') return null; // 404 Not Found equivalent
     throw error;
   }
+  
+  return {
+    uid: data.id,
+    id: data.id,
+    email: data.email,
+    displayName: data.display_name,
+    role: data.role,
+    phone: data.phone,
+    avatarUrl: data.avatar_url || "",
+    isVerified: data.is_verified || false,
+    createdAt: data.created_at
+  };
 };
 
 const updateUserProfile = async (uid, updateData) => {

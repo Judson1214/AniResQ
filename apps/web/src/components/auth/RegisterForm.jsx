@@ -8,10 +8,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, PawPrint } from "lucide-react";
+import { Loader2, Info } from "lucide-react";
 import { UserRole } from "@aniresq/shared-types";
+
 const RegisterForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { signUp } = useAuth();
@@ -29,15 +29,24 @@ const RegisterForm = () => {
       role: UserRole.CITIZEN
     }
   });
+
   const selectedRole = watch("role");
+
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
       await signUp(data.email, data.password, data.displayName, data.role, data.phone);
-      toast({
-        title: "Account created",
-        description: "Welcome to AniResQ!"
-      });
+      if (data.role && data.role !== UserRole.CITIZEN) {
+        toast({
+          title: "Account Created",
+          description: `Registered as Citizen. Request for ${data.role} access submitted for admin verification.`
+        });
+      } else {
+        toast({
+          title: "Account Created",
+          description: "Welcome to AniResQ!"
+        });
+      }
       navigate("/dashboard");
     } catch (error) {
       console.error(error);
@@ -50,22 +59,24 @@ const RegisterForm = () => {
       setIsLoading(false);
     }
   };
+
   const getRoleDescription = (role) => {
     switch (role) {
       case UserRole.CITIZEN:
         return "Report rescues, find lost pets, and adopt animals.";
       case UserRole.VOLUNTEER:
-        return "Help with rescues, transport, and fostering.";
+        return "Help with rescues, transport, and fostering (Admin verified).";
       case UserRole.SHELTER:
-        return "Manage animal inventory and adoptions.";
+        return "Manage shelter inventory and adoption listings (Admin verified).";
       case UserRole.NGO:
-        return "Coordinate large-scale rescues and campaigns.";
+        return "Coordinate rescue operations and campaigns (Admin verified).";
       case UserRole.VET:
-        return "Provide medical care and consultations.";
+        return "Provide veterinary triage and consultations (Admin verified).";
       default:
         return "";
     }
   };
+
   return (
     <div className="w-full">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -110,7 +121,7 @@ const RegisterForm = () => {
               <SelectValue placeholder="Select a role" />
             </SelectTrigger>
             <SelectContent className="bg-slate-900 border-slate-800 text-white">
-              <SelectItem value={UserRole.CITIZEN} className="focus:bg-slate-800 focus:text-white">Citizen</SelectItem>
+              <SelectItem value={UserRole.CITIZEN} className="focus:bg-slate-800 focus:text-white">Citizen (Standard)</SelectItem>
               <SelectItem value={UserRole.VOLUNTEER} className="focus:bg-slate-800 focus:text-white">Volunteer</SelectItem>
               <SelectItem value={UserRole.SHELTER} className="focus:bg-slate-800 focus:text-white">Shelter / Foster</SelectItem>
               <SelectItem value={UserRole.NGO} className="focus:bg-slate-800 focus:text-white">NGO / Rescue Organization</SelectItem>
@@ -119,6 +130,12 @@ const RegisterForm = () => {
           </Select>
           {errors.role && <p className="text-sm text-rose-500">{errors.role.message}</p>}
           <p className="text-xs text-emerald-400 mt-1 font-medium">{getRoleDescription(selectedRole)}</p>
+          {selectedRole !== UserRole.CITIZEN && (
+            <div className="flex items-center gap-1.5 text-xs text-amber-400/90 mt-1 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
+              <Info size={14} className="shrink-0" />
+              <span>Accounts start as Citizen. Privileged roles require administrator verification before access is granted.</span>
+            </div>
+          )}
         </div>
 
         <Button 
@@ -127,7 +144,7 @@ const RegisterForm = () => {
           disabled={isLoading}
         >
           {isLoading ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : null}
-          Request Access
+          Create Account
         </Button>
       </form>
       
@@ -140,6 +157,5 @@ const RegisterForm = () => {
     </div>
   );
 };
-export {
-  RegisterForm
-};
+
+export { RegisterForm };

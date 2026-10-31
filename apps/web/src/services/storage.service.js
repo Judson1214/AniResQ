@@ -2,7 +2,7 @@ import { supabase } from "@/config/supabase";
 
 const uploadFile = async (path, file, onProgress) => {
   // Note: Ensure you have created a public bucket named 'uploads' in Supabase
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from('uploads')
     .upload(path, file, {
       cacheControl: '3600',

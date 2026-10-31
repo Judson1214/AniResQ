@@ -1,6 +1,5 @@
-import { MainLayout } from "./MainLayout";
 import { Sidebar } from "./Sidebar";
-import { Bell, Search, Menu, UserCircle, LogOut } from "lucide-react";
+import { Search, Menu, UserCircle, LogOut } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 

@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, ArrowDownRight, Activity, MapPin, Truck, CheckCircle2, Clock, Loader2 } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { ArrowUpRight, ArrowDownRight, Activity, MapPin, Truck, Clock, Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";

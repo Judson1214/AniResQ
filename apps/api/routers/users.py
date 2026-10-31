@@ -8,6 +8,8 @@ from auth import get_current_user
 router = APIRouter(prefix="/api/users", tags=["users"])
 logger = logging.getLogger("users")
 
+VALID_ROLES = {"CITIZEN", "NGO", "VOLUNTEER", "SHELTER", "VET", "ADMIN"}
+
 class UserProfileCreate(BaseModel):
     uid: str
     email: str
@@ -22,6 +24,9 @@ class UserProfileUpdate(BaseModel):
     bio: Optional[str] = None
     avatarUrl: Optional[str] = None
 
+class UserRoleUpdate(BaseModel):
+    role: str
+
 @router.get("/{uid}")
 def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
     try:
@@ -30,9 +35,10 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="User not found")
         data = res.data[0]
         
-        # PII Protection: Only self or staff/admin can see email and phone
+        # PII Protection: Only self or organizational staff/admin can see email and phone
+        # Excludes regular volunteers from broad PII access
         is_self = current_user["uid"] == uid
-        is_staff = current_user.get("role") in ["ADMIN", "NGO", "SHELTER", "VOLUNTEER"]
+        is_staff_admin = current_user.get("role") in ["ADMIN", "NGO", "SHELTER", "VET"]
         
         return {
             "id": data["id"],
@@ -41,8 +47,8 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
             "role": data.get("role", "CITIZEN"),
             "avatarUrl": data.get("avatar_url", ""),
             "createdAt": data.get("created_at"),
-            "email": data["email"] if (is_self or is_staff) else "",
-            "phoneNumber": data.get("phone", "") if (is_self or is_staff) else "",
+            "email": data["email"] if (is_self or is_staff_admin) else "",
+            "phoneNumber": data.get("phone", "") if (is_self or is_staff_admin) else "",
         }
     except HTTPException:
         raise
@@ -56,18 +62,25 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
     if current_user["uid"] != profile.uid and current_user.get("role") != "ADMIN":
         raise HTTPException(status_code=403, detail="Cannot create profile for another user")
         
-    # Prevent unauthorized role assignment: non-admins are forced to CITIZEN
-    target_role = profile.role if current_user.get("role") == "ADMIN" else "CITIZEN"
-    
-    data = {
-        "id": profile.uid,
-        "email": profile.email,
-        "display_name": profile.displayName,
-        "role": target_role,
-        "phone": profile.phoneNumber or ""
-    }
-    
     try:
+        # Prevent unauthorized role changes or demoting existing staff members
+        existing = supabase.table("users").select("role").eq("id", profile.uid).execute()
+        if existing.data and current_user.get("role") != "ADMIN":
+            target_role = existing.data[0].get("role", "CITIZEN")
+        else:
+            target_role = profile.role.upper() if current_user.get("role") == "ADMIN" and profile.role else "CITIZEN"
+            
+        if target_role not in VALID_ROLES:
+            target_role = "CITIZEN"
+        
+        data = {
+            "id": profile.uid,
+            "email": profile.email,
+            "display_name": profile.displayName,
+            "role": target_role,
+            "phone": profile.phoneNumber or ""
+        }
+        
         res = supabase.table("users").upsert(data).execute()
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to create user profile")
@@ -109,3 +122,29 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
     except Exception as e:
         logger.error(f"Error updating user profile {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update user profile")
+
+@router.patch("/{uid}/role")
+def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "ADMIN":
+        raise HTTPException(status_code=403, detail="Forbidden: Only administrators can assign user roles")
+        
+    target_role = req.role.upper()
+    if target_role not in VALID_ROLES:
+        raise HTTPException(status_code=422, detail=f"Invalid role '{req.role}'. Must be one of {sorted(VALID_ROLES)}")
+        
+    try:
+        res = supabase.table("users").update({"role": target_role}).eq("id", uid).execute()
+        if not res.data:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        return {
+            "id": uid,
+            "uid": uid,
+            "role": target_role,
+            "displayName": res.data[0].get("display_name", "")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating role for user {uid}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update user role")

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import api from '@/lib/api';
 import {
-  createRescueRequest,
   getRescueRequests,
   getRescueRequestById,
   updateRescueStatus,

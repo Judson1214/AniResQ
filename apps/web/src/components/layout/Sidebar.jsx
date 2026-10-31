@@ -9,10 +9,6 @@ import {
   Search,
   HeartHandshake,
   Users,
-  Home,
-  ClipboardList,
-  PlusCircle,
-  Syringe,
   Settings,
   Activity,
   MapPin,
@@ -25,8 +21,6 @@ const Sidebar = () => {
   const { user, signOut } = useAuth();
   const location = useLocation();
 
-  // Fallback to Admin role for the demo if not logged in
-  const role = user?.role || UserRole.ADMIN;
   const displayName = user?.displayName || 'Demo Operator';
   const email = user?.email || 'admin@security.io';
 

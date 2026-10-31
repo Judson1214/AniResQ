@@ -8,8 +8,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, PawPrint } from "lucide-react";
+import { Loader2 } from "lucide-react";
+
 const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuth();
@@ -23,6 +23,7 @@ const LoginForm = () => {
   } = useForm({
     resolver: zodResolver(loginSchema)
   });
+
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
@@ -33,10 +34,16 @@ const LoginForm = () => {
       });
       navigate("/dashboard");
     } catch (error) {
+      toast({
+        title: "Login Failed",
+        description: error.message || "Invalid email or password.",
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }
   };
+
   return (
     <div className="w-full">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -107,6 +114,5 @@ const LoginForm = () => {
     </div>
   );
 };
-export {
-  LoginForm
-};
+
+export { LoginForm };

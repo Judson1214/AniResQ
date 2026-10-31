@@ -10,6 +10,9 @@ from auth import get_current_user
 router = APIRouter(prefix="/api/lostfound", tags=["lostfound"])
 logger = logging.getLogger("lostfound")
 
+VALID_TYPES = {"LOST", "FOUND"}
+VALID_STATUSES = {"ACTIVE", "RESOLVED"}
+
 class Location(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude must be between -90 and 90")
     longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude must be between -180 and 180")
@@ -67,9 +70,9 @@ def get_lost_found(
     try:
         query = supabase.table("lost_and_found").select("*")
         if type:
-            query = query.eq("type", type)
+            query = query.eq("type", type.upper())
         if status:
-            query = query.eq("status", status)
+            query = query.eq("status", status.upper())
         if reporterId:
             query = query.eq("reporter_id", reporterId)
         
@@ -94,9 +97,13 @@ def get_lost_found_by_id(id: str):
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_lost_found(report: LostFoundCreate, user: dict = Depends(get_current_user)):
+    target_type = report.type.upper()
+    if target_type not in VALID_TYPES:
+        raise HTTPException(status_code=422, detail=f"Invalid type '{report.type}'. Must be one of {sorted(VALID_TYPES)}")
+        
     try:
         new_post = {
-            "type": report.type,
+            "type": target_type,
             "title": report.title,
             "description": report.description,
             "species": report.species,
@@ -127,6 +134,10 @@ def create_lost_found(report: LostFoundCreate, user: dict = Depends(get_current_
 
 @router.patch("/{id}/status")
 def update_lost_found_status(id: str, status_update: LostFoundStatusUpdate, user: dict = Depends(get_current_user)):
+    target_status = status_update.status.upper()
+    if target_status not in VALID_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid status '{status_update.status}'. Must be one of {sorted(VALID_STATUSES)}")
+        
     try:
         existing = supabase.table("lost_and_found").select("id, reporter_id").eq("id", id).execute()
         if not existing.data:
@@ -139,7 +150,7 @@ def update_lost_found_status(id: str, status_update: LostFoundStatusUpdate, user
         if not (is_reporter or is_admin):
             raise HTTPException(status_code=403, detail="Forbidden: Only the original reporter or admin can change status")
             
-        res = supabase.table("lost_and_found").update({"status": status_update.status}).eq("id", id).execute()
+        res = supabase.table("lost_and_found").update({"status": target_status}).eq("id", id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Lost/found post not found")
         
@@ -148,7 +159,7 @@ def update_lost_found_status(id: str, status_update: LostFoundStatusUpdate, user
         raise
     except Exception as e:
         logger.error(f"Error updating lost/found status {id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to update lost/found post status")
+        raise HTTPException(status_code=500, detail="Failed to update lost/found status")
 
 @router.delete("/{id}")
 def delete_lost_found(id: str, user: dict = Depends(get_current_user)):
@@ -172,42 +183,6 @@ def delete_lost_found(id: str, user: dict = Depends(get_current_user)):
         logger.error(f"Error deleting lost/found post {id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete lost/found post")
 
-@router.post("/{id}/replies", status_code=status.HTTP_201_CREATED)
-def add_lost_found_reply(id: str, reply: LostFoundReply, user: dict = Depends(get_current_user)):
-    try:
-        post_res = supabase.table("lost_and_found").select("id").eq("id", id).execute()
-        if not post_res.data:
-            raise HTTPException(status_code=404, detail="Report not found")
-            
-        new_reply = {
-            "lost_and_found_id": id,
-            "user_id": user["uid"],
-            "user_name": user.get("name") or user.get("email", "Anonymous"),
-            "text": reply.text.strip(),
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        
-        if not new_reply["text"]:
-            raise HTTPException(status_code=400, detail="Reply text cannot be empty")
-            
-        res = supabase.table("lost_and_found_replies").insert(new_reply).execute()
-        if not res.data:
-            raise HTTPException(status_code=500, detail="Failed to insert reply")
-            
-        data = res.data[0]
-        return {
-            "id": data["id"],
-            "userId": data["user_id"],
-            "userName": data["user_name"],
-            "text": data["text"],
-            "createdAt": data["created_at"]
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error adding reply to post {id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to add reply")
-
 @router.get("/{id}/replies")
 def get_lost_found_replies(
     id: str,
@@ -215,30 +190,58 @@ def get_lost_found_replies(
     offset: int = Query(default=0, ge=0),
 ):
     try:
-        post_res = supabase.table("lost_and_found").select("id").eq("id", id).execute()
-        if not post_res.data:
-            raise HTTPException(status_code=404, detail="Report not found")
-            
         res = (
             supabase.table("lost_and_found_replies")
             .select("*")
             .eq("lost_and_found_id", id)
-            .order("created_at")
+            .order("created_at", desc=False)
             .range(offset, offset + limit - 1)
             .execute()
         )
         return [
             {
-                "id": data["id"],
-                "userId": data["user_id"],
-                "userName": data["user_name"],
-                "text": data["text"],
-                "createdAt": data["created_at"]
+                "id": r["id"],
+                "postId": r["lost_and_found_id"],
+                "userId": r["user_id"],
+                "userName": r["user_name"],
+                "text": r["text"],
+                "createdAt": r["created_at"],
             }
-            for data in res.data
+            for r in res.data
         ]
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error fetching replies for post {id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve replies")
+
+@router.post("/{id}/replies", status_code=status.HTTP_201_CREATED)
+def add_lost_found_reply(id: str, reply: LostFoundReply, user: dict = Depends(get_current_user)):
+    try:
+        # Verify parent post exists
+        post_res = supabase.table("lost_and_found").select("id").eq("id", id).execute()
+        if not post_res.data:
+            raise HTTPException(status_code=404, detail="Lost/found post not found")
+            
+        data = {
+            "lost_and_found_id": id,
+            "user_id": user["uid"],
+            "user_name": user.get("name") or "Community Member",
+            "text": reply.text,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        res = supabase.table("lost_and_found_replies").insert(data).execute()
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to add reply")
+            
+        return {
+            "id": res.data[0]["id"],
+            "postId": res.data[0]["lost_and_found_id"],
+            "userId": res.data[0]["user_id"],
+            "userName": res.data[0]["user_name"],
+            "text": res.data[0]["text"],
+            "createdAt": res.data[0]["created_at"],
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error adding reply to post {id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to submit reply")

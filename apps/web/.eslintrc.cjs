@@ -15,8 +15,6 @@ module.exports = {
     'react/prop-types': 'off',
     'react/no-unescaped-entities': 'off',
     'react-refresh/only-export-components': 'off',
-    'no-unused-vars': 'off',
-    'no-empty': 'off',
-    'no-useless-catch': 'off',
+    'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
   },
 };

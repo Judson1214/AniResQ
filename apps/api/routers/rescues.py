@@ -11,6 +11,8 @@ router = APIRouter(prefix="/api/rescues", tags=["rescues"])
 logger = logging.getLogger("rescues")
 
 STAFF_ROLES = {"ADMIN", "NGO", "VOLUNTEER", "SHELTER", "VET"}
+VALID_STATUSES = {"PENDING", "DISPATCHED", "IN_PROGRESS", "RESOLVED", "CANCELLED"}
+VALID_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
 
 class Location(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude must be between -90 and 90")
@@ -46,9 +48,9 @@ def get_all_rescues(
     try:
         query = supabase.table("rescues").select("*")
         if status:
-            query = query.eq("status", status)
+            query = query.eq("status", status.upper())
         if severity:
-            query = query.eq("severity", severity)
+            query = query.eq("severity", severity.upper())
         if species:
             query = query.eq("species", species)
         if reporterId:
@@ -107,6 +109,10 @@ def get_rescue_by_id(rescue_id: str):
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get_current_user)):
+    target_sev = request.severity.upper()
+    if target_sev not in VALID_SEVERITIES:
+        raise HTTPException(status_code=422, detail=f"Invalid severity '{request.severity}'. Must be one of {sorted(VALID_SEVERITIES)}")
+        
     try:
         new_rescue = {
             "title": request.title,
@@ -116,7 +122,7 @@ def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get
             "longitude": request.location.longitude,
             "address": request.address,
             "images": request.photoUrls,
-            "severity": request.severity,
+            "severity": target_sev,
             "status": "PENDING",
             "reporter_id": user["uid"],
         }
@@ -150,6 +156,10 @@ def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get
 
 @router.patch("/{rescue_id}/status")
 def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user: dict = Depends(get_current_user)):
+    target_status = update.status.upper()
+    if target_status not in VALID_STATUSES:
+        raise HTTPException(status_code=422, detail=f"Invalid status '{update.status}'. Must be one of {sorted(VALID_STATUSES)}")
+        
     try:
         existing = supabase.table("rescues").select("*").eq("id", rescue_id).execute()
         if not existing.data:
@@ -161,22 +171,22 @@ def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user
         is_staff = user_role in STAFF_ROLES
         
         if not is_staff:
-            if not (is_reporter and update.status in ["CANCELLED", "RESOLVED"]):
+            if not (is_reporter and target_status in ["CANCELLED", "RESOLVED"]):
                 raise HTTPException(
                     status_code=403, 
                     detail="Forbidden: Only assigned responders or administrators can change rescue status to this state"
                 )
         
-        res = supabase.table("rescues").update({"status": update.status}).eq("id", rescue_id).execute()
+        res = supabase.table("rescues").update({"status": target_status}).eq("id", rescue_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Rescue request not found")
             
         # Record timeline entry using verified identity from JWT token
         try:
-            status_msg = update.message or f"Status updated to {update.status}"
+            status_msg = update.message or f"Status updated to {target_status}"
             timeline_entry = {
                 "rescue_id": rescue_id,
-                "status": update.status,
+                "status": target_status,
                 "message": status_msg,
                 "updated_by": user["uid"],
                 "updated_by_name": user.get("name") or user_role,
@@ -186,7 +196,7 @@ def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user
         except Exception as te_err:
             logger.warning(f"Failed to insert timeline entry: {te_err}")
             
-        return {"id": rescue_id, "status": update.status}
+        return {"id": rescue_id, "status": target_status}
     except HTTPException:
         raise
     except Exception as e:
@@ -200,7 +210,18 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
         if user_role not in STAFF_ROLES:
             raise HTTPException(status_code=403, detail="Forbidden: Only staff and responders can assign volunteers")
             
+        # Validate that volunteerId exists and is an authorized responder/volunteer
+        vol_check = supabase.table("users").select("id, role, display_name").eq("id", req.volunteerId).execute()
+        if not vol_check.data:
+            raise HTTPException(status_code=404, detail="Volunteer user not found")
+            
+        vol_user = vol_check.data[0]
+        if vol_user.get("role") not in STAFF_ROLES:
+            raise HTTPException(status_code=400, detail="User is not registered as a volunteer or responder")
+            
+        volunteer_name = vol_user.get("display_name") or req.volunteerName
         new_status = "DISPATCHED"
+        
         res = supabase.table("rescues").update({
             "assigned_to": req.volunteerId,
             "status": new_status,
@@ -213,7 +234,7 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
             timeline_entry = {
                 "rescue_id": rescue_id,
                 "status": new_status,
-                "message": f"Assigned to volunteer {req.volunteerName} by {user.get('name', 'Staff')}",
+                "message": f"Assigned to responder {volunteer_name} by {user.get('name', 'Staff')}",
                 "updated_by": user["uid"],
                 "updated_by_name": user.get("name") or user_role,
                 "created_at": datetime.now(timezone.utc).isoformat(),

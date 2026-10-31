@@ -1,5 +1,5 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { HeartHandshake, MapPin, Megaphone, ArrowRight, Clock, Loader2, Trophy, Star } from "lucide-react";
+import { HeartHandshake, Megaphone, ArrowRight, Clock, Loader2, Trophy, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";

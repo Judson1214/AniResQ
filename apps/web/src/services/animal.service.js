@@ -1,4 +1,5 @@
 import { supabase } from "@/config/supabase";
+import api from "@/lib/api";
 import { uploadMultipleFiles } from "./storage.service";
 import { AdoptionStatus } from "@aniresq/shared-types";
 
@@ -59,6 +60,26 @@ const createAnimal = async (data, photos) => {
   return docId;
 };
 
+const surrenderAnimal = async (data, photos) => {
+  let photoUrls = [];
+  if (photos && photos.length > 0) {
+    const tempId = crypto.randomUUID();
+    photoUrls = await uploadMultipleFiles(`animal-photos/${tempId}`, photos);
+  }
+
+  const payload = {
+    name: data.name,
+    species: data.species,
+    ageEstimate: data.ageEstimate || "Unknown",
+    description: data.description,
+    reason: data.reason || "",
+    photos: photoUrls,
+  };
+
+  const response = await api.post('/animals/surrender', payload);
+  return response.data.id;
+};
+
 const getAnimals = async (filters) => {
   let query = supabase.from('animals').select('*').order('created_at', { ascending: false });
 
@@ -117,11 +138,11 @@ const updateAnimal = async (id, data) => {
   if (error) throw error;
 };
 
-const updateAdoptionStatus = async (id, status) => {
+const updateAdoptionStatus = async (animalId, newStatus) => {
   const { error } = await supabase
     .from('animals')
-    .update({ adoption_status: status })
-    .eq('id', id);
+    .update({ adoption_status: newStatus })
+    .eq('id', animalId);
 
   if (error) throw error;
 };
@@ -143,6 +164,7 @@ export {
   getAnimalById,
   getAnimals,
   getFeaturedAnimals,
+  surrenderAnimal,
   updateAdoptionStatus,
   updateAnimal
 };
