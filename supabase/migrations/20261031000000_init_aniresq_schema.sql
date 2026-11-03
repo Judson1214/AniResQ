@@ -24,6 +24,8 @@ CREATE TABLE public.users (
   email TEXT NOT NULL UNIQUE,
   phone TEXT DEFAULT '',
   avatar_url TEXT DEFAULT '',
+  address TEXT DEFAULT '',
+  bio TEXT DEFAULT '',
   role user_role DEFAULT 'CITIZEN'::user_role NOT NULL,
   requested_role TEXT DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
@@ -351,12 +353,12 @@ ALTER TABLE public.rescues ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.rescue_timeline ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
--- 10a. Users RLS (PII protected: users see own profile, only organization staff sees others; excludes volunteers)
-CREATE POLICY "Users can view own profile or organization staff can view profiles" 
+-- 10a. Users RLS (PII protected: users see own profile, only administrators or backend service role see others)
+CREATE POLICY "Users can view own profile or admins can view profiles" 
   ON public.users FOR SELECT 
   USING (
     auth.uid() = id 
-    OR public.is_shelter_or_ngo() 
+    OR public.is_admin() 
     OR auth.role() = 'service_role'
   );
 
@@ -536,14 +538,32 @@ CREATE POLICY "Allow users to delete their own uploads"
   TO authenticated
   USING (bucket_id = 'uploads' AND (auth.uid() = owner OR auth.role() = 'service_role'));
 
--- 11b. User Avatar URL Bucket Validation Trigger
+-- 11b. User Avatar URL Bucket Validation Trigger (Compares against configured project storage prefix)
+CREATE OR REPLACE FUNCTION public.get_storage_prefix()
+RETURNS TEXT
+LANGUAGE plpgsql STABLE
+AS $$
+DECLARE
+  config_url TEXT;
+BEGIN
+  config_url := current_setting('app.settings.supabase_url', true);
+  IF config_url IS NULL OR config_url = '' THEN
+    config_url := 'https://cspnzitnvzdwwyxpnluw.supabase.co';
+  END IF;
+  RETURN rtrim(config_url, '/') || '/storage/v1/object/public/uploads/';
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.validate_user_avatar_url()
 RETURNS TRIGGER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  valid_prefix TEXT;
 BEGIN
   IF NEW.avatar_url IS NOT NULL AND NEW.avatar_url != '' THEN
-    IF NOT (NEW.avatar_url ~ '^https://[a-zA-Z0-9.-]+\.supabase\.co/storage/v1/object/public/uploads/.*$') THEN
+    valid_prefix := public.get_storage_prefix();
+    IF NOT (NEW.avatar_url LIKE (valid_prefix || '%')) THEN
       RAISE EXCEPTION 'Invalid avatar URL. Avatars must be uploaded to the official AniResQ uploads storage bucket.';
     END IF;
   END IF;
@@ -575,22 +595,28 @@ CREATE POLICY "Allow admins to read audit logs"
   ON public.audit_logs FOR SELECT
   USING (public.is_admin() OR auth.role() = 'service_role');
 
-CREATE POLICY "Allow service role or admin to insert audit logs"
+-- Strictly allow ONLY service_role to insert audit logs (prevents forged audit entries from client)
+CREATE POLICY "Allow service role to insert audit logs"
   ON public.audit_logs FOR INSERT
-  WITH CHECK (public.is_admin() OR auth.role() = 'service_role');
+  WITH CHECK (auth.role() = 'service_role');
 
+-- Skip trigger when updated via service_role to avoid duplicate audit logs with the backend API
 CREATE OR REPLACE FUNCTION public.audit_user_role_change()
 RETURNS TRIGGER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+  IF auth.role() = 'service_role' THEN
+    RETURN NEW;
+  END IF;
+
   IF NEW.role IS DISTINCT FROM OLD.role THEN
     INSERT INTO public.audit_logs (action, entity_type, entity_id, performed_by, old_value, new_value)
     VALUES (
       'ROLE_CHANGE',
       'USER',
       NEW.id,
-      COALESCE(auth.uid()::text, 'service_role'),
+      COALESCE(auth.uid()::text, 'unknown'),
       jsonb_build_object('role', OLD.role),
       jsonb_build_object('role', NEW.role)
     );

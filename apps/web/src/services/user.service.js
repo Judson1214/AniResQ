@@ -5,36 +5,27 @@ const mapUserToCamelCase = (dbData) => ({
   uid: dbData.id,
   id: dbData.id,
   email: dbData.email,
-  displayName: dbData.display_name,
+  displayName: dbData.display_name || dbData.displayName,
   role: dbData.role,
-  requestedRole: dbData.requested_role,
-  phone: dbData.phone,
-  avatarUrl: dbData.avatar_url || "",
-  createdAt: dbData.created_at
+  requestedRole: dbData.requested_role || dbData.requestedRole,
+  phone: dbData.phone || dbData.phoneNumber,
+  avatarUrl: dbData.avatar_url || dbData.avatarUrl || "",
+  createdAt: dbData.created_at || dbData.createdAt
 });
 
 const getUserById = async (uid) => {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', uid)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') return null; // 404
+  try {
+    const response = await api.get(`/users/${uid}`);
+    return mapUserToCamelCase(response.data);
+  } catch (error) {
+    if (error.response?.status === 404) return null;
     throw error;
   }
-  return mapUserToCamelCase(data);
 };
 
 const getUsersByRole = async (role) => {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('role', role);
-
-  if (error) throw error;
-  return data.map(mapUserToCamelCase);
+  const response = await api.get('/users', { params: { role } });
+  return response.data.map(mapUserToCamelCase);
 };
 
 const updateUserProfile = async (uid, data) => {
@@ -58,13 +49,8 @@ const updateUserProfile = async (uid, data) => {
 };
 
 const searchUsers = async (searchQuery) => {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .ilike('display_name', `%${searchQuery}%`);
-
-  if (error) throw error;
-  return data.map(mapUserToCamelCase);
+  const response = await api.get('/users', { params: { search: searchQuery } });
+  return response.data.map(mapUserToCamelCase);
 };
 
 const getUsers = async (params) => {

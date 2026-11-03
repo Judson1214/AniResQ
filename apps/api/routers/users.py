@@ -35,6 +35,7 @@ class UserRoleUpdate(BaseModel):
 def list_users(
     role: Optional[str] = None,
     has_requested_role: Optional[bool] = None,
+    search: Optional[str] = None,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
@@ -46,11 +47,13 @@ def list_users(
         raise HTTPException(status_code=403, detail="Forbidden: Only administrators and shelter/NGO coordinators can list users")
         
     try:
-        query = supabase.table("users").select("id, display_name, email, phone, role, requested_role, avatar_url, created_at")
+        query = supabase.table("users").select("id, display_name, email, phone, role, requested_role, avatar_url, created_at, address, bio")
         if role:
             query = query.eq("role", role.upper())
         if has_requested_role:
             query = query.not_.is_("requested_role", "null")
+        if search:
+            query = query.ilike("display_name", f"%{search}%")
             
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         is_admin = current_user.get("role") == "ADMIN"
@@ -86,7 +89,10 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
         
         is_self = current_user["uid"] == uid
         is_admin = current_user.get("role") == "ADMIN"
-        can_view_contact = is_self or is_admin
+        is_shelter_ngo = current_user.get("role") in ["NGO", "SHELTER"]
+        # Self, Admin, and review staff (Shelter/NGO) can see contact info for applicant review
+        # VET and regular users cannot view other users' contact info
+        can_view_contact = is_self or is_admin or is_shelter_ngo
         
         return {
             "id": data["id"],
@@ -98,6 +104,8 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
             "createdAt": data.get("created_at"),
             "email": data.get("email", "") if can_view_contact else "",
             "phoneNumber": data.get("phone", "") if can_view_contact else "",
+            "address": data.get("address", "") if can_view_contact else "",
+            "bio": data.get("bio", ""),
         }
     except HTTPException:
         raise
@@ -225,7 +233,7 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
         if not res.data:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Audit role change in database and structured application logs
+        # Audit role change in database audit_logs (performed_by records real admin) and structured logs
         audit_entry = {
             "action": "ROLE_CHANGE",
             "entity_type": "USER",

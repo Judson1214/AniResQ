@@ -1,4 +1,5 @@
 import pytest
+import time
 from unittest.mock import MagicMock
 from starlette.testclient import TestClient
 from main import app
@@ -495,16 +496,101 @@ def test_role_change_audited(monkeypatch):
         app.dependency_overrides.clear()
 
 def test_rate_limiter_blocks_excessive_requests():
-    from rate_limiter import SlidingWindowRateLimiter
+    from rate_limiter import SlidingWindowRateLimiter, get_client_ip
+    from starlette.datastructures import Headers
 
-    limiter = SlidingWindowRateLimiter(limit=3, window_seconds=10)
-    key = "test-client-ip"
+    limiter = SlidingWindowRateLimiter(default_limit=3, window_seconds=10)
+    client_ip = "192.168.1.100"
 
-    assert limiter.is_allowed(key)[0] is True
-    assert limiter.is_allowed(key)[0] is True
-    assert limiter.is_allowed(key)[0] is True
+    assert limiter.is_allowed(client_ip, path="/api/rescues", method="GET")[0] is True
+    assert limiter.is_allowed(client_ip, path="/api/rescues", method="GET")[0] is True
+    assert limiter.is_allowed(client_ip, path="/api/rescues", method="GET")[0] is True
 
-    # 4th request exceeds limit
-    allowed, retry_after = limiter.is_allowed(key)
+    # 4th GET request exceeds limit
+    allowed, retry_after = limiter.is_allowed(client_ip, path="/api/rescues", method="GET")
     assert allowed is False
     assert retry_after > 0
+
+    # Tiered limits: surrender endpoint has strict limit of 10
+    surrender_ip = "192.168.1.200"
+    for _ in range(10):
+        assert limiter.is_allowed(surrender_ip, path="/api/animals/surrender", method="POST")[0] is True
+    # 11th surrender request blocked
+    allowed_surrender, _ = limiter.is_allowed(surrender_ip, path="/api/animals/surrender", method="POST")
+    assert allowed_surrender is False
+
+    # Eviction of idle keys:
+    limiter.evict_idle_keys(now=time.time() + 20)
+    assert f"{client_ip}:read" not in limiter.requests
+    assert f"{surrender_ip}:surrender" not in limiter.requests
+
+    # Spoofed X-Forwarded-For is ignored by default
+    fake_scope = {
+        "type": "http",
+        "client": ("10.0.0.1", 12345),
+        "headers": [(b"x-forwarded-for", b"spoofed.hacker.ip")]
+    }
+    mock_req = MagicMock()
+    mock_req.client.host = "10.0.0.1"
+    mock_req.headers = {"x-forwarded-for": "spoofed.hacker.ip"}
+    resolved_ip = get_client_ip(mock_req)
+    assert resolved_ip == "10.0.0.1"  # Uses socket host, not spoofed header!
+
+def test_user_profile_address_and_bio_patch(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-addr-bio", "email": "user@test.com", "name": "User", "role": "CITIZEN"
+    }
+    try:
+        captured_update = {}
+        mock_query = MagicMock()
+        mock_query.update.side_effect = lambda d: captured_update.update(d) or mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.execute.return_value = MagicMock(data=[{
+            "id": "user-addr-bio",
+            "display_name": "User",
+            "address": "123 Main St",
+            "bio": "Animal lover"
+        }])
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+        res = client.patch("/api/users/user-addr-bio", json={
+            "address": "123 Main St",
+            "bio": "Animal lover"
+        })
+        assert res.status_code == 200
+        assert captured_update.get("address") == "123 Main St"
+        assert captured_update.get("bio") == "Animal lover"
+    finally:
+        app.dependency_overrides.clear()
+
+def test_shelter_ngo_can_view_applicant_contact_details(monkeypatch):
+    # SHELTER/NGO coordinator reviewing an applicant
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "shelter-mgr", "email": "shelter@test.com", "name": "Shelter Mgr", "role": "SHELTER"
+    }
+    try:
+        mock_user = {
+            "id": "applicant-1",
+            "display_name": "Jane Applicant",
+            "email": "jane@example.com",
+            "phone": "555-9876",
+            "address": "456 Elm St",
+            "bio": "Experienced dog owner",
+            "role": "CITIZEN",
+            "avatar_url": "",
+            "created_at": "2026-11-01T00:00:00Z"
+        }
+        mock_query = MagicMock()
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.execute.return_value = MagicMock(data=[mock_user])
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+        res = client.get("/api/users/applicant-1")
+        assert res.status_code == 200
+        # Shelter reviewing applicant receives contact details needed for review
+        assert res.json()["email"] == "jane@example.com"
+        assert res.json()["phoneNumber"] == "555-9876"
+        assert res.json()["address"] == "456 Elm St"
+    finally:
+        app.dependency_overrides.clear()
