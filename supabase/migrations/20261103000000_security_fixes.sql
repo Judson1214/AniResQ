@@ -1,5 +1,5 @@
 -- 20261103000000_security_fixes.sql
--- Security Hardening: Restrict Users SELECT RLS, Project URL Avatar Validation, Scoped Storage Uploads, Service Role Audit Logs, Address/Bio Columns
+-- Security Hardening: Restrict Users SELECT RLS, Fail-Closed Project URL Avatar Validation, Scoped Storage Uploads, Service Role Audit Logs, Address/Bio Columns
 
 -- 1. Add missing address and bio columns to public.users
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
@@ -49,8 +49,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- 4. Enforce official configured Supabase project uploads bucket prefix on public.users.avatar_url
--- Compares against configured project URL instead of any regex matching random attacker Supabase projects
+-- 4. Fail-closed official Supabase project uploads bucket validation on public.users.avatar_url
+-- Configures current project URL setting; fails closed if unset in new deployments
+ALTER DATABASE postgres SET app.settings.supabase_url = 'https://cspnzitnvzdwwyxpnluw.supabase.co';
+
 CREATE OR REPLACE FUNCTION public.get_storage_prefix()
 RETURNS TEXT
 LANGUAGE plpgsql STABLE
@@ -60,7 +62,7 @@ DECLARE
 BEGIN
   config_url := current_setting('app.settings.supabase_url', true);
   IF config_url IS NULL OR config_url = '' THEN
-    config_url := 'https://cspnzitnvzdwwyxpnluw.supabase.co';
+    RAISE EXCEPTION 'Database setting app.settings.supabase_url is not configured. Configure it via: ALTER DATABASE postgres SET app.settings.supabase_url = ''https://<your-project-id>.supabase.co'';';
   END IF;
   RETURN rtrim(config_url, '/') || '/storage/v1/object/public/uploads/';
 END;

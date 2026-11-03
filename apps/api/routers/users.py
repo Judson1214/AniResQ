@@ -79,6 +79,67 @@ def list_users(
         logger.error(f"Error listing users: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve users")
 
+def check_staff_has_active_case_with_user(staff_id: str, target_user_id: str) -> bool:
+    """Checks if a staff user (SHELTER, NGO, VOLUNTEER) has an active operational relationship
+    with the target user to justify viewing their contact details (email, phone, address).
+    Legitimate cases:
+      1. Target user submitted an adoption application for an animal managed/reviewed by this shelter.
+      2. Target user surrendered an animal to this shelter.
+      3. Staff user is assigned to an emergency rescue incident reported by target user.
+    """
+    try:
+        # 1. Adoption applications for animals managed by this staff/shelter
+        apps = (
+            supabase.table("adoption_applications")
+            .select("id, animal_id, reviewer_id")
+            .eq("applicant_id", target_user_id)
+            .execute()
+        )
+        if apps.data:
+            animal_ids = [a["animal_id"] for a in apps.data if a.get("animal_id")]
+            if animal_ids:
+                shelter_animals = (
+                    supabase.table("animals")
+                    .select("id")
+                    .in_("id", animal_ids)
+                    .eq("shelter_id", staff_id)
+                    .limit(1)
+                    .execute()
+                )
+                if shelter_animals.data and len(shelter_animals.data) > 0:
+                    return True
+            if any(a.get("reviewer_id") == staff_id for a in apps.data):
+                return True
+
+        # 2. Check if target user surrendered an animal to this shelter
+        surrenders = (
+            supabase.table("animals")
+            .select("id")
+            .eq("surrendered_by", target_user_id)
+            .eq("shelter_id", staff_id)
+            .limit(1)
+            .execute()
+        )
+        if surrenders.data and len(surrenders.data) > 0:
+            return True
+
+        # 3. Check if staff is assigned to a rescue reported by target user
+        rescues = (
+            supabase.table("rescues")
+            .select("id")
+            .eq("reporter_id", target_user_id)
+            .eq("assigned_to", staff_id)
+            .limit(1)
+            .execute()
+        )
+        if rescues.data and len(rescues.data) > 0:
+            return True
+
+        return False
+    except Exception as e:
+        logger.warning(f"Error checking staff relationship for {staff_id} -> {target_user_id}: {e}")
+        return False
+
 @router.get("/{uid}")
 def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
     try:
@@ -89,10 +150,17 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
         
         is_self = current_user["uid"] == uid
         is_admin = current_user.get("role") == "ADMIN"
-        is_shelter_ngo = current_user.get("role") in ["NGO", "SHELTER"]
-        # Self, Admin, and review staff (Shelter/NGO) can see contact info for applicant review
-        # VET and regular users cannot view other users' contact info
-        can_view_contact = is_self or is_admin or is_shelter_ngo
+        caller_role = current_user.get("role")
+        
+        # PII Protection: Contact details (email, phone, address) are strictly scoped:
+        # - Full system administrators
+        # - The user themselves
+        # - Staff (SHELTER, NGO, VOLUNTEER) with an active application, surrender, or rescue case with the user
+        can_view_contact = False
+        if is_self or is_admin:
+            can_view_contact = True
+        elif caller_role in ["NGO", "SHELTER", "VOLUNTEER"]:
+            can_view_contact = check_staff_has_active_case_with_user(current_user["uid"], uid)
         
         return {
             "id": data["id"],

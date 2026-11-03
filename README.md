@@ -71,10 +71,16 @@ cd AniResQ
 2. Navigate to the **SQL Editor** in the Supabase dashboard.
 3. Open and run the complete database initialization script:
    - [`supabase/migrations/20261031000000_init_aniresq_schema.sql`](./supabase/migrations/20261031000000_init_aniresq_schema.sql)
+   - Followed by incremental security fixes: [`supabase/migrations/20261103000000_security_fixes.sql`](./supabase/migrations/20261103000000_security_fixes.sql)
    *(Note: This creates all enums, tables, triggers, helper functions, indexes, and RLS policies).*
-4. Navigate to **Storage** in the Supabase dashboard:
-   - Verify that the `uploads` bucket exists and is set to **Public** (the migration script provisions this automatically with 10MB size limits and image MIME restrictions).
-5. From **Project Settings -> API**, copy your **Project URL**, **anon public key**, and **service_role secret key**.
+4. Configure the database setting for the avatar validation trigger:
+   ```sql
+   ALTER DATABASE postgres SET app.settings.supabase_url = 'https://<your-project-id>.supabase.co';
+   ```
+   *(Note: The avatar upload trigger fails closed with a clear exception if this setting is omitted).*
+5. Navigate to **Storage** in the Supabase dashboard:
+   - Verify that the `uploads` bucket exists and is set to **Public** (the migration script provisions this automatically with 10MB size limits, scoped user folder `{auth.uid()}/...` policies, and image MIME restrictions).
+6. From **Project Settings -> API**, copy your **Project URL**, **anon public key**, and **service_role secret key**.
 
 ### 3. Environment Configuration
 
@@ -88,6 +94,10 @@ Fill in your Supabase credentials:
 SUPABASE_URL=https://<your-project-id>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<your-service-role-secret-key>
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+
+# Rate limiting proxy configuration:
+TRUST_PROXY_HEADERS=false
+RATE_LIMIT_PER_MINUTE=120
 ```
 
 > [!CAUTION]
@@ -187,21 +197,47 @@ pnpm --filter @aniresq/web build
 
 ---
 
+## Rate Limiting & Deployment Notes
+
+The API enforces a sliding-window in-memory rate limiter per client IP:
+- **Default IP Keying (`TRUST_PROXY_HEADERS=false`)**:
+  - By default, the rate limiter keys directly on the TCP socket IP (`request.client.host`). Spoofed `X-Forwarded-For` headers from clients are completely ignored.
+- **Behind Reverse Proxies (`TRUST_PROXY_HEADERS=true`)**:
+  - Set `TRUST_PROXY_HEADERS=true` in `apps/api/.env` **only** if your backend runs behind a trusted reverse proxy (e.g. Nginx, Cloudflare, Traefik, AWS ALB, Render) that strips and overwrites `X-Forwarded-For`.
+  - Without this flag behind a proxy, all client requests will share the single reverse proxy IP bucket.
+- **Process Worker Scaling**:
+  - The rate limiter operates in-memory per process. Running multiple Uvicorn workers (`--workers N`) multiplies effective throughput across worker processes. For distributed deployments across multiple VM nodes, consider backing the sliding window with Redis.
+- **Tiered Endpoint Limits (per minute)**:
+  - `POST /api/animals/surrender`: **10 req/min** (slow spam prevention)
+  - `POST /api/rescues` & `POST /api/lostfound`: **15 req/min**
+  - General mutations (`POST`, `PATCH`, `DELETE`): **40 req/min**
+  - Read queries: **120 req/min** (configurable via `RATE_LIMIT_PER_MINUTE`)
+- **Memory Safety**:
+  - Idle keys with no active timestamps are evicted periodically to prevent memory leaks from high volumes of unique IP addresses.
+
+---
+
 ## Security Model & RBAC
 
 1. **Role Escalation Protection**:
-   - The PostgreSQL `handle_new_user()` trigger automatically enforces `role = 'CITIZEN'::user_role` for all new signups, capturing any requested role in `requested_role` for administrator review.
+   - The PostgreSQL `handle_new_user()` trigger automatically enforces `role = 'CITIZEN'::user_role` for all new signups, capturing any requested role in `requested_role` for administrator review. Requests for the `ADMIN` role via signup metadata are automatically rejected and sanitized.
    - The `protect_user_fields_update()` trigger rejects any role change, email change, or ID tampering unless executed by an authenticated administrator or the backend `service_role`.
    - Admin-only role management endpoint `PATCH /api/users/{uid}/role` provides secure role transitions with safeguards against demoting the sole administrator.
+   - Role updates are audited to `public.audit_logs` (restricted strictly to `service_role` insertion to prevent forgery).
 2. **Rescue & Animal Authorization**:
    - The `protect_rescue_update()` trigger ensures non-staff reporters cannot forge responder assignments or arbitrary status transitions, and freezes incident details once responders are dispatched.
    - Animal surrenders start as `NOT_READY` pending shelter review and are visible only to staff and the surrenderer.
-3. **PII Isolation**:
-   - Supabase Row Level Security restricts user profiles (`public.users`) so that non-staff and volunteers can only query their own contact info; organization staff (`ADMIN`, `NGO`, `SHELTER`, `VET`) can access user contact details for rescue coordination.
+3. **PII Isolation & User Access Control**:
+   - **PostgreSQL Row Level Security (`public.users`)**: Policy enforces `auth.uid() = id OR public.is_admin() OR auth.role() = 'service_role'`. Regular users, VETs, NGOs, and shelters querying Supabase directly with client keys cannot view other users' records.
+   - **Scoped Contact Details on Profile Endpoint**: `GET /api/users/{uid}` strictly redacts user contact information (`email`, `phoneNumber`, `address`) unless:
+     - The requester is an administrator (`ADMIN`)
+     - The requester is viewing their own profile
+     - The requester is staff (`NGO`, `SHELTER`, `VOLUNTEER`) with an active case with the user (e.g., active adoption application for their animals, animal surrender, or assigned rescue dispatch).
+   - `GET /api/users` (list users directory) forbids `VET` and non-staff (`403 Forbidden`), and redacts emails and phone numbers unless requested by an administrator.
 4. **Backend Route Guarding & Media Validation**:
    - All mutating API endpoints require valid Bearer JWT tokens via `Depends(get_current_user)`.
-   - Photo and avatar uploads are validated to ensure assets originate from the official AniResQ storage bucket.
-   - Status updates, volunteer dispatching, and deletion routes verify authorized role claims before executing database modifications.
+   - Storage uploads are restricted to `{auth.uid()}/...` paths via storage RLS policies.
+   - Photo and avatar uploads are verified against the official project storage bucket prefix; database triggers fail closed if the project URL setting is unconfigured.
 
 ---
 

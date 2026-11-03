@@ -538,7 +538,9 @@ CREATE POLICY "Allow users to delete their own uploads"
   TO authenticated
   USING (bucket_id = 'uploads' AND (auth.uid() = owner OR auth.role() = 'service_role'));
 
--- 11b. User Avatar URL Bucket Validation Trigger (Compares against configured project storage prefix)
+-- 11b. User Avatar URL Bucket Validation Trigger (Compares against configured project storage prefix, fails closed if unset)
+ALTER DATABASE postgres SET app.settings.supabase_url = 'https://cspnzitnvzdwwyxpnluw.supabase.co';
+
 CREATE OR REPLACE FUNCTION public.get_storage_prefix()
 RETURNS TEXT
 LANGUAGE plpgsql STABLE
@@ -548,7 +550,7 @@ DECLARE
 BEGIN
   config_url := current_setting('app.settings.supabase_url', true);
   IF config_url IS NULL OR config_url = '' THEN
-    config_url := 'https://cspnzitnvzdwwyxpnluw.supabase.co';
+    RAISE EXCEPTION 'Database setting app.settings.supabase_url is not configured. Configure it via: ALTER DATABASE postgres SET app.settings.supabase_url = ''https://<your-project-id>.supabase.co'';';
   END IF;
   RETURN rtrim(config_url, '/') || '/storage/v1/object/public/uploads/';
 END;

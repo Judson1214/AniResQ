@@ -564,7 +564,7 @@ def test_user_profile_address_and_bio_patch(monkeypatch):
         app.dependency_overrides.clear()
 
 def test_shelter_ngo_can_view_applicant_contact_details(monkeypatch):
-    # SHELTER/NGO coordinator reviewing an applicant
+    # SHELTER/NGO coordinator reviewing an applicant with an active adoption application
     app.dependency_overrides[get_current_user] = lambda: {
         "uid": "shelter-mgr", "email": "shelter@test.com", "name": "Shelter Mgr", "role": "SHELTER"
     }
@@ -580,17 +580,75 @@ def test_shelter_ngo_can_view_applicant_contact_details(monkeypatch):
             "avatar_url": "",
             "created_at": "2026-11-01T00:00:00Z"
         }
-        mock_query = MagicMock()
-        mock_query.select.return_value = mock_query
-        mock_query.eq.return_value = mock_query
-        mock_query.execute.return_value = MagicMock(data=[mock_user])
-        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+        
+        def table_mock(name):
+            query = MagicMock()
+            query.select.return_value = query
+            query.eq.return_value = query
+            query.in_.return_value = query
+            query.limit.return_value = query
+            if name == "users":
+                query.execute.return_value = MagicMock(data=[mock_user])
+            elif name == "adoption_applications":
+                # Active application by applicant-1
+                query.execute.return_value = MagicMock(data=[{"id": "app-1", "animal_id": "animal-10"}])
+            elif name == "animals":
+                # animal-10 is owned by shelter-mgr
+                query.execute.return_value = MagicMock(data=[{"id": "animal-10"}])
+            else:
+                query.execute.return_value = MagicMock(data=[])
+            return query
+
+        monkeypatch.setattr(supabase_config.supabase, "table", table_mock)
 
         res = client.get("/api/users/applicant-1")
         assert res.status_code == 200
-        # Shelter reviewing applicant receives contact details needed for review
+        # Shelter reviewing applicant for their animal receives contact details
         assert res.json()["email"] == "jane@example.com"
         assert res.json()["phoneNumber"] == "555-9876"
         assert res.json()["address"] == "456 Elm St"
+    finally:
+        app.dependency_overrides.clear()
+
+def test_shelter_ngo_cannot_view_unrelated_user_contact_details(monkeypatch):
+    # SHELTER/NGO querying a random user with no active application, surrender, or rescue
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "shelter-mgr", "email": "shelter@test.com", "name": "Shelter Mgr", "role": "SHELTER"
+    }
+    try:
+        mock_user = {
+            "id": "unrelated-user-2",
+            "display_name": "Random User",
+            "email": "random@example.com",
+            "phone": "555-0000",
+            "address": "789 Pine St",
+            "bio": "No animals",
+            "role": "CITIZEN",
+            "avatar_url": "",
+            "created_at": "2026-11-01T00:00:00Z"
+        }
+        
+        def table_mock(name):
+            query = MagicMock()
+            query.select.return_value = query
+            query.eq.return_value = query
+            query.in_.return_value = query
+            query.limit.return_value = query
+            if name == "users":
+                query.execute.return_value = MagicMock(data=[mock_user])
+            else:
+                # No active cases for this user
+                query.execute.return_value = MagicMock(data=[])
+            return query
+
+        monkeypatch.setattr(supabase_config.supabase, "table", table_mock)
+
+        res = client.get("/api/users/unrelated-user-2")
+        assert res.status_code == 200
+        # Contact details are strictly redacted for unrelated user
+        assert res.json()["email"] == ""
+        assert res.json()["phoneNumber"] == ""
+        assert res.json()["address"] == ""
+        assert res.json()["displayName"] == "Random User"
     finally:
         app.dependency_overrides.clear()
