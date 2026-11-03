@@ -257,6 +257,30 @@ def test_photo_url_validation():
         "uid": "citizen-1", "email": "cit@test.com", "name": "Citizen", "role": "CITIZEN"
     }
     try:
+        # External URL containing /uploads/ substring rejected with 422
+        res_evil_uploads = client.post("/api/rescues/", json={
+            "title": "Injured animal",
+            "description": "Needs help",
+            "severity": "HIGH",
+            "species": "CAT",
+            "location": {"latitude": 10.0, "longitude": 20.0},
+            "address": "Street",
+            "photoUrls": ["https://evil.example/uploads/x.jpg"]
+        })
+        assert res_evil_uploads.status_code == 422
+
+        # Substring in query param rejected with 422
+        res_evil_query = client.post("/api/rescues/", json={
+            "title": "Injured animal",
+            "description": "Needs help",
+            "severity": "HIGH",
+            "species": "CAT",
+            "location": {"latitude": 10.0, "longitude": 20.0},
+            "address": "Street",
+            "photoUrls": ["https://evil.example/a?x=/storage/v1/object/public/uploads/"]
+        })
+        assert res_evil_query.status_code == 422
+
         # External URL rejected with 422
         res_ext = client.post("/api/rescues/", json={
             "title": "Injured animal",
@@ -268,6 +292,48 @@ def test_photo_url_validation():
             "photoUrls": ["https://malicious-external-site.com/exploit.png"]
         })
         assert res_ext.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+def test_shared_validators_direct():
+    from validators import PREFIX, validate_photo_urls, validate_avatar_url
+
+    # Prefix must be formatted with the Supabase uploads bucket path
+    assert PREFIX.endswith("/storage/v1/object/public/uploads/")
+
+    # Rejection of substrings on evil domains
+    for evil_url in [
+        "https://evil.example/uploads/x.jpg",
+        "https://evil.example/a?x=/storage/v1/object/public/uploads/",
+        "https://malicious-external-site.com/exploit.png",
+        "http://evil.com/storage/v1/object/public/uploads/test.png",
+    ]:
+        with pytest.raises(Exception) as exc_info:
+            validate_photo_urls([evil_url])
+        assert exc_info.value.status_code == 422
+
+        with pytest.raises(Exception) as exc_info_avatar:
+            validate_avatar_url(evil_url)
+        assert exc_info_avatar.value.status_code == 422
+
+    # Valid URLs starting with PREFIX succeed
+    valid_url = f"{PREFIX}rescues/rescue-1.jpg"
+    assert validate_photo_urls([valid_url]) == [valid_url]
+    assert validate_avatar_url(valid_url) == valid_url
+
+    # Empty / None avatar URL is safely passed through
+    assert validate_avatar_url(None) is None
+    assert validate_avatar_url("") == ""
+
+def test_user_avatar_url_validation():
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-1", "email": "user@test.com", "name": "User", "role": "CITIZEN"
+    }
+    try:
+        res = client.patch("/api/users/user-1", json={
+            "avatarUrl": "https://evil.example/uploads/x.jpg"
+        })
+        assert res.status_code == 422
     finally:
         app.dependency_overrides.clear()
 

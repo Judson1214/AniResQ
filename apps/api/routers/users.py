@@ -4,22 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from supabase_config import supabase
 from auth import get_current_user
+from validators import validate_avatar_url
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 logger = logging.getLogger("users")
 
 VALID_ROLES = {"CITIZEN", "NGO", "VOLUNTEER", "SHELTER", "VET", "ADMIN"}
-
-def validate_avatar_url(url: Optional[str]) -> Optional[str]:
-    if not url:
-        return url
-    u = url.strip()
-    if "/storage/v1/object/public/uploads/" in u or u.startswith("uploads/") or "/uploads/" in u:
-        return u
-    raise HTTPException(
-        status_code=422,
-        detail="Invalid avatar URL. Avatars must be uploaded to the official AniResQ uploads storage bucket."
-    )
 
 class UserProfileCreate(BaseModel):
     uid: str

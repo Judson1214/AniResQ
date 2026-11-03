@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from supabase_config import supabase
 from auth import get_current_user
+from validators import validate_photo_urls
 
 router = APIRouter(prefix="/api/rescues", tags=["rescues"])
 logger = logging.getLogger("rescues")
@@ -13,21 +14,6 @@ logger = logging.getLogger("rescues")
 STAFF_ROLES = {"ADMIN", "NGO", "VOLUNTEER", "SHELTER", "VET"}
 VALID_STATUSES = {"PENDING", "DISPATCHED", "IN_PROGRESS", "RESOLVED", "CANCELLED"}
 VALID_SEVERITIES = {"CRITICAL", "HIGH", "MEDIUM", "LOW"}
-
-def validate_photo_urls(urls: List[str]) -> List[str]:
-    valid = []
-    for u in urls:
-        if not u or not isinstance(u, str):
-            continue
-        u = u.strip()
-        if "/storage/v1/object/public/uploads/" in u or u.startswith("uploads/") or "/uploads/" in u:
-            valid.append(u)
-        else:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Invalid photo URL '{u}'. Photos must be uploaded to the official AniResQ uploads storage bucket."
-            )
-    return valid
 
 class Location(BaseModel):
     latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude must be between -90 and 90")
