@@ -1,4 +1,3 @@
-import { supabase } from "@/config/supabase";
 import api from "@/lib/api";
 
 const mapUserToCamelCase = (dbData) => ({

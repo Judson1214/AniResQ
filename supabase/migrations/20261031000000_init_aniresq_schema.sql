@@ -27,7 +27,7 @@ CREATE TABLE public.users (
   address TEXT DEFAULT '',
   bio TEXT DEFAULT '',
   role user_role DEFAULT 'CITIZEN'::user_role NOT NULL,
-  requested_role TEXT DEFAULT NULL,
+  requested_role TEXT DEFAULT NULL CHECK (requested_role IS NULL OR requested_role IN ('VOLUNTEER', 'NGO', 'SHELTER', 'VET')),
   created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );
@@ -242,6 +242,13 @@ BEGIN
     END IF;
   END IF;
 
+  -- Disallow setting requested_role to ADMIN or invalid roles
+  IF NEW.requested_role IS DISTINCT FROM OLD.requested_role AND NEW.requested_role IS NOT NULL THEN
+    IF UPPER(NEW.requested_role) = 'ADMIN' OR UPPER(NEW.requested_role) NOT IN ('VOLUNTEER', 'NGO', 'SHELTER', 'VET') THEN
+      RAISE EXCEPTION 'Invalid requested role. Users cannot request ADMIN role.';
+    END IF;
+  END IF;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -338,7 +345,7 @@ AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.users
-    WHERE id = auth.uid() AND role IN ('ADMIN'::public.user_role, 'NGO'::public.user_role, 'SHELTER'::public.user_role, 'VET'::public.user_role)
+    WHERE id = auth.uid() AND role IN ('ADMIN'::public.user_role, 'NGO'::public.user_role, 'SHELTER'::public.user_role)
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;

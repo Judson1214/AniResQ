@@ -161,3 +161,23 @@ CREATE TRIGGER tr_audit_user_role_change
   AFTER UPDATE OF role ON public.users
   FOR EACH ROW
   EXECUTE PROCEDURE public.audit_user_role_change();
+
+-- 7. Add CHECK constraint on public.users.requested_role to forbid requesting ADMIN or invalid roles
+ALTER TABLE public.users DROP CONSTRAINT IF EXISTS check_requested_role;
+ALTER TABLE public.users ADD CONSTRAINT check_requested_role
+  CHECK (requested_role IS NULL OR requested_role IN ('VOLUNTEER', 'NGO', 'SHELTER', 'VET'));
+
+-- 8. Restrict is_shelter_or_ngo() strictly to ADMIN, NGO, and SHELTER (excludes VET)
+-- Prevents VET from reading and updating every adoption application through RLS
+CREATE OR REPLACE FUNCTION public.is_shelter_or_ngo()
+RETURNS BOOLEAN 
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.users
+    WHERE id = auth.uid() AND role IN ('ADMIN'::public.user_role, 'NGO'::public.user_role, 'SHELTER'::public.user_role)
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+

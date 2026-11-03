@@ -27,6 +27,7 @@ class UserProfileUpdate(BaseModel):
     address: Optional[str] = None
     bio: Optional[str] = None
     avatarUrl: Optional[str] = None
+    requestedRole: Optional[str] = None
 
 class UserRoleUpdate(BaseModel):
     role: str
@@ -253,6 +254,11 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
         update_data["bio"] = profile.bio
     if profile.avatarUrl is not None: 
         update_data["avatar_url"] = validate_avatar_url(profile.avatarUrl)
+    if profile.requestedRole is not None:
+        raw_req = profile.requestedRole.strip().upper() if profile.requestedRole.strip() else None
+        if raw_req == "ADMIN" or (raw_req and raw_req not in ALLOWED_REQUESTED_ROLES):
+            raise HTTPException(status_code=400, detail="Cannot request ADMIN or invalid role")
+        update_data["requested_role"] = raw_req
     
     try:
         if not update_data:

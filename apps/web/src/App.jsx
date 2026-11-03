@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AuthInitializer } from "@/components/auth/AuthInitializer";
+import { UserRole } from "@aniresq/shared-types";
 
 const HomePage = lazy(() => import("@/pages/HomePage"));
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
@@ -27,6 +28,14 @@ const PageLoader = () => (
   </div>
 );
 
+const RESPONDER_ROLES = [
+  UserRole.ADMIN,
+  UserRole.VOLUNTEER,
+  UserRole.SHELTER,
+  UserRole.NGO,
+  UserRole.VET,
+];
+
 function App() {
   return (
     <>
@@ -39,8 +48,6 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/animals" element={<AnimalsPage />} />
           <Route path="/animals/:id" element={<AnimalDetailPage />} />
-          <Route path="/rescue" element={<RescueListPage />} />
-          <Route path="/rescue/:id" element={<RescueDetailPage />} />
           <Route path="/lost-found" element={<LostFoundPage />} />
           <Route path="/donate" element={<DonationPage />} />
 
@@ -90,6 +97,58 @@ function App() {
             element={
               <ProtectedRoute>
                 <MyApplicationsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Responder / Staff Protected Routes (Active SOS alerts and maps) */}
+          <Route
+            path="/rescue"
+            element={
+              <ProtectedRoute allowedRoles={RESPONDER_ROLES}>
+                <RescueListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/rescue/:id"
+            element={
+              <ProtectedRoute allowedRoles={RESPONDER_ROLES}>
+                <RescueDetailPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Admin Protected Routes */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/users"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/dashboard/settings"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <DashboardPage />
               </ProtectedRoute>
             }
           />

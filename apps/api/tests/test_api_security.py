@@ -652,3 +652,27 @@ def test_shelter_ngo_cannot_view_unrelated_user_contact_details(monkeypatch):
         assert res.json()["displayName"] == "Random User"
     finally:
         app.dependency_overrides.clear()
+
+def test_cannot_request_admin_role_via_patch_profile(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-test", "email": "user@test.com", "name": "Test User", "role": "CITIZEN"
+    }
+    try:
+        mock_query = MagicMock()
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.update.return_value = mock_query
+        mock_query.execute.return_value = MagicMock(data=[{"id": "user-test", "display_name": "Test"}])
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+        # Attempting to PATCH requestedRole to ADMIN fails with 400
+        res = client.patch("/api/users/user-test", json={"requestedRole": "ADMIN"})
+        assert res.status_code == 400
+        assert "Cannot request ADMIN" in res.json()["detail"]
+
+        # Valid requested role VOLUNTEER is accepted
+        res_ok = client.patch("/api/users/user-test", json={"requestedRole": "VOLUNTEER"})
+        assert res_ok.status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+

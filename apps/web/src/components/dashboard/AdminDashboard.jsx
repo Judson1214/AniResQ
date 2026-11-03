@@ -1,6 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpRight, ArrowDownRight, Activity, MapPin, Truck, Loader2, ShieldCheck, UserCheck, X } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { UserRole } from "@aniresq/shared-types";
+
+const ALLOWED_REQUESTED_ROLES = ["VOLUNTEER", "NGO", "SHELTER", "VET"];
 import { cn, formatDateTime } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
@@ -10,6 +14,7 @@ import { getUsers, updateUserRole } from "@/services/user.service";
 import { useToast } from "@/components/ui/use-toast";
 
 const AdminDashboard = () => {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -46,7 +51,11 @@ const AdminDashboard = () => {
 
   const pendingRoleRequests = useMemo(() => {
     if (!users) return [];
-    return users.filter(u => u.requestedRole && u.requestedRole !== u.role);
+    return users.filter(
+      u => u.requestedRole && 
+           u.requestedRole !== u.role && 
+           ALLOWED_REQUESTED_ROLES.includes(u.requestedRole.toUpperCase())
+    );
   }, [users]);
 
   const stats = useMemo(() => {
@@ -66,6 +75,10 @@ const AdminDashboard = () => {
 
     return { active, pending, deployed: deployedIds.size, recent };
   }, [rescues]);
+
+  if (user && user.role !== UserRole.ADMIN) {
+    return <Navigate to="/unauthorized" replace />;
+  }
 
   if (isRescuesLoading) {
     return (
@@ -213,8 +226,12 @@ const AdminDashboard = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => roleMutation.mutate({ uid: u.id, role: u.requestedRole })}
-                      disabled={roleMutation.isPending}
+                      onClick={() => {
+                        if (ALLOWED_REQUESTED_ROLES.includes(u.requestedRole?.toUpperCase())) {
+                          roleMutation.mutate({ uid: u.id, role: u.requestedRole });
+                        }
+                      }}
+                      disabled={roleMutation.isPending || !ALLOWED_REQUESTED_ROLES.includes(u.requestedRole?.toUpperCase())}
                       className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5"
                     >
                       <UserCheck size={14} /> Approve as {u.requestedRole}
