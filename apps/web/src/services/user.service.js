@@ -38,18 +38,23 @@ const getUsersByRole = async (role) => {
 };
 
 const updateUserProfile = async (uid, data) => {
-  const updateData = {};
-  if (data.displayName !== undefined) updateData.display_name = data.displayName;
-  if (data.phone !== undefined) updateData.phone = data.phone;
-  if (data.avatarUrl !== undefined) updateData.avatar_url = data.avatarUrl;
+  const payload = {};
+  if (data.displayName !== undefined) payload.displayName = data.displayName;
+  if (data.phone !== undefined) {
+    payload.phoneNumber = data.phone;
+    payload.phone = data.phone;
+  }
+  if (data.phoneNumber !== undefined) {
+    payload.phoneNumber = data.phoneNumber;
+    payload.phone = data.phoneNumber;
+  }
+  if (data.avatarUrl !== undefined) payload.avatarUrl = data.avatarUrl;
+  if (data.address !== undefined) payload.address = data.address;
+  if (data.bio !== undefined) payload.bio = data.bio;
   // NOTE: role is strictly excluded to prevent privilege escalation from the browser
 
-  const { error } = await supabase
-    .from('users')
-    .update(updateData)
-    .eq('id', uid);
-
-  if (error) throw error;
+  const response = await api.patch(`/users/${uid}`, payload);
+  return response.data;
 };
 
 const searchUsers = async (searchQuery) => {

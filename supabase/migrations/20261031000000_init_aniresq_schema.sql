@@ -167,12 +167,20 @@ CREATE TRIGGER update_lost_and_found_modtime BEFORE UPDATE ON public.lost_and_fo
 CREATE TRIGGER update_rescues_modtime BEFORE UPDATE ON public.rescues FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 CREATE TRIGGER update_notifications_modtime BEFORE UPDATE ON public.notifications FOR EACH ROW EXECUTE PROCEDURE update_updated_at_column();
 
--- 8. Auth Signup Trigger (Hardened: Always defaults to CITIZEN, captures requested_role)
+-- 8. Auth Signup Trigger (Hardened: Always defaults to CITIZEN, captures requested_role, disallows ADMIN)
 CREATE OR REPLACE FUNCTION public.handle_new_user() 
 RETURNS TRIGGER 
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  req_role TEXT;
 BEGIN
+  req_role := UPPER(NEW.raw_user_meta_data->>'requested_role');
+  -- Strictly disallow requesting ADMIN role or invalid roles via signup metadata
+  IF req_role = 'ADMIN' OR req_role NOT IN ('VOLUNTEER', 'NGO', 'SHELTER', 'VET') THEN
+    req_role := NULL;
+  END IF;
+
   INSERT INTO public.users (id, email, display_name, phone, role, requested_role)
   VALUES (
     NEW.id,
@@ -180,7 +188,7 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'display_name', 'Unknown User'),
     COALESCE(NEW.raw_user_meta_data->>'phone', ''),
     'CITIZEN'::public.user_role, -- Force CITIZEN regardless of user input
-    NEW.raw_user_meta_data->>'requested_role'
+    req_role
   )
   ON CONFLICT (id) DO UPDATE SET
     email = EXCLUDED.email,
@@ -509,7 +517,14 @@ CREATE POLICY "Allow public viewing of uploads"
 CREATE POLICY "Allow authenticated users to upload files"
   ON storage.objects FOR INSERT
   TO authenticated
-  WITH CHECK (bucket_id = 'uploads');
+  WITH CHECK (
+    bucket_id = 'uploads' AND 
+    (
+      (auth.uid()::text = (storage.foldername(name))[1]) OR
+      (name LIKE (auth.uid()::text || '/%')) OR
+      auth.role() = 'service_role'
+    )
+  );
 
 CREATE POLICY "Allow users to update their own uploads"
   ON storage.objects FOR UPDATE
@@ -520,6 +535,75 @@ CREATE POLICY "Allow users to delete their own uploads"
   ON storage.objects FOR DELETE
   TO authenticated
   USING (bucket_id = 'uploads' AND (auth.uid() = owner OR auth.role() = 'service_role'));
+
+-- 11b. User Avatar URL Bucket Validation Trigger
+CREATE OR REPLACE FUNCTION public.validate_user_avatar_url()
+RETURNS TRIGGER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.avatar_url IS NOT NULL AND NEW.avatar_url != '' THEN
+    IF NOT (NEW.avatar_url ~ '^https://[a-zA-Z0-9.-]+\.supabase\.co/storage/v1/object/public/uploads/.*$') THEN
+      RAISE EXCEPTION 'Invalid avatar URL. Avatars must be uploaded to the official AniResQ uploads storage bucket.';
+    END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_validate_user_avatar_url ON public.users;
+CREATE TRIGGER tr_validate_user_avatar_url
+  BEFORE INSERT OR UPDATE OF avatar_url ON public.users
+  FOR EACH ROW
+  EXECUTE PROCEDURE public.validate_user_avatar_url();
+
+-- 11c. Audit Logs Table and Trigger for Role Changes
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  action TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  performed_by TEXT NOT NULL,
+  old_value JSONB,
+  new_value JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
+);
+
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow admins to read audit logs"
+  ON public.audit_logs FOR SELECT
+  USING (public.is_admin() OR auth.role() = 'service_role');
+
+CREATE POLICY "Allow service role or admin to insert audit logs"
+  ON public.audit_logs FOR INSERT
+  WITH CHECK (public.is_admin() OR auth.role() = 'service_role');
+
+CREATE OR REPLACE FUNCTION public.audit_user_role_change()
+RETURNS TRIGGER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  IF NEW.role IS DISTINCT FROM OLD.role THEN
+    INSERT INTO public.audit_logs (action, entity_type, entity_id, performed_by, old_value, new_value)
+    VALUES (
+      'ROLE_CHANGE',
+      'USER',
+      NEW.id,
+      COALESCE(auth.uid()::text, 'service_role'),
+      jsonb_build_object('role', OLD.role),
+      jsonb_build_object('role', NEW.role)
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS tr_audit_user_role_change ON public.users;
+CREATE TRIGGER tr_audit_user_role_change
+  AFTER UPDATE OF role ON public.users
+  FOR EACH ROW
+  EXECUTE PROCEDURE public.audit_user_role_change();
 
 -- 12. Database Indexes
 CREATE INDEX IF NOT EXISTS idx_rescues_reporter_id ON public.rescues (reporter_id);

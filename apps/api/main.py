@@ -6,6 +6,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from routers import rescues, users, animals, adoptions, lostfound, notifications
+from rate_limiter import RateLimitMiddleware
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("main")
@@ -15,6 +16,9 @@ app = FastAPI(
     description="Backend API for AniResQ animal rescue, adoption, and lost-and-found management platform.",
     version="1.0.0"
 )
+
+# In-memory sliding window rate limiter
+app.add_middleware(RateLimitMiddleware)
 
 # Safe CORS configuration
 allowed_origins_env = os.getenv("CORS_ORIGINS", "")

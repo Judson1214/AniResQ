@@ -385,3 +385,126 @@ def test_demote_last_admin_prevented(monkeypatch):
         assert "Cannot demote the last administrator" in res.json()["detail"]
     finally:
         app.dependency_overrides.clear()
+
+def test_vet_cannot_list_users():
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "vet-1", "email": "vet@clinic.com", "name": "Dr. Vet", "role": "VET"
+    }
+    try:
+        # VET cannot access user directory
+        res = client.get("/api/users")
+        assert res.status_code == 403
+        assert "Forbidden" in res.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+def test_vet_cannot_view_other_user_contact_info(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "vet-1", "email": "vet@clinic.com", "name": "Dr. Vet", "role": "VET"
+    }
+    try:
+        mock_user = {
+            "id": "citizen-99",
+            "display_name": "Private Citizen",
+            "email": "private@domain.com",
+            "phone": "555-1234",
+            "role": "CITIZEN",
+            "avatar_url": "",
+            "created_at": "2026-11-01T00:00:00Z"
+        }
+        mock_query = MagicMock()
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.execute.return_value = MagicMock(data=[mock_user])
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+        res = client.get("/api/users/citizen-99")
+        assert res.status_code == 200
+        # Email and phone must be redacted for VET viewing another user
+        assert res.json()["email"] == ""
+        assert res.json()["phoneNumber"] == ""
+    finally:
+        app.dependency_overrides.clear()
+
+def test_cannot_request_admin_role_via_profile(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-test", "email": "user@test.com", "name": "Test User", "role": "CITIZEN"
+    }
+    try:
+        captured = {}
+        mock_query = MagicMock()
+        mock_query.select.return_value = mock_query
+        mock_query.eq.return_value = mock_query
+        mock_query.execute.return_value = MagicMock(data=[{"id": "user-test"}])
+        mock_query.upsert.side_effect = lambda d: captured.update(d) or mock_query
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+        # Trying to request ADMIN should be rejected / sanitized to None
+        res = client.post("/api/users", json={
+            "uid": "user-test",
+            "displayName": "Test",
+            "requestedRole": "ADMIN"
+        })
+        assert res.status_code == 200
+        assert res.json()["requestedRole"] is None
+        assert "requested_role" not in captured
+
+        # Valid requested role VOLUNTEER is preserved
+        res_vol = client.post("/api/users", json={
+            "uid": "user-test",
+            "displayName": "Test",
+            "requestedRole": "VOLUNTEER"
+        })
+        assert res_vol.status_code == 200
+        assert res_vol.json()["requestedRole"] == "VOLUNTEER"
+        assert captured.get("requested_role") == "VOLUNTEER"
+    finally:
+        app.dependency_overrides.clear()
+
+def test_role_change_audited(monkeypatch):
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "admin-1", "email": "admin@domain.com", "name": "Admin", "role": "ADMIN"
+    }
+    try:
+        mock_users_query = MagicMock()
+        mock_users_query.select.return_value = mock_users_query
+        mock_users_query.eq.return_value = mock_users_query
+        mock_users_query.execute.return_value = MagicMock(data=[{"role": "CITIZEN", "display_name": "Target"}])
+        mock_users_query.update.return_value = mock_users_query
+
+        audit_inserted = {}
+        mock_audit_query = MagicMock()
+        mock_audit_query.insert.side_effect = lambda d: audit_inserted.update(d) or mock_audit_query
+        mock_audit_query.execute.return_value = MagicMock(data=[{"id": "audit-1"}])
+
+        def table_router(name):
+            if name == "audit_logs":
+                return mock_audit_query
+            return mock_users_query
+
+        monkeypatch.setattr(supabase_config.supabase, "table", table_router)
+
+        res = client.patch("/api/users/target-user/role", json={"role": "VOLUNTEER"})
+        assert res.status_code == 200
+        assert audit_inserted.get("action") == "ROLE_CHANGE"
+        assert audit_inserted.get("entity_id") == "target-user"
+        assert audit_inserted.get("performed_by") == "admin-1"
+        assert audit_inserted.get("old_value") == {"role": "CITIZEN"}
+        assert audit_inserted.get("new_value") == {"role": "VOLUNTEER"}
+    finally:
+        app.dependency_overrides.clear()
+
+def test_rate_limiter_blocks_excessive_requests():
+    from rate_limiter import SlidingWindowRateLimiter
+
+    limiter = SlidingWindowRateLimiter(limit=3, window_seconds=10)
+    key = "test-client-ip"
+
+    assert limiter.is_allowed(key)[0] is True
+    assert limiter.is_allowed(key)[0] is True
+    assert limiter.is_allowed(key)[0] is True
+
+    # 4th request exceeds limit
+    allowed, retry_after = limiter.is_allowed(key)
+    assert allowed is False
+    assert retry_after > 0

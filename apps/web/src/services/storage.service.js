@@ -1,10 +1,19 @@
 import { supabase } from "@/config/supabase";
 
 const uploadFile = async (path, file, onProgress) => {
-  // Note: Ensure you have created a public bucket named 'uploads' in Supabase
+  // Ensure the upload path is strictly scoped under {auth.uid()}/... to satisfy storage RLS policies
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  
+  let scopedPath = path.replace(/^\/+/, '');
+  if (userId && !scopedPath.startsWith(`${userId}/`)) {
+    scopedPath = `${userId}/${scopedPath}`;
+  }
+
+  // Upload to public 'uploads' bucket in Supabase
   const { error } = await supabase.storage
     .from('uploads')
-    .upload(path, file, {
+    .upload(scopedPath, file, {
       cacheControl: '3600',
       upsert: true // Overwrite if exists
     });
@@ -15,7 +24,7 @@ const uploadFile = async (path, file, onProgress) => {
 
   const { data: publicUrlData } = supabase.storage
     .from('uploads')
-    .getPublicUrl(path);
+    .getPublicUrl(scopedPath);
     
   return publicUrlData.publicUrl;
 };

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { supabase } from '@/config/supabase';
-import { getUserProfile, updateUserProfile } from '../auth.service';
+import api from '@/lib/api';
+import { getUserProfile, updateUserProfile, signUp } from '../auth.service';
+
+vi.mock('@/lib/api', () => ({
+  default: {
+    patch: vi.fn(),
+  },
+}));
 
 vi.mock('@/config/supabase', () => {
   const mockFrom = vi.fn();
@@ -53,23 +60,43 @@ describe('Auth Service', () => {
     });
   });
 
-  it('updateUserProfile excludes role to prevent privilege escalation', async () => {
-    const singleMock = vi.fn().mockResolvedValueOnce({ data: { id: 'user-1' }, error: null });
-    const selectMock = vi.fn().mockReturnValue({ single: singleMock });
-    const eqMock = vi.fn().mockReturnValue({ select: selectMock });
-    const updateMock = vi.fn().mockReturnValue({ eq: eqMock });
-    supabase.from.mockReturnValue({ update: updateMock });
+  it('updateUserProfile routes through API and excludes role to prevent privilege escalation', async () => {
+    api.patch.mockResolvedValueOnce({ data: { id: 'user-1', displayName: 'New Name' } });
 
     await updateUserProfile('user-1', {
       displayName: 'New Name',
       role: 'ADMIN', // Should be strictly ignored!
       phone: '9876543210',
+      avatarUrl: 'https://cspnzitnvzdwwyxpnluw.supabase.co/storage/v1/object/public/uploads/avatar.jpg'
     });
 
-    // Verify role was stripped from db payload
-    expect(updateMock).toHaveBeenCalledWith({
-      display_name: 'New Name',
+    // Verify role was stripped and routed through backend PATCH /api/users/user-1
+    expect(api.patch).toHaveBeenCalledWith('/users/user-1', {
+      displayName: 'New Name',
+      phoneNumber: '9876543210',
       phone: '9876543210',
+      avatarUrl: 'https://cspnzitnvzdwwyxpnluw.supabase.co/storage/v1/object/public/uploads/avatar.jpg'
+    });
+  });
+
+  it('signUp disallows requesting ADMIN role in metadata', async () => {
+    supabase.auth.signUp.mockResolvedValueOnce({
+      data: { user: { id: 'new-user-id', email: 'test@example.com' } },
+      error: null
+    });
+
+    await signUp('test@example.com', 'Password123!', 'Test User', 'ADMIN');
+
+    expect(supabase.auth.signUp).toHaveBeenCalledWith({
+      email: 'test@example.com',
+      password: 'Password123!',
+      options: {
+        data: {
+          display_name: 'Test User',
+          phone: '',
+          requested_role: null, // Sanitized away from ADMIN
+        }
+      }
     });
   });
 });

@@ -10,6 +10,7 @@ router = APIRouter(prefix="/api/users", tags=["users"])
 logger = logging.getLogger("users")
 
 VALID_ROLES = {"CITIZEN", "NGO", "VOLUNTEER", "SHELTER", "VET", "ADMIN"}
+ALLOWED_REQUESTED_ROLES = {"NGO", "VOLUNTEER", "SHELTER", "VET"}
 
 class UserProfileCreate(BaseModel):
     uid: str
@@ -17,10 +18,12 @@ class UserProfileCreate(BaseModel):
     displayName: str
     role: Optional[str] = "CITIZEN"
     phoneNumber: Optional[str] = None
+    requestedRole: Optional[str] = None
 
 class UserProfileUpdate(BaseModel):
     displayName: Optional[str] = None
     phoneNumber: Optional[str] = None
+    phone: Optional[str] = None
     address: Optional[str] = None
     bio: Optional[str] = None
     avatarUrl: Optional[str] = None
@@ -36,9 +39,11 @@ def list_users(
     offset: int = Query(default=0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
-    """Allows staff/administrators to query users and view pending role requests."""
-    if current_user.get("role") not in ["ADMIN", "NGO", "SHELTER", "VET"]:
-        raise HTTPException(status_code=403, detail="Forbidden: Only staff and administrators can list users")
+    """Allows shelter/NGO managers and administrators to query users and view pending role requests.
+    Strictly forbids VET and regular users from harvesting user directory PII.
+    """
+    if current_user.get("role") not in ["ADMIN", "NGO", "SHELTER"]:
+        raise HTTPException(status_code=403, detail="Forbidden: Only administrators and shelter/NGO coordinators can list users")
         
     try:
         query = supabase.table("users").select("id, display_name, email, phone, role, requested_role, avatar_url, created_at")
@@ -48,13 +53,16 @@ def list_users(
             query = query.not_.is_("requested_role", "null")
             
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        is_admin = current_user.get("role") == "ADMIN"
+        
         return [
             {
                 "id": d["id"],
                 "uid": d["id"],
                 "displayName": d.get("display_name", ""),
-                "email": d.get("email", ""),
-                "phoneNumber": d.get("phone", ""),
+                # Protect user PII: Only full system administrators can see emails and phone numbers across users
+                "email": d.get("email", "") if is_admin else "",
+                "phoneNumber": d.get("phone", "") if is_admin else "",
                 "role": d.get("role", "CITIZEN"),
                 "requestedRole": d.get("requested_role"),
                 "avatarUrl": d.get("avatar_url", ""),
@@ -62,6 +70,8 @@ def list_users(
             }
             for d in res.data
         ]
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error listing users: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve users")
@@ -74,21 +84,20 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="User not found")
         data = res.data[0]
         
-        # PII Protection: Only self or organizational staff/admin can see email and phone
-        # Excludes regular volunteers from broad PII access
         is_self = current_user["uid"] == uid
-        is_staff_admin = current_user.get("role") in ["ADMIN", "NGO", "SHELTER", "VET"]
+        is_admin = current_user.get("role") == "ADMIN"
+        can_view_contact = is_self or is_admin
         
         return {
             "id": data["id"],
             "uid": data["id"],
             "displayName": data.get("display_name", ""),
             "role": data.get("role", "CITIZEN"),
-            "requestedRole": data.get("requested_role") if (is_self or is_staff_admin) else None,
+            "requestedRole": data.get("requested_role") if (is_self or is_admin) else None,
             "avatarUrl": data.get("avatar_url", ""),
             "createdAt": data.get("created_at"),
-            "email": data["email"] if (is_self or is_staff_admin) else "",
-            "phoneNumber": data.get("phone", "") if (is_self or is_staff_admin) else "",
+            "email": data.get("email", "") if can_view_contact else "",
+            "phoneNumber": data.get("phone", "") if can_view_contact else "",
         }
     except HTTPException:
         raise
@@ -113,6 +122,11 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         if target_role not in VALID_ROLES:
             target_role = "CITIZEN"
         
+        # Disallow requesting ADMIN role through signup metadata or profile creation
+        req_role = profile.requestedRole.upper() if profile.requestedRole else None
+        if req_role == "ADMIN" or req_role not in ALLOWED_REQUESTED_ROLES:
+            req_role = None
+
         # Security: Derive verified email strictly from authenticated JWT token
         verified_email = current_user.get("email")
         if not verified_email and existing.data:
@@ -125,8 +139,10 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
             "email": verified_email,
             "display_name": profile.displayName,
             "role": target_role,
-            "phone": profile.phoneNumber or ""
+            "phone": profile.phoneNumber or "",
         }
+        if req_role:
+            data["requested_role"] = req_role
         
         res = supabase.table("users").upsert(data).execute()
         if not res.data:
@@ -135,6 +151,7 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         dumped = profile.model_dump()
         dumped["email"] = verified_email
         dumped["role"] = target_role
+        dumped["requestedRole"] = req_role
         return {"id": profile.uid, "uid": profile.uid, **dumped}
     except HTTPException:
         raise
@@ -149,8 +166,15 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
         raise HTTPException(status_code=403, detail="Cannot edit profile of another user")
         
     update_data = {}
-    if profile.displayName is not None: update_data["display_name"] = profile.displayName
-    if profile.phoneNumber is not None: update_data["phone"] = profile.phoneNumber
+    if profile.displayName is not None: 
+        update_data["display_name"] = profile.displayName
+    phone_val = profile.phoneNumber if profile.phoneNumber is not None else profile.phone
+    if phone_val is not None: 
+        update_data["phone"] = phone_val
+    if profile.address is not None: 
+        update_data["address"] = profile.address
+    if profile.bio is not None: 
+        update_data["bio"] = profile.bio
     if profile.avatarUrl is not None: 
         update_data["avatar_url"] = validate_avatar_url(profile.avatarUrl)
     
@@ -188,6 +212,10 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             raise HTTPException(status_code=400, detail="Cannot demote the last administrator.")
             
     try:
+        # Fetch current role for audit log tracking
+        current_rec = supabase.table("users").select("role, display_name").eq("id", uid).execute()
+        prev_role = current_rec.data[0].get("role", "UNKNOWN") if (current_rec.data and len(current_rec.data) > 0) else "UNKNOWN"
+
         # Update role and clear pending requested_role
         res = supabase.table("users").update({
             "role": target_role,
@@ -196,6 +224,24 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
         
         if not res.data:
             raise HTTPException(status_code=404, detail="User not found")
+
+        # Audit role change in database and structured application logs
+        audit_entry = {
+            "action": "ROLE_CHANGE",
+            "entity_type": "USER",
+            "entity_id": uid,
+            "performed_by": current_user["uid"],
+            "old_value": {"role": prev_role},
+            "new_value": {"role": target_role},
+        }
+        try:
+            supabase.table("audit_logs").insert(audit_entry).execute()
+        except Exception as audit_err:
+            logger.warning(f"Could not persist audit record to database: {audit_err}")
+
+        logger.info(
+            f"AUDIT: Role changed for user {uid} from '{prev_role}' to '{target_role}' by admin '{current_user['uid']}'"
+        )
             
         return {
             "id": uid,

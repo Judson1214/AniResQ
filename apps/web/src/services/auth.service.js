@@ -1,6 +1,12 @@
 import { supabase } from "@/config/supabase";
+import api from "@/lib/api";
 
 const signUp = async (email, password, displayName, role = "CITIZEN", phone = "") => {
+  // Prevent users from requesting ADMIN role via signup metadata
+  const requestedRole = (role && role.toUpperCase() !== "ADMIN" && ["VOLUNTEER", "NGO", "SHELTER", "VET"].includes(role.toUpperCase()))
+    ? role.toUpperCase()
+    : null;
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -8,7 +14,7 @@ const signUp = async (email, password, displayName, role = "CITIZEN", phone = ""
       data: {
         display_name: displayName,
         phone: phone || "",
-        requested_role: role,
+        requested_role: requestedRole,
       }
     }
   });
@@ -67,21 +73,23 @@ const getUserProfile = async (uid) => {
 };
 
 const updateUserProfile = async (uid, updateData) => {
-  const dbData = {};
-  if (updateData.displayName !== undefined) dbData.display_name = updateData.displayName;
-  if (updateData.phone !== undefined) dbData.phone = updateData.phone;
-  if (updateData.avatarUrl !== undefined) dbData.avatar_url = updateData.avatarUrl;
+  const payload = {};
+  if (updateData.displayName !== undefined) payload.displayName = updateData.displayName;
+  if (updateData.phone !== undefined) {
+    payload.phoneNumber = updateData.phone;
+    payload.phone = updateData.phone;
+  }
+  if (updateData.phoneNumber !== undefined) {
+    payload.phoneNumber = updateData.phoneNumber;
+    payload.phone = updateData.phoneNumber;
+  }
+  if (updateData.avatarUrl !== undefined) payload.avatarUrl = updateData.avatarUrl;
+  if (updateData.address !== undefined) payload.address = updateData.address;
+  if (updateData.bio !== undefined) payload.bio = updateData.bio;
   // NOTE: role is strictly excluded to prevent privilege escalation from the browser
 
-  const { data, error } = await supabase
-    .from('users')
-    .update(dbData)
-    .eq('id', uid)
-    .select()
-    .single();
-    
-  if (error) throw error;
-  return data;
+  const response = await api.patch(`/users/${uid}`, payload);
+  return response.data;
 };
 
 const onAuthChange = (callback) => {
