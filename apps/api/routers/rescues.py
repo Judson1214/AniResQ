@@ -45,8 +45,12 @@ def get_all_rescues(
     reporterId: Optional[str] = None,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    user: dict = Depends(get_current_user),
 ):
     try:
+        user_role = user.get("role", "CITIZEN")
+        is_staff = user_role in STAFF_ROLES
+
         query = supabase.table("rescues").select("*")
         if status:
             query = query.eq("status", status.upper())
@@ -54,8 +58,14 @@ def get_all_rescues(
             query = query.eq("severity", severity.upper())
         if species:
             query = query.eq("species", species)
-        if reporterId:
-            query = query.eq("reporter_id", reporterId)
+
+        # Privacy & Access Control: Staff can filter by reporterId or view all.
+        # Non-staff (e.g. citizens) can ONLY view their own reported rescues.
+        if is_staff:
+            if reporterId:
+                query = query.eq("reporter_id", reporterId)
+        else:
+            query = query.eq("reporter_id", user["uid"])
             
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         rescues = []
@@ -80,13 +90,61 @@ def get_all_rescues(
         logger.error(f"Error fetching rescues: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve rescues")
 
+@router.get("/public")
+def get_public_rescues(
+    status: Optional[str] = None,
+    species: Optional[str] = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """
+    Publicly visible rescue markers.
+    Obfuscates precise coordinates (~500m - 1km) and omits description, address, photos, and reporter info.
+    """
+    try:
+        query = supabase.table("rescues").select("id, species, severity, status, latitude, longitude, created_at")
+        if status:
+            query = query.eq("status", status.upper())
+        if species:
+            query = query.eq("species", species)
+            
+        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        public_rescues = []
+        for data in res.data:
+            lat = round(data["latitude"], 2) if data.get("latitude") is not None else None
+            lon = round(data["longitude"], 2) if data.get("longitude") is not None else None
+            public_rescues.append({
+                "id": data["id"],
+                "species": data["species"],
+                "severity": data["severity"],
+                "status": data["status"],
+                "location": {"latitude": lat, "longitude": lon},
+                "createdAt": data["created_at"],
+            })
+        return public_rescues
+    except Exception as e:
+        logger.error(f"Error fetching public rescues: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve public rescue markers")
+
 @router.get("/{rescue_id}")
-def get_rescue_by_id(rescue_id: str):
+def get_rescue_by_id(rescue_id: str, user: dict = Depends(get_current_user)):
     try:
         res = supabase.table("rescues").select("*").eq("id", rescue_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Rescue request not found")
         data = res.data[0]
+
+        user_role = user.get("role", "CITIZEN")
+        is_staff = user_role in STAFF_ROLES
+        is_reporter = data.get("reporter_id") == user["uid"]
+        is_assigned = data.get("assigned_to") == user["uid"]
+
+        if not (is_staff or is_reporter or is_assigned):
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: You do not have permission to access this rescue request"
+            )
+
         return {
             "id": data["id"],
             "title": data["title"],
@@ -280,8 +338,25 @@ def get_rescue_timeline(
     rescue_id: str,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    user: dict = Depends(get_current_user),
 ):
     try:
+        parent = supabase.table("rescues").select("id, reporter_id, assigned_to").eq("id", rescue_id).execute()
+        if not parent.data:
+            raise HTTPException(status_code=404, detail="Rescue request not found")
+        rescue = parent.data[0]
+
+        user_role = user.get("role", "CITIZEN")
+        is_staff = user_role in STAFF_ROLES
+        is_reporter = rescue.get("reporter_id") == user["uid"]
+        is_assigned = rescue.get("assigned_to") == user["uid"]
+
+        if not (is_staff or is_reporter or is_assigned):
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: You do not have permission to access this rescue timeline"
+            )
+
         res = (
             supabase.table("rescue_timeline")
             .select("*")
@@ -301,6 +376,8 @@ def get_rescue_timeline(
             } 
             for d in res.data
         ]
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching rescue timeline: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve rescue timeline")

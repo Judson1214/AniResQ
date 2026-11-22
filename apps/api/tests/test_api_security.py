@@ -141,16 +141,16 @@ def test_pagination_query_parameters(monkeypatch):
     mock_table = MagicMock(return_value=mock_query)
     monkeypatch.setattr(supabase_config.supabase, "table", mock_table)
 
-    # Verify pagination parameters are accepted and validated
-    res_valid = client.get("/api/rescues/?limit=10&offset=20")
+    # Verify pagination parameters are accepted and validated on public endpoint
+    res_valid = client.get("/api/rescues/public?limit=10&offset=20")
     assert res_valid.status_code == 200
 
     # Limit must be >= 1
-    res_invalid_limit = client.get("/api/rescues/?limit=0")
+    res_invalid_limit = client.get("/api/rescues/public?limit=0")
     assert res_invalid_limit.status_code == 422
 
     # Offset must be >= 0
-    res_invalid_offset = client.get("/api/rescues/?offset=-5")
+    res_invalid_offset = client.get("/api/rescues/public?offset=-5")
     assert res_invalid_offset.status_code == 422
 
 def test_validation_exception_does_not_leak_body():
@@ -795,5 +795,166 @@ def test_shelter_can_claim_animal(monkeypatch):
     assert res_conflict.status_code == 409
 
     app.dependency_overrides.clear()
+
+def test_rescues_get_endpoints_require_auth():
+    # Anonymous requests must return 401
+    res_list = client.get("/api/rescues/")
+    assert res_list.status_code in [401, 403]
+
+    res_detail = client.get("/api/rescues/some-rescue-id")
+    assert res_detail.status_code in [401, 403]
+
+    res_timeline = client.get("/api/rescues/some-rescue-id/timeline")
+    assert res_timeline.status_code in [401, 403]
+
+def test_citizen_cannot_read_another_users_rescue(monkeypatch):
+    mock_rescue = {
+        "id": "rescue-target-1",
+        "title": "Injured Dog",
+        "description": "Found near highway",
+        "species": "DOG",
+        "severity": "HIGH",
+        "status": "PENDING",
+        "reporter_id": "citizen-reporter-2",
+        "assigned_to": "volunteer-99",
+        "latitude": 37.7749295,
+        "longitude": -122.4194155,
+        "address": "123 Main St",
+        "images": [],
+        "created_at": "2026-11-01T00:00:00Z",
+        "updated_at": "2026-11-01T00:00:00Z",
+    }
+
+    mock_query = MagicMock()
+    mock_query.select.return_value = mock_query
+    mock_query.eq.return_value = mock_query
+    mock_query.execute.return_value = MagicMock(data=[mock_rescue])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+    # Authenticated as an unrelated citizen
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "unrelated-citizen-1", "role": "CITIZEN"
+    }
+    try:
+        # Detail request is Forbidden
+        res_detail = client.get("/api/rescues/rescue-target-1")
+        assert res_detail.status_code == 403
+
+        # Timeline request is Forbidden
+        res_timeline = client.get("/api/rescues/rescue-target-1/timeline")
+        assert res_timeline.status_code == 403
+
+        # List request: Even if citizen specifies reporterId=citizen-reporter-2,
+        # query is forced to filter by caller's own uid
+        mock_list_query = MagicMock()
+        mock_list_query.select.return_value = mock_list_query
+        mock_list_query.eq.return_value = mock_list_query
+        mock_list_query.order.return_value = mock_list_query
+        mock_list_query.range.return_value = mock_list_query
+        mock_list_query.execute.return_value = MagicMock(data=[])
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_list_query))
+
+        client.get("/api/rescues/?reporterId=citizen-reporter-2")
+        mock_list_query.eq.assert_called_with("reporter_id", "unrelated-citizen-1")
+    finally:
+        app.dependency_overrides.clear()
+
+def test_rescue_detail_and_timeline_authorized_readers(monkeypatch):
+    mock_rescue = {
+        "id": "rescue-case-1",
+        "title": "Cat in tree",
+        "description": "Near the park",
+        "species": "CAT",
+        "severity": "LOW",
+        "status": "DISPATCHED",
+        "reporter_id": "citizen-owner-1",
+        "assigned_to": "volunteer-assigned-1",
+        "latitude": 40.7128,
+        "longitude": -74.0060,
+        "address": "Park Ave",
+        "images": [],
+        "created_at": "2026-11-01T00:00:00Z",
+        "updated_at": "2026-11-01T00:00:00Z",
+    }
+    mock_timeline_item = {
+        "id": "t-1",
+        "rescue_id": "rescue-case-1",
+        "status": "DISPATCHED",
+        "message": "Assigned",
+        "updated_by": "volunteer-assigned-1",
+        "updated_by_name": "Volunteer",
+        "created_at": "2026-11-01T01:00:00Z",
+    }
+
+    def table_mock(name):
+        q = MagicMock()
+        q.select.return_value = q
+        q.eq.return_value = q
+        q.order.return_value = q
+        q.range.return_value = q
+        if name == "rescues":
+            q.execute.return_value = MagicMock(data=[mock_rescue])
+        elif name == "rescue_timeline":
+            q.execute.return_value = MagicMock(data=[mock_timeline_item])
+        return q
+
+    monkeypatch.setattr(supabase_config.supabase, "table", table_mock)
+
+    # 1. Reporter can read detail & timeline
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "citizen-owner-1", "role": "CITIZEN"
+    }
+    assert client.get("/api/rescues/rescue-case-1").status_code == 200
+    assert client.get("/api/rescues/rescue-case-1/timeline").status_code == 200
+
+    # 2. Assigned volunteer can read detail & timeline
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "volunteer-assigned-1", "role": "VOLUNTEER"
+    }
+    assert client.get("/api/rescues/rescue-case-1").status_code == 200
+    assert client.get("/api/rescues/rescue-case-1/timeline").status_code == 200
+
+    # 3. Staff (ADMIN) can read detail & timeline
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "admin-1", "role": "ADMIN"
+    }
+    assert client.get("/api/rescues/rescue-case-1").status_code == 200
+    assert client.get("/api/rescues/rescue-case-1/timeline").status_code == 200
+
+    app.dependency_overrides.clear()
+
+def test_public_rescues_endpoint_anonymized(monkeypatch):
+    mock_rescues = [
+        {
+            "id": "r-pub-1",
+            "species": "DOG",
+            "severity": "HIGH",
+            "status": "PENDING",
+            "latitude": 37.774929,
+            "longitude": -122.419416,
+            "created_at": "2026-11-01T00:00:00Z",
+        }
+    ]
+    mock_query = MagicMock()
+    mock_query.select.return_value = mock_query
+    mock_query.order.return_value = mock_query
+    mock_query.range.return_value = mock_query
+    mock_query.execute.return_value = MagicMock(data=mock_rescues)
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+    res = client.get("/api/rescues/public")
+    assert res.status_code == 200
+    data = res.json()
+    assert len(data) == 1
+    item = data[0]
+    # Coordinates rounded to 2 decimals (~1km fuzz)
+    assert item["location"]["latitude"] == 37.77
+    assert item["location"]["longitude"] == -122.42
+    # Sensitive fields strictly omitted
+    assert "description" not in item
+    assert "address" not in item
+    assert "reporterId" not in item
+    assert "photoUrls" not in item
+
 
 
