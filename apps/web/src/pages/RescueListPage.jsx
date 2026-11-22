@@ -1,46 +1,66 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getRescueRequests } from "@/services/rescue.service";
+import { getRescueRequests, getPublicRescues } from "@/services/rescue.service";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { RescueMap } from "@/components/rescue/RescueMap";
 import { RescueCard } from "@/components/rescue/RescueCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { UserRole } from "@aniresq/shared-types";
 import { RescueStatus, RescueSeverity } from "@aniresq/shared-types";
 
 function RescueListPage() {
   const { user } = useAuth();
-  const isCitizen = user?.role === UserRole.CITIZEN || !user;
+  const isStaff = user && [
+    UserRole.ADMIN,
+    UserRole.NGO,
+    UserRole.VOLUNTEER,
+    UserRole.SHELTER,
+    UserRole.VET,
+  ].includes(user.role);
+
   const [statusFilter, setStatusFilter] = useState("");
   const [severityFilter, setSeverityFilter] = useState("");
+
   const { data: rescues, isLoading } = useQuery({
-    queryKey: ["rescues", statusFilter, severityFilter],
-    queryFn: () => getRescueRequests({
-      status: statusFilter || void 0,
-      severity: severityFilter || void 0
-    })
+    queryKey: ["rescues", isStaff, statusFilter, severityFilter],
+    queryFn: () => {
+      const filters = {
+        status: statusFilter || undefined,
+        severity: severityFilter || undefined,
+      };
+      return isStaff ? getRescueRequests(filters) : getPublicRescues(filters);
+    },
   });
 
-  if (isCitizen) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
-  return <MainLayout>
+  return (
+    <MainLayout>
       <div className="container mx-auto py-8 px-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Active SOS Alerts</h1>
-            <p className="text-gray-600 mt-1">Command Hub for tracking ongoing rescue operations.</p>
+            <h1 className="text-3xl font-bold">
+              {isStaff ? "Active SOS Alerts" : "Community Rescue Map"}
+            </h1>
+            <p className="text-gray-600 mt-1">
+              {isStaff
+                ? "Command Hub for tracking ongoing rescue operations."
+                : "Live overview of reported animal emergencies in the community."}
+            </p>
           </div>
           <Button asChild size="lg" className="bg-rose-500 hover:bg-rose-600 text-white">
             <Link to="/report-rescue">Report a Rescue</Link>
           </Button>
         </div>
 
-        <Tabs defaultValue="list" className="w-full">
+        {!isStaff && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-800 text-xs rounded-lg p-3">
+            <strong>Public Safety View:</strong> Coordinates are generalized to ~1 km and reporter contact details are protected.
+          </div>
+        )}
+
+        <Tabs defaultValue={isStaff ? "list" : "map"} className="w-full">
           <div className="flex justify-between items-center mb-6">
             <TabsList>
               <TabsTrigger value="list">List View</TabsTrigger>
@@ -84,7 +104,8 @@ function RescueListPage() {
           </TabsContent>
         </Tabs>
       </div>
-    </MainLayout>;
+    </MainLayout>
+  );
 }
 export {
   RescueListPage as default

@@ -72,6 +72,7 @@ cd AniResQ
 3. Open and run the complete database initialization script:
    - [`supabase/migrations/20261031000000_init_aniresq_schema.sql`](./supabase/migrations/20261031000000_init_aniresq_schema.sql)
    - Followed by incremental security fixes: [`supabase/migrations/20261103000000_security_fixes.sql`](./supabase/migrations/20261103000000_security_fixes.sql)
+   - And rescue RLS lockdown: [`supabase/migrations/20261122000000_restrict_rescue_reads.sql`](./supabase/migrations/20261122000000_restrict_rescue_reads.sql)
    *(Note: This creates all enums, tables, triggers, helper functions, indexes, and RLS policies).*
 4. Configure the database setting for the avatar validation trigger:
    ```sql
@@ -226,7 +227,9 @@ The API enforces a sliding-window in-memory rate limiter per client IP:
    - Role updates are audited to `public.audit_logs` (restricted strictly to `service_role` insertion to prevent forgery).
 2. **Rescue & Animal Authorization**:
    - The `protect_rescue_update()` trigger ensures non-staff reporters cannot forge responder assignments or arbitrary status transitions, and freezes incident details once responders are dispatched.
-   - Animal surrenders start as `NOT_READY` pending shelter review and are visible only to staff and the surrenderer.
+   - **PostgreSQL Row Level Security (`public.rescues` & `public.rescue_timeline`)**: Direct Supabase reads are locked down via RLS policy `Rescues readable by reporter, assignee or staff`. Anonymous SELECT permissions are revoked from `anon` on both tables.
+   - **Privacy & Coordinates Rounding**: The public endpoint `GET /api/rescues/public` intentionally rounds GPS coordinates to 2 decimal places (~1.1 km precision) and omits exact street addresses, incident descriptions, photos, and reporter identities to protect citizen privacy and prevent harassment or poaching. Do not increase coordinate precision on this endpoint.
+   - Animal surrenders start as `NOT_READY` pending shelter review and are visible only to staff and the surrenderer. Shelters claim intake animals via atomic `POST /api/animals/{id}/claim`.
 3. **PII Isolation & User Access Control**:
    - **PostgreSQL Row Level Security (`public.users`)**: Policy enforces `auth.uid() = id OR public.is_admin() OR auth.role() = 'service_role'`. Regular users, VETs, NGOs, and shelters querying Supabase directly with client keys cannot view other users' records.
    - **Scoped Contact Details on Profile Endpoint**: `GET /api/users/{uid}` strictly redacts user contact information (`email`, `phoneNumber`, `address`) unless:

@@ -25,6 +25,11 @@ const getRescueRequests = async (filters) => {
   return response.data;
 };
 
+const getPublicRescues = async (filters) => {
+  const response = await api.get('/rescues/public', { params: filters });
+  return response.data;
+};
+
 const getRescueRequestById = async (id) => {
   const response = await api.get(`/rescues/${id}`);
   return response.data;
@@ -59,6 +64,7 @@ export {
   assignVolunteer,
   createRescueRequest,
   deleteRescueRequest,
+  getPublicRescues,
   getRescueRequestById,
   getRescueRequests,
   getRescueTimeline,

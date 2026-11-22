@@ -772,6 +772,7 @@ def test_shelter_can_claim_animal(monkeypatch):
     mock_query = MagicMock()
     mock_query.select.return_value = mock_query
     mock_query.eq.return_value = mock_query
+    mock_query.is_.return_value = mock_query
     mock_query.update.return_value = mock_query
     # First call is select (existing), second is update
     mock_query.execute.side_effect = [
@@ -793,6 +794,34 @@ def test_shelter_can_claim_animal(monkeypatch):
 
     res_conflict = client.post("/api/animals/animal-surrender-1/claim")
     assert res_conflict.status_code == 409
+
+    # 4. Animal not surrendered returns 400
+    mock_nonsurrendered = {**mock_unclaimed_animal, "surrendered_by": None}
+    mock_query_nonsurr = MagicMock()
+    mock_query_nonsurr.select.return_value = mock_query_nonsurr
+    mock_query_nonsurr.eq.return_value = mock_query_nonsurr
+    mock_query_nonsurr.execute.return_value = MagicMock(data=[mock_nonsurrendered])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query_nonsurr))
+
+    res_not_surr = client.post("/api/animals/animal-surrender-1/claim")
+    assert res_not_surr.status_code == 400
+    assert "Only surrendered animals" in res_not_surr.json()["detail"]
+
+    # 5. Race condition: atomic update matches 0 rows because another worker claimed first -> 409
+    mock_query_race = MagicMock()
+    mock_query_race.select.return_value = mock_query_race
+    mock_query_race.eq.return_value = mock_query_race
+    mock_query_race.is_.return_value = mock_query_race
+    mock_query_race.update.return_value = mock_query_race
+    mock_query_race.execute.side_effect = [
+        MagicMock(data=[mock_unclaimed_animal]), # select succeeds
+        MagicMock(data=[]), # atomic update returns empty because shelter_id was no longer null
+    ]
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query_race))
+
+    res_race = client.post("/api/animals/animal-surrender-1/claim")
+    assert res_race.status_code == 409
+    assert "already claimed" in res_race.json()["detail"]
 
     app.dependency_overrides.clear()
 

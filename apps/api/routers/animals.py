@@ -293,6 +293,11 @@ def claim_animal(id: str, user: dict = Depends(require_roles(["ADMIN", "SHELTER"
             raise HTTPException(status_code=404, detail="Animal not found")
 
         animal = existing.data[0]
+
+        # Intake check: Only surrendered animals pending shelter intake can be claimed
+        if not animal.get("surrendered_by"):
+            raise HTTPException(status_code=400, detail="Only surrendered animals can be claimed for intake")
+
         if animal.get("shelter_id") is not None:
             raise HTTPException(status_code=409, detail="Animal is already claimed by a shelter")
 
@@ -300,9 +305,16 @@ def claim_animal(id: str, user: dict = Depends(require_roles(["ADMIN", "SHELTER"
             "shelter_id": user["uid"],
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
-        res = supabase.table("animals").update(update_data).eq("id", id).execute()
+        # Atomic update with is_("shelter_id", "null") to prevent race conditions
+        res = (
+            supabase.table("animals")
+            .update(update_data)
+            .eq("id", id)
+            .is_("shelter_id", "null")
+            .execute()
+        )
         if not res.data:
-            raise HTTPException(status_code=500, detail="Failed to claim animal")
+            raise HTTPException(status_code=409, detail="Animal was already claimed by another shelter")
         return map_animal(res.data[0], viewer=user)
     except HTTPException:
         raise

@@ -113,8 +113,10 @@ def get_public_rescues(
         for data in res.data:
             lat = round(data["latitude"], 2) if data.get("latitude") is not None else None
             lon = round(data["longitude"], 2) if data.get("longitude") is not None else None
+            species = (data.get("species") or "Animal").capitalize()
             public_rescues.append({
                 "id": data["id"],
+                "title": f"{species} SOS Report",
                 "species": data["species"],
                 "severity": data["severity"],
                 "status": data["status"],

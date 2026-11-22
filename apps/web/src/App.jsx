@@ -28,14 +28,6 @@ const PageLoader = () => (
   </div>
 );
 
-const RESPONDER_ROLES = [
-  UserRole.ADMIN,
-  UserRole.VOLUNTEER,
-  UserRole.SHELTER,
-  UserRole.NGO,
-  UserRole.VET,
-];
-
 function App() {
   return (
     <>
@@ -101,15 +93,8 @@ function App() {
             }
           />
 
-          {/* Responder / Staff Protected Routes (Active SOS alerts and maps) */}
-          <Route
-            path="/rescue"
-            element={
-              <ProtectedRoute allowedRoles={RESPONDER_ROLES}>
-                <RescueListPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* Public & Community Rescue Map */}
+          <Route path="/rescue" element={<RescueListPage />} />
           <Route
             path="/rescue/:id"
             element={
