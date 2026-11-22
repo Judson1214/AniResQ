@@ -73,7 +73,8 @@ cd AniResQ
    - [`supabase/migrations/20261031000000_init_aniresq_schema.sql`](./supabase/migrations/20261031000000_init_aniresq_schema.sql)
    - Followed by incremental security fixes: [`supabase/migrations/20261103000000_security_fixes.sql`](./supabase/migrations/20261103000000_security_fixes.sql)
    - Rescue RLS lockdown: [`supabase/migrations/20261122000000_restrict_rescue_reads.sql`](./supabase/migrations/20261122000000_restrict_rescue_reads.sql)
-   - And animal direct reads lockdown: [`supabase/migrations/20261122010000_restrict_animals_direct_reads.sql`](./supabase/migrations/20261122010000_restrict_animals_direct_reads.sql)
+   - Animal direct reads lockdown: [`supabase/migrations/20261122010000_restrict_animals_direct_reads.sql`](./supabase/migrations/20261122010000_restrict_animals_direct_reads.sql)
+   - Direct mutations lockdown: [`supabase/migrations/20261122020000_revoke_direct_table_mutations.sql`](./supabase/migrations/20261122020000_revoke_direct_table_mutations.sql)
    *(Note: This creates all enums, tables, triggers, helper functions, indexes, and RLS policies).*
 4. Configure the database setting for the avatar validation trigger:
    ```sql
