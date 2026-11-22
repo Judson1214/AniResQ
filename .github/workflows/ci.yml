@@ -33,9 +33,15 @@ jobs:
 
       - name: Run unit tests (Vitest)
         run: pnpm test
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder
 
       - name: Run production build
         run: pnpm build
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder
 
   api-ci:
     name: Backend API (Pytest)

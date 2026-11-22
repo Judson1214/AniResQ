@@ -17,6 +17,12 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
+// Mock storage.service to prevent it from importing the real Supabase client,
+// which throws when VITE_SUPABASE_* env vars are missing (e.g. in CI).
+vi.mock('../storage.service', () => ({
+  uploadMultipleFiles: vi.fn(),
+}));
+
 describe('Rescue Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
