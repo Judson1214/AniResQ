@@ -93,18 +93,26 @@ def get_all_rescues(
 @router.get("/public")
 def get_public_rescues(
     status: Optional[str] = None,
+    severity: Optional[str] = None,
     species: Optional[str] = None,
-    limit: int = Query(default=20, ge=1, le=100),
+    limit: int = Query(default=100, ge=1, le=250),
     offset: int = Query(default=0, ge=0),
 ):
     """
     Publicly visible rescue markers.
     Obfuscates precise coordinates (~500m - 1km) and omits description, address, photos, and reporter info.
+    Filters to unresolved/active cases by default unless status is explicitly requested.
     """
     try:
         query = supabase.table("rescues").select("id, species, severity, status, latitude, longitude, created_at")
         if status:
             query = query.eq("status", status.upper())
+        else:
+            # Default to active/unresolved incidents for the community map
+            query = query.neq("status", "RESOLVED").neq("status", "CANCELLED")
+
+        if severity:
+            query = query.eq("severity", severity.upper())
         if species:
             query = query.eq("species", species)
             

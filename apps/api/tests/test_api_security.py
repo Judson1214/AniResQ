@@ -135,6 +135,7 @@ def test_pagination_query_parameters(monkeypatch):
     mock_execute = MagicMock(return_value=MagicMock(data=[]))
     mock_query = MagicMock()
     mock_query.select.return_value = mock_query
+    mock_query.neq.return_value = mock_query
     mock_query.order.return_value = mock_query
     mock_query.range.return_value = mock_query
     mock_query.execute = mock_execute
@@ -966,6 +967,8 @@ def test_public_rescues_endpoint_anonymized(monkeypatch):
     ]
     mock_query = MagicMock()
     mock_query.select.return_value = mock_query
+    mock_query.neq.return_value = mock_query
+    mock_query.eq.return_value = mock_query
     mock_query.order.return_value = mock_query
     mock_query.range.return_value = mock_query
     mock_query.execute.return_value = MagicMock(data=mock_rescues)
@@ -984,6 +987,25 @@ def test_public_rescues_endpoint_anonymized(monkeypatch):
     assert "address" not in item
     assert "reporterId" not in item
     assert "photoUrls" not in item
+
+    # Verify severity filter is accepted and applied
+    res_sev = client.get("/api/rescues/public?severity=HIGH")
+    assert res_sev.status_code == 200
+    mock_query.eq.assert_any_call("severity", "HIGH")
+
+def test_animals_endpoint_supports_shelter_filter(monkeypatch):
+    mock_query = MagicMock()
+    mock_query.select.return_value = mock_query
+    mock_query.neq.return_value = mock_query
+    mock_query.eq.return_value = mock_query
+    mock_query.order.return_value = mock_query
+    mock_query.range.return_value = mock_query
+    mock_query.execute.return_value = MagicMock(data=[])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+    res = client.get("/api/animals/?shelterId=shelter-abc")
+    assert res.status_code == 200
+    mock_query.eq.assert_any_call("shelter_id", "shelter-abc")
 
 
 

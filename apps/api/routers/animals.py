@@ -85,6 +85,7 @@ def map_animal(db_data: dict, viewer: dict = None) -> dict:
 def get_animals(
     status: Optional[str] = None,
     species: Optional[str] = None,
+    shelterId: Optional[str] = None,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     user: Optional[dict] = Depends(get_optional_user),
@@ -112,6 +113,8 @@ def get_animals(
                 
         if species:
             query = query.eq("species", species.upper())
+        if shelterId:
+            query = query.eq("shelter_id", shelterId)
             
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         return [map_animal(item, viewer=user) for item in res.data]

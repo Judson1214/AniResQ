@@ -4,6 +4,8 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { RescueStatusBadge } from "./RescueStatusBadge";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { UserRole } from "@aniresq/shared-types";
 import icon from "leaflet/dist/images/marker-icon.png";
 import iconShadow from "leaflet/dist/images/marker-shadow.png";
 let DefaultIcon = L.icon({
@@ -63,6 +65,14 @@ const RescueMap = ({
 }) => {
   const [mapCenter, setMapCenter] = useState(center);
   const [mapZoom, setMapZoom] = useState(zoom);
+  const { user } = useAuth();
+  const isStaff = user && [
+    UserRole.ADMIN,
+    UserRole.NGO,
+    UserRole.VOLUNTEER,
+    UserRole.SHELTER,
+    UserRole.VET,
+  ].includes(user.role);
   useEffect(() => {
     if (singleRescue && singleRescue.location) {
       setMapCenter([singleRescue.location.latitude, singleRescue.location.longitude]);
@@ -117,12 +127,18 @@ const RescueMap = ({
                     <RescueStatusBadge status={rescue.status} className="scale-75 origin-left" />
                   </div>
                   <p className="text-xs text-gray-600 mb-2">{rescue.species}</p>
-                  <Link
-      to={`/rescue/${rescue.id}`}
-      className="text-xs text-blue-600 hover:underline"
-    >
-                    View Details
-                  </Link>
+                  {isStaff || (user?.uid && rescue.reporterId === user.uid) ? (
+                    <Link
+                      to={`/rescue/${rescue.id}`}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      View Details
+                    </Link>
+                  ) : (
+                    <span className="text-[11px] text-gray-500 italic block">
+                      Dispatched Community SOS
+                    </span>
+                  )}
                 </div>
               </Popup>
             </Marker>;

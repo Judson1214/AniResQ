@@ -1,27 +1,6 @@
-import { supabase } from "@/config/supabase";
 import api from "@/lib/api";
 import { uploadMultipleFiles } from "./storage.service";
 import { AdoptionStatus } from "@aniresq/shared-types";
-
-const mapAnimalToCamelCase = (dbData) => ({
-  id: dbData.id,
-  name: dbData.name,
-  species: dbData.species,
-  breed: dbData.breed,
-  ageEstimate: dbData.age_estimate,
-  gender: dbData.gender,
-  weight: dbData.weight,
-  healthStatus: dbData.health_status,
-  adoptionStatus: dbData.adoption_status,
-  description: dbData.description,
-  vaccinations: dbData.vaccinations || [],
-  isNeutered: dbData.is_neutered,
-  specialNeeds: dbData.special_needs,
-  shelterId: dbData.shelter_id,
-  photos: dbData.images || [],
-  createdAt: dbData.created_at,
-  updatedAt: dbData.updated_at
-});
 
 const createAnimal = async (data, photos) => {
   let photoUrls = [];
@@ -71,38 +50,31 @@ const surrenderAnimal = async (data, photos) => {
 };
 
 const getAnimals = async (filters) => {
-  let query = supabase.from('animals').select('*').order('created_at', { ascending: false });
-
+  const params = {};
   if (filters) {
     if (filters.species && filters.species !== "All") {
-      query = query.eq('species', filters.species);
+      params.species = filters.species;
     }
     if (filters.adoptionStatus) {
-      query = query.eq('adoption_status', filters.adoptionStatus);
+      params.status = filters.adoptionStatus;
     }
     if (filters.shelterId) {
-      query = query.eq('shelter_id', filters.shelterId);
+      params.shelterId = filters.shelterId;
     }
   }
 
-  const { data, error } = await query;
-  if (error) throw error;
-
-  return data.map(mapAnimalToCamelCase);
+  const response = await api.get('/animals/', { params });
+  return response.data;
 };
 
 const getAnimalById = async (id) => {
-  const { data, error } = await supabase
-    .from('animals')
-    .select('*')
-    .eq('id', id)
-    .single();
-
-  if (error) {
-    if (error.code === 'PGRST116') return null; // 404
+  try {
+    const response = await api.get(`/animals/${id}`);
+    return response.data;
+  } catch (error) {
+    if (error?.response?.status === 404) return null;
     throw error;
   }
-  return mapAnimalToCamelCase(data);
 };
 
 const updateAnimal = async (id, data) => {
@@ -128,16 +100,11 @@ const updateAdoptionStatus = async (animalId, newStatus) => {
   await api.patch(`/animals/${animalId}`, { adoptionStatus: newStatus });
 };
 
-const getFeaturedAnimals = async (limitNum) => {
-  const { data, error } = await supabase
-    .from('animals')
-    .select('*')
-    .eq('adoption_status', AdoptionStatus.AVAILABLE)
-    .order('created_at', { ascending: false })
-    .limit(limitNum);
-
-  if (error) throw error;
-  return data.map(mapAnimalToCamelCase);
+const getFeaturedAnimals = async (limitNum = 6) => {
+  const response = await api.get('/animals/', {
+    params: { status: AdoptionStatus.AVAILABLE, limit: limitNum }
+  });
+  return response.data;
 };
 
 export {
