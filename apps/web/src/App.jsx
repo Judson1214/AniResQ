@@ -113,7 +113,7 @@ function App() {
           <Route
             path="/rescue/:id"
             element={
-              <ProtectedRoute allowedRoles={RESPONDER_ROLES}>
+              <ProtectedRoute>
                 <RescueDetailPage />
               </ProtectedRoute>
             }

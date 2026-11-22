@@ -56,7 +56,10 @@ class AnimalUpdate(BaseModel):
     specialNeeds: Optional[str] = None
     photos: Optional[List[str]] = None
 
-def map_animal(db_data: dict) -> dict:
+def map_animal(db_data: dict, viewer: dict = None) -> dict:
+    """Map DB row to API response. Redacts surrenderedBy unless viewer is owner or staff."""
+    is_staff = viewer and viewer.get("role") in STAFF_ROLES
+    is_owner = viewer and db_data.get("surrendered_by") == viewer.get("uid")
     return {
         "id": db_data["id"],
         "name": db_data["name"],
@@ -72,7 +75,7 @@ def map_animal(db_data: dict) -> dict:
         "isNeutered": db_data.get("is_neutered", False),
         "specialNeeds": db_data.get("special_needs"),
         "shelterId": db_data.get("shelter_id"),
-        "surrenderedBy": db_data.get("surrendered_by"),
+        "surrenderedBy": db_data.get("surrendered_by") if (is_staff or is_owner) else None,
         "photos": db_data.get("images", []),
         "createdAt": db_data.get("created_at"),
         "updatedAt": db_data.get("updated_at"),
@@ -111,7 +114,7 @@ def get_animals(
             query = query.eq("species", species.upper())
             
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
-        return [map_animal(item) for item in res.data]
+        return [map_animal(item, viewer=user) for item in res.data]
     except Exception as e:
         logger.error(f"Error fetching animals: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve animals")
@@ -131,7 +134,7 @@ def get_animal(id: str, user: Optional[dict] = Depends(get_optional_user)):
         if data.get("adoption_status") == "NOT_READY" and not (is_staff or is_owner):
             raise HTTPException(status_code=404, detail="Animal not found")
             
-        return map_animal(data)
+        return map_animal(data, viewer=user)
     except HTTPException:
         raise
     except Exception as e:
@@ -179,7 +182,7 @@ def create_animal(payload: AnimalCreate, user: dict = Depends(require_roles(STAF
         res = supabase.table("animals").insert(data).execute()
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to create animal")
-        return map_animal(res.data[0])
+        return map_animal(res.data[0], viewer=user)
     except HTTPException:
         raise
     except Exception as e:
@@ -222,7 +225,7 @@ def surrender_animal(payload: AnimalSurrenderCreate, user: dict = Depends(get_cu
         res = supabase.table("animals").insert(data).execute()
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to submit surrender request")
-        return map_animal(res.data[0])
+        return map_animal(res.data[0], viewer=user)
     except HTTPException:
         raise
     except Exception as e:
@@ -269,17 +272,43 @@ def update_animal(id: str, payload: AnimalUpdate, user: dict = Depends(require_r
             update_data["images"] = validate_photo_urls(payload.photos)
         
         if not update_data:
-            return map_animal(existing.data[0])
+            return map_animal(existing.data[0], viewer=user)
             
         res = supabase.table("animals").update(update_data).eq("id", id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Animal not found")
-        return map_animal(res.data[0])
+        return map_animal(res.data[0], viewer=user)
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error updating animal {id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update animal record")
+
+@router.post("/{id}/claim")
+def claim_animal(id: str, user: dict = Depends(require_roles(["ADMIN", "SHELTER", "NGO"]))):
+    """Allows a shelter/NGO to claim a surrendered animal for intake."""
+    try:
+        existing = supabase.table("animals").select("*").eq("id", id).execute()
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Animal not found")
+
+        animal = existing.data[0]
+        if animal.get("shelter_id") is not None:
+            raise HTTPException(status_code=409, detail="Animal is already claimed by a shelter")
+
+        update_data = {
+            "shelter_id": user["uid"],
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        res = supabase.table("animals").update(update_data).eq("id", id).execute()
+        if not res.data:
+            raise HTTPException(status_code=500, detail="Failed to claim animal")
+        return map_animal(res.data[0], viewer=user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error claiming animal {id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to claim animal")
 
 @router.delete("/{id}")
 def delete_animal(id: str, user: dict = Depends(require_roles(STAFF_ROLES))):

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { PawPrint, Menu, User as UserIcon } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { UserRole } from "@aniresq/shared-types";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
@@ -19,9 +20,13 @@ const Navbar = () => {
   const { user, isAuthenticated, signOut } = useAuth();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
+  const RESPONDER_ROLES = [UserRole.ADMIN, UserRole.VOLUNTEER, UserRole.SHELTER, UserRole.NGO, UserRole.VET];
+  const isResponder = user && RESPONDER_ROLES.includes(user.role);
   const navLinks = [
     { name: "Home", href: "/" },
-    { name: "Rescue Map", href: "/rescue" },
+    isResponder
+      ? { name: "Rescue Map", href: "/rescue" }
+      : { name: "Report Emergency", href: "/report-rescue" },
     { name: "Animals", href: "/animals" },
     { name: "Lost & Found", href: "/lost-found" }
   ];

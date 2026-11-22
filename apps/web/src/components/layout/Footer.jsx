@@ -24,7 +24,7 @@ const Footer = () => {
           <div>
             <h3 className="font-semibold text-gray-900 mb-4">Platform</h3>
             <ul className="space-y-2 text-sm text-gray-500">
-              <li><Link to="/rescue" className="hover:text-emerald-600">Rescue Map</Link></li>
+              <li><Link to="/report-rescue" className="hover:text-emerald-600">Report Emergency</Link></li>
               <li><Link to="/animals" className="hover:text-emerald-600">Adopt an Animal</Link></li>
               <li><Link to="/lost-found" className="hover:text-emerald-600">Lost & Found</Link></li>
               <li><Link to="/report-rescue" className="hover:text-emerald-600">Report an Emergency</Link></li>

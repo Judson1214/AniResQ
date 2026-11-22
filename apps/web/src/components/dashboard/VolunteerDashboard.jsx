@@ -51,7 +51,7 @@ const VolunteerDashboard = () => {
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">Pending requests in your area.</p>
             <Button asChild>
-              <Link to="/rescues">View Rescue Map</Link>
+              <Link to="/rescue">View Rescue Map</Link>
             </Button>
           </CardContent>
         </Card>

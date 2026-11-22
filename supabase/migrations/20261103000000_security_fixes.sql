@@ -50,8 +50,9 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 4. Fail-closed official Supabase project uploads bucket validation on public.users.avatar_url
--- Configures current project URL setting; fails closed if unset in new deployments
-ALTER DATABASE postgres SET app.settings.supabase_url = 'https://cspnzitnvzdwwyxpnluw.supabase.co';
+-- NOTE: You must configure the project URL yourself after running this migration:
+--   ALTER DATABASE postgres SET app.settings.supabase_url = 'https://<your-project-id>.supabase.co';
+-- The get_storage_prefix() function will fail closed if this is not set.
 
 CREATE OR REPLACE FUNCTION public.get_storage_prefix()
 RETURNS TEXT

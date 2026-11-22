@@ -159,7 +159,7 @@ const RescueReportForm = () => {
       
       await createRescueRequest(rescueData, photos);
       toast({ title: "SOS Dispatched!", description: "Emergency rescue units have been notified." });
-      navigate(`/rescue`);
+      navigate(`/dashboard`);
     } catch (error) {
       console.error(error);
       toast({ title: "Error", description: "Failed to dispatch SOS.", variant: "destructive" });

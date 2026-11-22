@@ -3,7 +3,7 @@ import time
 from unittest.mock import MagicMock
 from starlette.testclient import TestClient
 from main import app
-from auth import get_current_user
+from auth import get_current_user, get_optional_user
 import supabase_config
 
 client = TestClient(app)
@@ -675,4 +675,125 @@ def test_cannot_request_admin_role_via_patch_profile(monkeypatch):
         assert res_ok.status_code == 200
     finally:
         app.dependency_overrides.clear()
+
+def test_surrendered_by_redacted_for_public_and_unrelated_users(monkeypatch):
+    mock_animal = {
+        "id": "animal-1",
+        "name": "Buddy",
+        "species": "DOG",
+        "breed": "Mix",
+        "age_estimate": "2 years",
+        "gender": "MALE",
+        "weight": 12.0,
+        "health_status": "HEALTHY",
+        "adoption_status": "AVAILABLE",
+        "description": "Friendly dog",
+        "vaccinations": [],
+        "is_neutered": True,
+        "special_needs": None,
+        "shelter_id": "shelter-1",
+        "surrendered_by": "citizen-owner-1",
+        "images": [],
+        "created_at": "2026-11-01T00:00:00Z",
+        "updated_at": "2026-11-01T00:00:00Z",
+    }
+    mock_query = MagicMock()
+    mock_query.select.return_value = mock_query
+    mock_query.eq.return_value = mock_query
+    mock_query.execute.return_value = MagicMock(data=[mock_animal])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+    # 1. Unauthenticated / anonymous visitor
+    app.dependency_overrides[get_optional_user] = lambda: None
+    res = client.get("/api/animals/animal-1")
+    assert res.status_code == 200
+    assert res.json()["surrenderedBy"] is None
+
+    # 2. Authenticated unrelated citizen
+    app.dependency_overrides[get_optional_user] = lambda: {
+        "uid": "other-citizen", "role": "CITIZEN"
+    }
+    res = client.get("/api/animals/animal-1")
+    assert res.status_code == 200
+    assert res.json()["surrenderedBy"] is None
+
+    # 3. Animal owner (citizen who surrendered)
+    app.dependency_overrides[get_optional_user] = lambda: {
+        "uid": "citizen-owner-1", "role": "CITIZEN"
+    }
+    res = client.get("/api/animals/animal-1")
+    assert res.status_code == 200
+    assert res.json()["surrenderedBy"] == "citizen-owner-1"
+
+    # 4. Staff member (SHELTER / ADMIN)
+    app.dependency_overrides[get_optional_user] = lambda: {
+        "uid": "shelter-staff-1", "role": "SHELTER"
+    }
+    res = client.get("/api/animals/animal-1")
+    assert res.status_code == 200
+    assert res.json()["surrenderedBy"] == "citizen-owner-1"
+
+    app.dependency_overrides.clear()
+
+def test_shelter_can_claim_animal(monkeypatch):
+    mock_unclaimed_animal = {
+        "id": "animal-surrender-1",
+        "name": "Milo",
+        "species": "CAT",
+        "breed": "Unknown",
+        "age_estimate": "1 year",
+        "gender": "UNKNOWN",
+        "weight": None,
+        "health_status": "HEALTHY",
+        "adoption_status": "NOT_READY",
+        "description": "Surrendered cat",
+        "vaccinations": [],
+        "is_neutered": False,
+        "special_needs": None,
+        "shelter_id": None,
+        "surrendered_by": "citizen-1",
+        "images": [],
+        "created_at": "2026-11-01T00:00:00Z",
+        "updated_at": "2026-11-01T00:00:00Z",
+    }
+    mock_claimed_animal = {**mock_unclaimed_animal, "shelter_id": "shelter-99"}
+
+    # 1. Citizen cannot claim (403)
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "citizen-1", "role": "CITIZEN"
+    }
+    res = client.post("/api/animals/animal-surrender-1/claim")
+    assert res.status_code == 403
+
+    # 2. Shelter claiming unclaimed animal succeeds
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "shelter-42", "role": "SHELTER"
+    }
+    mock_query = MagicMock()
+    mock_query.select.return_value = mock_query
+    mock_query.eq.return_value = mock_query
+    mock_query.update.return_value = mock_query
+    # First call is select (existing), second is update
+    mock_query.execute.side_effect = [
+        MagicMock(data=[mock_unclaimed_animal]),
+        MagicMock(data=[{**mock_unclaimed_animal, "shelter_id": "shelter-42"}]),
+    ]
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+    res = client.post("/api/animals/animal-surrender-1/claim")
+    assert res.status_code == 200
+    assert res.json()["shelterId"] == "shelter-42"
+
+    # 3. Already claimed animal returns 409
+    mock_query_claimed = MagicMock()
+    mock_query_claimed.select.return_value = mock_query_claimed
+    mock_query_claimed.eq.return_value = mock_query_claimed
+    mock_query_claimed.execute.return_value = MagicMock(data=[mock_claimed_animal])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query_claimed))
+
+    res_conflict = client.post("/api/animals/animal-surrender-1/claim")
+    assert res_conflict.status_code == 409
+
+    app.dependency_overrides.clear()
+
 
