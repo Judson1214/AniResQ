@@ -119,9 +119,15 @@ const LostFoundCard = ({ post, onUpdate }) => {
         </div>
 
         {post.status === LostFoundStatus.ACTIVE && (
-          <div className="pt-2 border-t border-slate-800 flex items-center gap-2 text-sm text-slate-300">
-            <Phone size={14} className="text-blue-400" />
-            <span className="font-medium">{post.contactPhone}</span>
+          <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-300">
+            <div className="flex items-center gap-1.5">
+              <Phone size={13} className="text-emerald-400" />
+              <span className="text-slate-400">Direct Contact:</span>
+              <a href={`tel:${post.contactPhone}`} className="font-semibold text-white hover:text-emerald-400 transition-colors">
+                {post.contactPhone}
+              </a>
+            </div>
+            <span className="text-[10px] text-slate-500 uppercase font-mono">Public Board</span>
           </div>
         )}
 

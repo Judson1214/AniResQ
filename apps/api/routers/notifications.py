@@ -23,6 +23,28 @@ def map_notification(db_data: dict) -> dict:
         "createdAt": db_data.get("created_at"),
     }
 
+def create_system_notification(
+    user_id: str,
+    notif_type: str,
+    title: str,
+    message: str,
+    related_entity_id: Optional[str] = None,
+    related_entity_type: Optional[str] = None,
+):
+    try:
+        supabase.table("notifications").insert({
+            "user_id": user_id,
+            "type": notif_type,
+            "title": title,
+            "message": message,
+            "is_read": False,
+            "related_entity_id": related_entity_id,
+            "related_entity_type": related_entity_type,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+    except Exception as e:
+        logger.warning(f"Failed to create system notification for user {user_id}: {e}")
+
 @router.get("/")
 def get_notifications(
     limit: int = Query(default=50, ge=1, le=100),

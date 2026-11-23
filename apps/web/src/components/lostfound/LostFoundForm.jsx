@@ -157,8 +157,14 @@ const LostFoundForm = ({ onSuccess }) => {
         </div>
 
         <div className="space-y-2">
-          <Label>Contact Phone</Label>
-          <Input {...register("contactPhone")} className="bg-slate-900 border-slate-700 text-white" type="tel" />
+          <div className="flex items-center justify-between">
+            <Label>Contact Phone</Label>
+            <span className="text-[11px] text-amber-400 font-semibold">Publicly Visible</span>
+          </div>
+          <Input {...register("contactPhone")} className="bg-slate-900 border-slate-700 text-white" type="tel" placeholder="e.g. +91 98765 43210" />
+          <p className="text-[11px] text-slate-400">
+            <strong>Public Notice:</strong> Your phone number will be displayed on this community lost &amp; found board so neighbors and finders can reach you immediately. For privacy, use a general cross-street or neighborhood for the location rather than private apartment numbers.
+          </p>
         </div>
 
         <div className="space-y-2">

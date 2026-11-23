@@ -56,6 +56,7 @@ describe('Auth Service', () => {
       phone: '1234567890',
       avatarUrl: 'https://example.com/avatar.jpg',
       isVerified: false,
+      requestedRole: null,
       createdAt: '2026-10-31T00:00:00Z',
     });
   });

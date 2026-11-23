@@ -100,6 +100,11 @@ const updateAdoptionStatus = async (animalId, newStatus) => {
   await api.patch(`/animals/${animalId}`, { adoptionStatus: newStatus });
 };
 
+const claimAnimal = async (animalId) => {
+  const response = await api.post(`/animals/${animalId}/claim`);
+  return response.data;
+};
+
 const getFeaturedAnimals = async (limitNum = 6) => {
   const response = await api.get('/animals/', {
     params: { status: AdoptionStatus.AVAILABLE, limit: limitNum }
@@ -108,6 +113,7 @@ const getFeaturedAnimals = async (limitNum = 6) => {
 };
 
 export {
+  claimAnimal,
   createAnimal,
   getAnimalById,
   getAnimals,

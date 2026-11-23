@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from supabase_config import supabase
 from auth import get_current_user, require_roles
+from .notifications import create_system_notification
 
 router = APIRouter(prefix="/api/adoptions", tags=["adoptions"])
 logger = logging.getLogger("adoptions")
@@ -145,7 +146,7 @@ def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = 
         raise HTTPException(status_code=422, detail=f"Invalid status '{payload.status}'. Must be one of {sorted(VALID_APP_STATUSES)}")
         
     try:
-        existing = supabase.table("adoption_applications").select("id, animal_id").eq("id", id).execute()
+        existing = supabase.table("adoption_applications").select("id, animal_id, applicant_id").eq("id", id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Adoption application not found")
             
@@ -168,6 +169,19 @@ def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = 
                 supabase.table("animals").update({"adoption_status": "ADOPTED"}).eq("id", app_record["animal_id"]).execute()
             except Exception as anim_err:
                 logger.warning(f"Failed to auto-update animal adoption status: {anim_err}")
+
+        # Send notification to applicant about application review decision
+        applicant_id = app_record.get("applicant_id")
+        if applicant_id:
+            status_label = "approved" if target_status == "APPROVED" else "declined" if target_status == "REJECTED" else target_status.lower()
+            create_system_notification(
+                user_id=applicant_id,
+                notif_type="ADOPTION_DECISION",
+                title=f"Adoption Application {target_status.capitalize()}",
+                message=f"Your adoption application has been {status_label}.",
+                related_entity_id=id,
+                related_entity_type="ADOPTION",
+            )
                 
         return map_adoption(res.data[0])
     except HTTPException:

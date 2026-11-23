@@ -1008,4 +1008,86 @@ def test_animals_endpoint_supports_shelter_filter(monkeypatch):
     mock_query.eq.assert_any_call("shelter_id", "shelter-abc")
 
 
+def test_notifications_sent_on_system_events(monkeypatch):
+    # Test notification created when volunteer assigned to rescue
+    from routers import notifications
+    notifications_created = []
+
+    def mock_create_notification(user_id, notif_type, title, message, related_entity_id=None, related_entity_type=None):
+        notifications_created.append({
+            "user_id": user_id,
+            "type": notif_type,
+            "title": title,
+            "message": message,
+            "related_id": related_entity_id,
+            "related_type": related_entity_type,
+        })
+
+    monkeypatch.setattr(notifications, "create_system_notification", mock_create_notification)
+    import routers.rescues as rescues_module
+    import routers.adoptions as adoptions_module
+    import routers.animals as animals_module
+    import routers.users as users_module
+    monkeypatch.setattr(rescues_module, "create_system_notification", mock_create_notification)
+    monkeypatch.setattr(adoptions_module, "create_system_notification", mock_create_notification)
+    monkeypatch.setattr(animals_module, "create_system_notification", mock_create_notification)
+    monkeypatch.setattr(users_module, "create_system_notification", mock_create_notification)
+
+    # 1. Test rescue assignment notification
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "admin-1", "email": "admin@aniresq.org", "name": "Admin", "role": "ADMIN"
+    }
+    try:
+        mock_table = MagicMock()
+        mock_table.select.return_value = mock_table
+        mock_table.update.return_value = mock_table
+        mock_table.insert.return_value = mock_table
+        mock_table.eq.return_value = mock_table
+        # For volunteer check and rescue update
+        mock_table.execute.side_effect = [
+            MagicMock(data=[{"id": "vol-1", "role": "VOLUNTEER", "display_name": "Volunteer Dave"}]), # vol_check
+            MagicMock(data=[{"id": "r-1", "reporter_id": "citizen-1", "assigned_to": "vol-1"}]), # update rescue
+            MagicMock(data=[]), # timeline insert
+        ]
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+        res = client.post("/api/rescues/r-1/assign", json={"volunteerId": "vol-1", "volunteerName": "Volunteer Dave"})
+        assert res.status_code == 200
+        # Check notifications for volunteer and reporter
+        vol_notif = next((n for n in notifications_created if n["user_id"] == "vol-1"), None)
+        rep_notif = next((n for n in notifications_created if n["user_id"] == "citizen-1"), None)
+        assert vol_notif is not None
+        assert vol_notif["type"] == "RESCUE_ASSIGNED"
+        assert rep_notif is not None
+        assert rep_notif["type"] == "RESCUE_UPDATE"
+    finally:
+        app.dependency_overrides.clear()
+
+    # 2. Test adoption review decision notification
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "shelter-admin", "email": "shelter@aniresq.org", "name": "Shelter", "role": "SHELTER"
+    }
+    try:
+        mock_table = MagicMock()
+        mock_table.select.return_value = mock_table
+        mock_table.update.return_value = mock_table
+        mock_table.eq.return_value = mock_table
+        mock_table.execute.side_effect = [
+            MagicMock(data=[{"id": "app-10", "animal_id": "a-1", "applicant_id": "applicant-99"}]), # select app
+            MagicMock(data=[{"id": "app-10", "status": "APPROVED", "animal_id": "a-1", "applicant_id": "applicant-99", "living_environment": "HOUSE", "prior_pet_experience": "Many years", "family_members": 2}]), # update app
+            MagicMock(data=[{"id": "a-1"}]), # update animal status
+        ]
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+        res = client.patch("/api/adoptions/app-10/status", json={"status": "APPROVED", "screeningNotes": "Great home"})
+        assert res.status_code == 200
+        app_notif = next((n for n in notifications_created if n["user_id"] == "applicant-99"), None)
+        assert app_notif is not None
+        assert app_notif["type"] == "ADOPTION_DECISION"
+        assert "approved" in app_notif["message"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+
 

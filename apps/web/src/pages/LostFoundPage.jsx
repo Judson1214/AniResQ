@@ -20,8 +20,10 @@ function LostFoundPage() {
       <div className="container mx-auto py-8 px-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-black text-white">Lost & Found</h1>
-            <p className="text-slate-400">Help reunite missing pets with their families, or report a found animal.</p>
+            <h1 className="text-3xl font-black text-white">Lost &amp; Found</h1>
+            <p className="text-slate-400 text-sm mt-1">
+              Help reunite missing pets with their families, or report a found animal. Direct contact details are publicly visible to facilitate immediate reunions.
+            </p>
           </div>
           
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

@@ -1,150 +1,317 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Mail, Phone, Shield, Camera } from "lucide-react";
-import { useState } from "react";
+import { 
+  User, 
+  Mail, 
+  Phone, 
+  Shield, 
+  Camera, 
+  Clock, 
+  ShieldCheck, 
+  CheckCircle2, 
+  Loader2
+} from "lucide-react";
 import { updateUserProfile } from "@/services/auth.service";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuthStore } from "@/store/authStore";
+
+const ALLOWED_REQUESTED_ROLES = [
+  { value: "VOLUNTEER", label: "Field Rescue Responder", description: "Receive emergency dispatch alerts and assist on-site." },
+  { value: "SHELTER", label: "Animal Shelter / Sanctuary", description: "Admit surrendered animals, conduct intake health reviews, and manage adoptions." },
+  { value: "NGO", label: "Welfare Organization (NGO)", description: "Coordinate rescue dispatches and organize community operations." },
+  { value: "VET", label: "Licensed Veterinary Clinic", description: "Provide medical care, health status updates, and emergency triage." },
+];
+
 const ProfilePage = () => {
   const { user } = useAuth();
   const { setUser } = useAuthStore();
   const { toast } = useToast();
+  
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSubmittingRole, setIsSubmittingRole] = useState(false);
+  const [selectedRole, setSelectedRole] = useState("VOLUNTEER");
+  
   const [formData, setFormData] = useState({
     name: user?.displayName || "",
-    phone: user?.phone || ""
+    phone: user?.phone || "",
   });
+
   if (!user) return null;
+
+  const hasPendingRoleRequest = user.requestedRole && user.requestedRole !== user.role;
+
   const getInitials = (name) => {
     if (!name) return "";
     return name.substring(0, 2).toUpperCase();
   };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
       await updateUserProfile(user.uid, {
         displayName: formData.name,
-        phone: formData.phone
+        phone: formData.phone,
       });
       setUser({ ...user, displayName: formData.name, phone: formData.phone });
       setIsEditing(false);
       toast({
         title: "Profile updated",
-        description: "Your profile has been updated successfully."
+        description: "Your personal details have been updated successfully.",
       });
     } catch (error) {
       toast({
         title: "Error updating profile",
         description: error.message || "Something went wrong.",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsSaving(false);
     }
   };
-  return <DashboardLayout>
+
+  const handleRoleRequest = async () => {
+    setIsSubmittingRole(true);
+    try {
+      await updateUserProfile(user.uid, {
+        requestedRole: selectedRole,
+      });
+      setUser({ ...user, requestedRole: selectedRole });
+      toast({
+        title: "Clearance Request Submitted",
+        description: `Your request for ${selectedRole} clearance is pending administrator verification.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Request Failed",
+        description: error.response?.data?.detail || error.message || "Could not submit role request.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingRole(false);
+    }
+  };
+
+  return (
+    <DashboardLayout>
       <div className="max-w-4xl mx-auto space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Profile</h1>
-          <p className="text-gray-500">Manage your account settings and preferences.</p>
+          <h1 className="text-3xl font-bold tracking-tight text-white">Profile & Credentials</h1>
+          <p className="text-slate-400">Manage your account details and organizational clearance levels.</p>
         </div>
 
+        {/* PENDING ROLE CLEARANCE BANNER */}
+        {hasPendingRoleRequest && (
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3.5 animate-in fade-in">
+            <Clock className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <h4 className="text-sm font-bold text-amber-300">
+                Clearance Request Pending Administrator Review
+              </h4>
+              <p className="text-xs text-amber-200/80 mt-1">
+                You have requested upgrade to <span className="font-bold underline">{user.requestedRole}</span> clearance. 
+                Our platform administrators are currently reviewing your credentials. You will receive an in-app notification once verified.
+              </p>
+            </div>
+            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs shrink-0">
+              PENDING
+            </Badge>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="md:col-span-1">
+          {/* USER CARD */}
+          <Card className="md:col-span-1 border-slate-800 bg-[#0A0F1C] shadow-xl rounded-2xl">
             <CardContent className="pt-6 flex flex-col items-center">
               <div className="relative mb-4">
-                <Avatar className="w-32 h-32">
+                <Avatar className="w-28 h-28 border-2 border-slate-700">
                   <AvatarImage src={user.avatarUrl} alt={user.displayName} />
-                  <AvatarFallback className="text-3xl bg-emerald-100 text-emerald-700">
+                  <AvatarFallback className="text-2xl bg-emerald-950 text-emerald-400 font-bold">
                     {getInitials(user.displayName)}
                   </AvatarFallback>
                 </Avatar>
-                <button className="absolute bottom-0 right-0 p-2 bg-emerald-600 rounded-full text-white hover:bg-emerald-700 transition-colors">
+                <button 
+                  type="button"
+                  aria-label="Change profile photo"
+                  className="absolute bottom-0 right-0 p-2 bg-emerald-600 rounded-full text-white hover:bg-emerald-500 transition-colors shadow-md"
+                >
                   <Camera className="w-4 h-4" />
                 </button>
               </div>
-              <h3 className="font-semibold text-xl text-center">{user.displayName}</h3>
-              <div className="flex items-center gap-1.5 mt-1 text-sm text-gray-500 capitalize bg-gray-100 px-3 py-1 rounded-full">
-                <Shield className="w-3.5 h-3.5" />
-                {user.role.toLowerCase()}
+              <h3 className="font-bold text-lg text-white text-center">{user.displayName || "User"}</h3>
+              <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-300 font-semibold capitalize bg-slate-800 border border-slate-700 px-3 py-1 rounded-full">
+                <Shield className="w-3.5 h-3.5 text-emerald-400" />
+                {user.role?.toLowerCase() || "citizen"}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="md:col-span-2">
+          {/* PERSONAL INFO CARD */}
+          <Card className="md:col-span-2 border-slate-800 bg-[#0A0F1C] shadow-xl rounded-2xl">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Personal Information</CardTitle>
-                  <CardDescription>Update your personal details here.</CardDescription>
+                  <CardTitle className="text-lg font-bold text-white">Personal Information</CardTitle>
+                  <CardDescription className="text-xs text-slate-400">Update your verified contact details.</CardDescription>
                 </div>
-                {!isEditing ? <Button variant="outline" onClick={() => setIsEditing(true)}>
+                {!isEditing ? (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} className="border-slate-700 text-slate-300 hover:bg-slate-800">
                     Edit Profile
-                  </Button> : <div className="flex gap-2">
-                    <Button variant="ghost" onClick={() => setIsEditing(false)} disabled={isSaving}>
+                  </Button>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)} disabled={isSaving} className="text-slate-400">
                       Cancel
                     </Button>
-                    <Button onClick={handleSave} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700">
+                    <Button size="sm" onClick={handleSave} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold">
                       {isSaving ? "Saving..." : "Save Changes"}
                     </Button>
-                  </div>}
+                  </div>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name" className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-500" /> Full Name
+                <div className="space-y-1.5">
+                  <Label htmlFor="name" className="flex items-center gap-2 text-xs text-slate-300">
+                    <User className="w-3.5 h-3.5 text-slate-500" /> Full Name
                   </Label>
                   <Input
-    id="name"
-    value={formData.name}
-    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-    disabled={!isEditing}
-    className="max-w-md"
-  />
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    disabled={!isEditing}
+                    className="bg-slate-900 border-slate-800 text-white text-sm"
+                  />
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="email" className="flex items-center gap-2">
-                    <Mail className="w-4 h-4 text-gray-500" /> Email Address
+                <div className="space-y-1.5">
+                  <Label htmlFor="email" className="flex items-center gap-2 text-xs text-slate-300">
+                    <Mail className="w-3.5 h-3.5 text-slate-500" /> Email Address
                   </Label>
                   <Input
-    id="email"
-    value={user.email}
-    disabled={true}
-    className="max-w-md bg-gray-50 text-gray-500"
-  />
-                  <p className="text-xs text-gray-500">Email cannot be changed.</p>
+                    id="email"
+                    value={user.email || ""}
+                    disabled={true}
+                    className="bg-slate-900/50 border-slate-800 text-slate-500 text-sm"
+                  />
+                  <p className="text-[10px] text-slate-500">Email is linked to authentication credentials.</p>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone" className="flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-gray-500" /> Phone Number
+                <div className="space-y-1.5">
+                  <Label htmlFor="phone" className="flex items-center gap-2 text-xs text-slate-300">
+                    <Phone className="w-3.5 h-3.5 text-slate-500" /> Phone Number
                   </Label>
                   <Input
-    id="phone"
-    value={formData.phone}
-    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-    disabled={!isEditing}
-    className="max-w-md"
-    placeholder="Add a phone number"
-  />
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    disabled={!isEditing}
+                    className="bg-slate-900 border-slate-800 text-white text-sm"
+                    placeholder="Enter phone number"
+                  />
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
+
+        {/* ROLE CLEARANCE REQUEST CARD */}
+        <Card className="border-slate-800 bg-[#0A0F1C] shadow-xl rounded-2xl overflow-hidden">
+          <CardHeader className="border-b border-slate-800 bg-slate-900/40 py-4 px-6">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <ShieldCheck size={18} />
+              </div>
+              <div>
+                <CardTitle className="text-base font-bold text-white">Personnel Clearance & Role Upgrades</CardTitle>
+                <CardDescription className="text-xs text-slate-400">
+                  Request access to volunteer dispatches, shelter operations, NGO coordination, or veterinary triage.
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            {hasPendingRoleRequest ? (
+              <div className="flex items-center justify-between p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <span className="text-sm font-bold text-white">Pending Clearance: {user.requestedRole}</span>
+                    <p className="text-xs text-slate-400">
+                      Submitted for administrative review. If you need to make urgent changes, contact the administration.
+                    </p>
+                  </div>
+                </div>
+                <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs">
+                  In Review
+                </Badge>
+              </div>
+            ) : user.role === "ADMIN" ? (
+              <div className="text-sm text-slate-400 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                You hold Administrator clearance with full access across all operations.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-slate-400">
+                  Select the organizational clearance level that corresponds to your verified organization or volunteer role:
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {ALLOWED_REQUESTED_ROLES.map((role) => (
+                    <label
+                      key={role.value}
+                      className={`p-3.5 rounded-xl border cursor-pointer transition-all flex flex-col justify-between ${
+                        selectedRole === role.value
+                          ? "border-emerald-500 bg-emerald-500/5 text-white"
+                          : "border-slate-800 bg-slate-900/40 text-slate-300 hover:border-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <span className="text-sm font-bold">{role.label}</span>
+                        <input
+                          type="radio"
+                          name="requestedRole"
+                          value={role.value}
+                          checked={selectedRole === role.value}
+                          onChange={(e) => setSelectedRole(e.target.value)}
+                          className="mt-1 accent-emerald-500"
+                        />
+                      </div>
+                      <p className="text-xs text-slate-400 mt-2">{role.description}</p>
+                    </label>
+                  ))}
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <Button
+                    onClick={handleRoleRequest}
+                    disabled={isSubmittingRole}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-5"
+                  >
+                    {isSubmittingRole ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> Submitting...
+                      </>
+                    ) : (
+                      "Submit Clearance Request"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
-    </DashboardLayout>;
+    </DashboardLayout>
+  );
 };
-var stdin_default = ProfilePage;
-export {
-  stdin_default as default
-};
+
+export default ProfilePage;

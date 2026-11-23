@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from supabase_config import supabase
 from auth import get_current_user, get_optional_user, require_roles
 from validators import validate_photo_urls
+from .notifications import create_system_notification
 
 router = APIRouter(prefix="/api/animals", tags=["animals"])
 logger = logging.getLogger("animals")
@@ -318,6 +319,20 @@ def claim_animal(id: str, user: dict = Depends(require_roles(["ADMIN", "SHELTER"
         )
         if not res.data:
             raise HTTPException(status_code=409, detail="Animal was already claimed by another shelter")
+
+        # Notify citizen who surrendered the animal that a shelter claimed it
+        surrendered_by = animal.get("surrendered_by")
+        if surrendered_by:
+            anim_name = animal.get("name") or "Your surrendered pet"
+            create_system_notification(
+                user_id=surrendered_by,
+                notif_type="SURRENDER_CLAIMED",
+                title="Surrender Claimed by Shelter",
+                message=f"{anim_name} has been accepted into care by an authorized shelter/NGO partner for health evaluation.",
+                related_entity_id=id,
+                related_entity_type="ANIMAL",
+            )
+
         return map_animal(res.data[0], viewer=user)
     except HTTPException:
         raise

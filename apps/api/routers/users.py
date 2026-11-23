@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from supabase_config import supabase
 from auth import get_current_user
 from validators import validate_avatar_url
+from .notifications import create_system_notification
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 logger = logging.getLogger("users")
@@ -294,9 +295,11 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             raise HTTPException(status_code=400, detail="Cannot demote the last administrator.")
             
     try:
-        # Fetch current role for audit log tracking
-        current_rec = supabase.table("users").select("role, display_name").eq("id", uid).execute()
-        prev_role = current_rec.data[0].get("role", "UNKNOWN") if (current_rec.data and len(current_rec.data) > 0) else "UNKNOWN"
+        # Fetch current role and requested role for audit log and user notification
+        current_rec = supabase.table("users").select("role, display_name, requested_role").eq("id", uid).execute()
+        user_row = current_rec.data[0] if (current_rec.data and len(current_rec.data) > 0) else {}
+        prev_role = user_row.get("role", "UNKNOWN")
+        prev_requested = user_row.get("requested_role")
 
         # Update role and clear pending requested_role
         res = supabase.table("users").update({
@@ -320,6 +323,35 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             supabase.table("audit_logs").insert(audit_entry).execute()
         except Exception as audit_err:
             logger.warning(f"Could not persist audit record to database: {audit_err}")
+
+        # Send notification to user regarding clearance decision
+        if prev_requested and target_role == prev_requested:
+            create_system_notification(
+                user_id=uid,
+                notif_type="ROLE_UPDATE",
+                title=f"Clearance Approved: {target_role}",
+                message=f"Congratulations! Your request for {target_role} clearance has been approved.",
+                related_entity_id=uid,
+                related_entity_type="USER",
+            )
+        elif prev_requested and target_role != prev_requested:
+            create_system_notification(
+                user_id=uid,
+                notif_type="ROLE_UPDATE",
+                title="Clearance Request Reviewed",
+                message=f"Your request for {prev_requested} clearance was reviewed. Your role has been set to {target_role}.",
+                related_entity_id=uid,
+                related_entity_type="USER",
+            )
+        else:
+            create_system_notification(
+                user_id=uid,
+                notif_type="ROLE_UPDATE",
+                title=f"Role Updated to {target_role}",
+                message=f"An administrator updated your account role to {target_role}.",
+                related_entity_id=uid,
+                related_entity_type="USER",
+            )
 
         logger.info(
             f"AUDIT: Role changed for user {uid} from '{prev_role}' to '{target_role}' by admin '{current_user['uid']}'"

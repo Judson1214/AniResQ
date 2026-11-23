@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from supabase_config import supabase
 from auth import get_current_user
 from validators import validate_photo_urls
+from .notifications import create_system_notification
 
 router = APIRouter(prefix="/api/rescues", tags=["rescues"])
 logger = logging.getLogger("rescues")
@@ -314,6 +315,27 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
         except Exception as te_err:
             logger.warning(f"Failed to record timeline assignment: {te_err}")
             
+        # Send notifications to assigned volunteer and reporter
+        assigned_rescue = res.data[0]
+        create_system_notification(
+            user_id=req.volunteerId,
+            notif_type="RESCUE_ASSIGNED",
+            title="New Rescue Assignment",
+            message=f"You have been assigned to rescue dispatch {rescue_id[:8].upper()}.",
+            related_entity_id=rescue_id,
+            related_entity_type="RESCUE",
+        )
+        reporter_id = assigned_rescue.get("reporter_id")
+        if reporter_id and reporter_id != req.volunteerId:
+            create_system_notification(
+                user_id=reporter_id,
+                notif_type="RESCUE_UPDATE",
+                title="Responder Dispatched",
+                message=f"Responder {volunteer_name} has been dispatched to your rescue report.",
+                related_entity_id=rescue_id,
+                related_entity_type="RESCUE",
+            )
+
         return {"id": rescue_id, "status": new_status, "assignedTo": req.volunteerId}
     except HTTPException:
         raise
