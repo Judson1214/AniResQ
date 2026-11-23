@@ -1,193 +1,111 @@
-import { useState } from "react";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/components/ui/use-toast";
 import { 
   HeartHandshake, 
-  Building, 
-  QrCode, 
-  Copy, 
-  Check, 
-  FileCheck2, 
   Package, 
   Mail, 
-  ShieldCheck,
   Stethoscope,
-  Utensils
+  Utensils,
+  ArrowRight,
+  ShieldAlert,
+  Info
 } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const DonationPage = () => {
   const { user } = useAuth();
-  const { toast } = useToast();
-  const [copiedKey, setCopiedKey] = useState(null);
-
-  const copyToClipboard = (key, text, label) => {
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    toast({
-      title: "Copied to clipboard",
-      description: `${label}: ${text}`,
-    });
-    setTimeout(() => {
-      setCopiedKey(null);
-    }, 2500);
-  };
 
   const content = (
-    <div className="max-w-4xl mx-auto py-10 px-4 sm:px-6 space-y-10">
-      {/* Hero Header */}
-      <div className="text-center space-y-3">
-        <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 px-3 py-1 text-xs uppercase tracking-wider font-bold">
-          Verified Non-Profit Community Initiative
-        </Badge>
-        <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-          Support AniResQ Life-Saving Operations
-        </h1>
-        <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
-          100% of community contributions go directly to emergency trauma triage, emergency surgeries, 
-          shelter foster boarding, and nutritional rehab for animals in distress.
+    <div className="max-w-4xl mx-auto py-10 px-4 sm:px-6 space-y-8">
+      {/* DEMO / INACTIVE FINANCIALS BANNER */}
+      <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-200 space-y-2 animate-in fade-in">
+        <div className="flex items-center gap-2.5 text-amber-400 font-bold text-base">
+          <ShieldAlert size={20} className="shrink-0" />
+          <span>Demonstration Environment — Financial Contributions Not Active</span>
+        </div>
+        <p className="text-xs sm:text-sm text-amber-200/90 leading-relaxed">
+          AniResQ is currently operating in a technical demonstration environment. Online payment processing, 
+          direct bank transfers, and 80G tax-exempt monetary contributions are <strong>not active</strong>. 
+          Please do not attempt to wire funds or make financial payments.
         </p>
       </div>
 
-      {/* Impact Pillars */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Card className="border-slate-800 bg-[#0A0F1C] shadow-lg rounded-2xl">
-          <CardContent className="p-6 text-center space-y-2">
-            <div className="w-12 h-12 mx-auto rounded-full bg-rose-500/10 flex items-center justify-center text-rose-400">
-              <Stethoscope size={24} />
-            </div>
-            <h3 className="font-bold text-white text-base">Emergency Triage</h3>
-            <p className="text-xs text-slate-400">
-              Covers ambulance transport, X-rays, bloodwork, and critical emergency surgery for hit-and-run strays.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-800 bg-[#0A0F1C] shadow-lg rounded-2xl">
-          <CardContent className="p-6 text-center space-y-2">
-            <div className="w-12 h-12 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">
-              <Utensils size={24} />
-            </div>
-            <h3 className="font-bold text-white text-base">Food & Nutrition</h3>
-            <p className="text-xs text-slate-400">
-              Provides daily nutritional kibble, milk replacers for orphaned litters, and medical recovery feeds.
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-800 bg-[#0A0F1C] shadow-lg rounded-2xl">
-          <CardContent className="p-6 text-center space-y-2">
-            <div className="w-12 h-12 mx-auto rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
-              <HeartHandshake size={24} />
-            </div>
-            <h3 className="font-bold text-white text-base">Shelter & Foster</h3>
-            <p className="text-xs text-slate-400">
-              Maintains sanctuary pens, heat lamps, vaccines, and rehabilitation until animals find forever homes.
-            </p>
-          </CardContent>
-        </Card>
+      {/* Header */}
+      <div className="text-center space-y-3">
+        <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 px-3 py-1 text-xs uppercase tracking-wider font-bold">
+          Community Pet Welfare Support
+        </Badge>
+        <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+          Support Animal Rescue & Care
+        </h1>
+        <p className="text-sm sm:text-base text-slate-400 max-w-2xl mx-auto leading-relaxed">
+          While direct monetary donations are paused during platform rollout, community shelters 
+          and volunteer responders urgently need physical pet supplies, foster homes, and field volunteers.
+        </p>
       </div>
 
-      {/* Direct Contribution Channels */}
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* UPI & QR Transfer */}
-        <Card className="border-slate-800 bg-[#0A0F1C] shadow-xl rounded-2xl overflow-hidden flex flex-col justify-between">
-          <div>
-            <CardHeader className="border-b border-slate-800 bg-slate-900/40 py-4 px-6 flex flex-row items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                <QrCode size={18} />
-              </div>
-              <div>
-                <CardTitle className="text-base font-bold text-white">Instant UPI Transfer</CardTitle>
-                <p className="text-xs text-slate-400">Directly via Google Pay, PhonePe, Paytm, or BHIM.</p>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 space-y-4">
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] text-slate-500 font-bold uppercase tracking-wider block">Official UPI VPA</span>
-                  <span className="text-sm font-mono font-bold text-emerald-400">aniresq@upi</span>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => copyToClipboard("upi", "aniresq@upi", "UPI ID")}
-                  className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs h-8"
-                >
-                  {copiedKey === "upi" ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                </Button>
-              </div>
-
-              <div className="text-xs text-slate-400 space-y-1.5 pt-2">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={14} className="text-emerald-400 shrink-0" />
-                  <span>Beneficiary: AniResQ Welfare Foundation</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <FileCheck2 size={14} className="text-emerald-400 shrink-0" />
-                  <span>Zero platform processing fees deducted</span>
-                </div>
-              </div>
-            </CardContent>
-          </div>
-          <div className="p-4 bg-slate-900/40 border-t border-slate-800 text-[11px] text-slate-500 text-center">
-            Include your email in transaction notes for an automated 80G tax receipt.
+      {/* Action / Help Pillars */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card className="border-slate-800 bg-[#0A0F1C] shadow-lg rounded-2xl flex flex-col justify-between">
+          <CardContent className="p-6 text-center space-y-2">
+            <div className="w-12 h-12 mx-auto rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-400">
+              <HeartHandshake size={24} />
+            </div>
+            <h3 className="font-bold text-white text-base">Adopt or Foster</h3>
+            <p className="text-xs text-slate-400">
+              Opening your home to a rescued dog or cat frees up critical shelter space and medical resources.
+            </p>
+          </CardContent>
+          <div className="p-4 pt-0">
+            <Link
+              to="/animals"
+              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-1.5"
+            >
+              Browse Animals <ArrowRight size={14} />
+            </Link>
           </div>
         </Card>
 
-        {/* Bank Wire / NEFT / IMPS */}
-        <Card className="border-slate-800 bg-[#0A0F1C] shadow-xl rounded-2xl overflow-hidden flex flex-col justify-between">
-          <div>
-            <CardHeader className="border-b border-slate-800 bg-slate-900/40 py-4 px-6 flex flex-row items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-                <Building size={18} />
-              </div>
-              <div>
-                <CardTitle className="text-base font-bold text-white">Direct Bank Wire (NEFT / IMPS)</CardTitle>
-                <p className="text-xs text-slate-400">For institutional or individual direct contributions.</p>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 space-y-3">
-              <div className="flex justify-between items-center text-xs py-1 border-b border-slate-800">
-                <span className="text-slate-400">Account Name</span>
-                <span className="font-semibold text-white">AniResQ Welfare Foundation</span>
-              </div>
-              <div className="flex justify-between items-center text-xs py-1 border-b border-slate-800">
-                <span className="text-slate-400">Account Number</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-white">924020081234567</span>
-                  <button
-                    onClick={() => copyToClipboard("acc", "924020081234567", "Account Number")}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    {copiedKey === "acc" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                  </button>
-                </div>
-              </div>
-              <div className="flex justify-between items-center text-xs py-1 border-b border-slate-800">
-                <span className="text-slate-400">IFSC Code</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-emerald-400">UTIB0001234</span>
-                  <button
-                    onClick={() => copyToClipboard("ifsc", "UTIB0001234", "IFSC Code")}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    {copiedKey === "ifsc" ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                  </button>
-                </div>
-              </div>
-              <div className="flex justify-between items-center text-xs py-1">
-                <span className="text-slate-400">Bank & Branch</span>
-                <span className="text-slate-300">Axis Bank, Central Bangalore</span>
-              </div>
-            </CardContent>
+        <Card className="border-slate-800 bg-[#0A0F1C] shadow-lg rounded-2xl flex flex-col justify-between">
+          <CardContent className="p-6 text-center space-y-2">
+            <div className="w-12 h-12 mx-auto rounded-full bg-blue-500/10 flex items-center justify-center text-blue-400">
+              <Package size={24} />
+            </div>
+            <h3 className="font-bold text-white text-base">Physical Supplies</h3>
+            <p className="text-xs text-slate-400">
+              Partner facilities accept direct drop-offs of kibble, antiseptics, clean blankets, and transport crates.
+            </p>
+          </CardContent>
+          <div className="p-4 pt-0">
+            <a
+              href="mailto:supplies@aniresq.org?subject=Physical Supply Donation Inquiry"
+              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-1.5"
+            >
+              Coordinate Drop-off <ArrowRight size={14} />
+            </a>
           </div>
-          <div className="p-4 bg-slate-900/40 border-t border-slate-800 text-[11px] text-slate-500 text-center">
-            Registered Trust under 80G (Reg: AAATA1234F24).
+        </Card>
+
+        <Card className="border-slate-800 bg-[#0A0F1C] shadow-lg rounded-2xl flex flex-col justify-between">
+          <CardContent className="p-6 text-center space-y-2">
+            <div className="w-12 h-12 mx-auto rounded-full bg-purple-500/10 flex items-center justify-center text-purple-400">
+              <Stethoscope size={24} />
+            </div>
+            <h3 className="font-bold text-white text-base">Volunteer in Field</h3>
+            <p className="text-xs text-slate-400">
+              Sign up as a verified volunteer to assist in rescue dispatches and emergency transports.
+            </p>
+          </CardContent>
+          <div className="p-4 pt-0">
+            <Link
+              to="/profile"
+              className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-1.5"
+            >
+              Request Clearance <ArrowRight size={14} />
+            </Link>
           </div>
         </Card>
       </div>
@@ -199,52 +117,61 @@ const DonationPage = () => {
             <Package size={18} />
           </div>
           <div>
-            <CardTitle className="text-base font-bold text-white">Physical Supply Donations & Wishlist</CardTitle>
+            <CardTitle className="text-base font-bold text-white">Shelter & Clinic Supply Wishlist</CardTitle>
             <p className="text-xs text-slate-400">
-              Shelters urgently welcome in-person supply drop-offs and courier deliveries.
+              Items immediately usable by local shelter veterinarians and caregivers.
             </p>
           </div>
         </CardHeader>
-        <CardContent className="p-6">
-          <div className="grid gap-4 sm:grid-cols-2 text-xs text-slate-300">
-            <div className="space-y-2">
-              <h4 className="font-bold text-white flex items-center gap-1.5">
-                <Stethoscope size={14} className="text-rose-400" /> Medical & Hygiene
+        <CardContent className="p-6 space-y-6">
+          <div className="grid gap-6 sm:grid-cols-2 text-xs text-slate-300">
+            <div className="space-y-2.5">
+              <h4 className="font-bold text-white flex items-center gap-1.5 text-sm">
+                <Stethoscope size={16} className="text-rose-400" /> Medical & First-Aid Supplies
               </h4>
-              <ul className="list-disc list-inside space-y-1 text-slate-400">
-                <li>Betadine solution & sterile surgical gauze</li>
-                <li>Bandages, adhesive tapes, and antiseptic sprays</li>
-                <li>Deworming tablets (Puppy & Adult)</li>
-                <li>Flea & tick spot-on treatments</li>
+              <ul className="list-disc list-inside space-y-1.5 text-slate-400">
+                <li>Betadine / Povidone-iodine topical antiseptic solutions</li>
+                <li>Sterile surgical gauze, elastic crepe bandages, and medical tape</li>
+                <li>Deworming and anti-parasitic treatments (veterinary approved)</li>
+                <li>Disposable examination gloves and digital thermometers</li>
               </ul>
             </div>
-            <div className="space-y-2">
-              <h4 className="font-bold text-white flex items-center gap-1.5">
-                <Utensils size={14} className="text-amber-400" /> Food & Shelter Goods
+            <div className="space-y-2.5">
+              <h4 className="font-bold text-white flex items-center gap-1.5 text-sm">
+                <Utensils size={16} className="text-amber-400" /> Food, Bedding & Hardware
               </h4>
-              <ul className="list-disc list-inside space-y-1 text-slate-400">
-                <li>Commercial dog/cat dry food & gravy pouches</li>
-                <li>Stainless steel feeding and water bowls</li>
-                <li>Clean blankets, towels, and fleece bedding</li>
-                <li>Leashes, slip leads, and transport crates</li>
+              <ul className="list-disc list-inside space-y-1.5 text-slate-400">
+                <li>Quality puppy/kitten and adult dog/cat commercial kibble</li>
+                <li>Stainless steel feeding and water bowls (hygienic & chew-proof)</li>
+                <li>Clean, washed blankets, towels, and fleece bedding</li>
+                <li>Adjustable nylon leashes, slip leads, and travel animal crates</li>
               </ul>
             </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+          <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 text-slate-400">
               <Mail size={14} className="text-emerald-400 shrink-0" />
-              <span>To schedule a drop-off or donate equipment, email <span className="text-white font-semibold">donations@aniresq.org</span></span>
+              <span>For supply delivery drop-off locations, contact <span className="text-white font-semibold">supplies@aniresq.org</span></span>
             </div>
             <a
-              href="mailto:donations@aniresq.org?subject=Supply Donation Drop-off Inquiry"
+              href="mailto:supplies@aniresq.org?subject=Supply Drop-off Inquiry"
               className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg font-bold border border-slate-700 transition-colors"
             >
-              Contact Shelter Logistics
+              Contact Shelter Team
             </a>
           </div>
         </CardContent>
       </Card>
+
+      {/* Trust Notice */}
+      <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 text-slate-400 text-xs flex items-start gap-3">
+        <Info size={16} className="text-blue-400 shrink-0 mt-0.5" />
+        <p>
+          AniResQ strictly operates with transparency. When online payment and donation infrastructure is officially 
+          launched with certified payment gateways and partner NGO compliance, official verified portals will be published here.
+        </p>
+      </div>
     </div>
   );
 

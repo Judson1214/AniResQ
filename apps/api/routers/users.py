@@ -369,3 +369,70 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
     except Exception as e:
         logger.error(f"Error updating role for user {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update user role")
+
+@router.post("/{uid}/role-request/decline")
+def decline_role_request(uid: str, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "ADMIN":
+        raise HTTPException(status_code=403, detail="Forbidden: Only administrators can decline role requests")
+        
+    try:
+        current_rec = supabase.table("users").select("role, display_name, requested_role").eq("id", uid).execute()
+        if not current_rec.data:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        user_row = current_rec.data[0]
+        current_role = user_row.get("role", "CITIZEN")
+        requested_role = user_row.get("requested_role")
+        
+        if not requested_role:
+            raise HTTPException(status_code=400, detail="User has no pending role request to decline")
+
+        # Clear requested_role only, leave existing role untouched
+        res = supabase.table("users").update({
+            "requested_role": None
+        }).eq("id", uid).execute()
+        
+        if not res.data:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Audit role request decline
+        audit_entry = {
+            "action": "ROLE_REQUEST_DECLINED",
+            "entity_type": "USER",
+            "entity_id": uid,
+            "performed_by": current_user["uid"],
+            "old_value": {"requested_role": requested_role, "role": current_role},
+            "new_value": {"requested_role": None, "role": current_role},
+        }
+        try:
+            supabase.table("audit_logs").insert(audit_entry).execute()
+        except Exception as audit_err:
+            logger.warning(f"Could not persist audit record to database: {audit_err}")
+
+        # Send notification to user that request was declined and current role is preserved
+        create_system_notification(
+            user_id=uid,
+            notif_type="ROLE_UPDATE",
+            title="Clearance Request Declined",
+            message=f"Your request for {requested_role} clearance was declined. Your current role ({current_role}) remains unchanged.",
+            related_entity_id=uid,
+            related_entity_type="USER",
+        )
+
+        logger.info(
+            f"AUDIT: Role request for {requested_role} by user {uid} declined by admin '{current_user['uid']}'. Role preserved as '{current_role}'."
+        )
+
+        return {
+            "id": uid,
+            "uid": uid,
+            "role": current_role,
+            "requestedRole": None,
+            "displayName": res.data[0].get("display_name", "")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error declining role request for user {uid}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to decline role request")
+

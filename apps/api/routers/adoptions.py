@@ -65,12 +65,32 @@ def get_adoptions(
     try:
         user_role = user.get("role", "CITIZEN")
         is_staff = user_role in STAFF_ROLES
+        is_admin = user_role == "ADMIN"
         
         query = supabase.table("adoption_applications").select("*")
         
         # Non-staff can ONLY query their own applications
         if not is_staff:
             query = query.eq("applicant_id", user["uid"])
+        elif not is_admin:
+            # Non-admin staff (SHELTER, NGO) can only see:
+            # 1. Their own personal applications if filtering by their own applicantId
+            # 2. Applications for animals managed by their shelter facility (shelter_id == user["uid"])
+            if applicantId and applicantId == user["uid"]:
+                query = query.eq("applicant_id", user["uid"])
+            else:
+                shelter_animals = (
+                    supabase.table("animals")
+                    .select("id")
+                    .eq("shelter_id", user["uid"])
+                    .execute()
+                )
+                animal_ids = [a["id"] for a in shelter_animals.data] if shelter_animals.data else []
+                if not animal_ids:
+                    return []
+                query = query.in_("animal_id", animal_ids)
+                if applicantId:
+                    query = query.eq("applicant_id", applicantId)
         elif applicantId:
             query = query.eq("applicant_id", applicantId)
             
@@ -95,12 +115,20 @@ def get_adoption(id: str, user: dict = Depends(get_current_user)):
         data = res.data[0]
         user_role = user.get("role", "CITIZEN")
         is_owner = data.get("applicant_id") == user["uid"]
-        is_staff = user_role in STAFF_ROLES
+        is_admin = user_role == "ADMIN"
         
-        if not (is_owner or is_staff):
-            raise HTTPException(status_code=403, detail="Forbidden: You cannot view this application")
+        if is_admin or is_owner:
+            return map_adoption(data)
             
-        return map_adoption(data)
+        if user_role in STAFF_ROLES:
+            # Check if this animal belongs to this shelter
+            animal_id = data.get("animal_id")
+            if animal_id:
+                anim_check = supabase.table("animals").select("id, shelter_id").eq("id", animal_id).execute()
+                if anim_check.data and anim_check.data[0].get("shelter_id") == user["uid"]:
+                    return map_adoption(data)
+                    
+        raise HTTPException(status_code=403, detail="Forbidden: You cannot view this application")
     except HTTPException:
         raise
     except Exception as e:
@@ -151,6 +179,20 @@ def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = 
             raise HTTPException(status_code=404, detail="Adoption application not found")
             
         app_record = existing.data[0]
+        user_role = user.get("role", "CITIZEN")
+
+        # Staff can only review applications for animals belonging to their own shelter facility (Admins can review any)
+        if user_role != "ADMIN":
+            animal_id = app_record.get("animal_id")
+            if not animal_id:
+                raise HTTPException(status_code=403, detail="Forbidden: You cannot review this application")
+            anim_check = supabase.table("animals").select("id, shelter_id").eq("id", animal_id).execute()
+            if not anim_check.data or anim_check.data[0].get("shelter_id") != user["uid"]:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Forbidden: You can only review applications for animals in your shelter facility"
+                )
+
         update_data = {
             "status": target_status,
             "reviewer_id": user["uid"],
@@ -170,15 +212,24 @@ def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = 
             except Exception as anim_err:
                 logger.warning(f"Failed to auto-update animal adoption status: {anim_err}")
 
-        # Send notification to applicant about application review decision
+        # Send notification to applicant with human-readable labels
         applicant_id = app_record.get("applicant_id")
         if applicant_id:
-            status_label = "approved" if target_status == "APPROVED" else "declined" if target_status == "REJECTED" else target_status.lower()
+            status_map = {
+                "SUBMITTED": ("Submitted", "has been received and submitted"),
+                "UNDER_REVIEW": ("Under Review", "is currently under review by our shelter team"),
+                "APPROVED": ("Approved", "has been approved! Our team will contact you for pickup coordination"),
+                "REJECTED": ("Declined", "was declined. Thank you for your interest in adopting"),
+            }
+            status_label, status_phrase = status_map.get(
+                target_status,
+                (target_status.replace("_", " ").title(), f"has been updated to {target_status.lower()}")
+            )
             create_system_notification(
                 user_id=applicant_id,
                 notif_type="ADOPTION_DECISION",
-                title=f"Adoption Application {target_status.capitalize()}",
-                message=f"Your adoption application has been {status_label}.",
+                title=f"Adoption Application {status_label}",
+                message=f"Your adoption application {status_phrase}.",
                 related_entity_id=id,
                 related_entity_type="ADOPTION",
             )

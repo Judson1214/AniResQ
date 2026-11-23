@@ -10,7 +10,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { useMemo } from "react";
 import { RescueMap } from "@/components/rescue/RescueMap";
-import { getUsers, updateUserRole } from "@/services/user.service";
+import { getUsers, updateUserRole, declineRoleRequest } from "@/services/user.service";
 import { useToast } from "@/components/ui/use-toast";
 
 const AdminDashboard = () => {
@@ -44,6 +44,24 @@ const AdminDashboard = () => {
       toast({
         title: "Update Failed",
         description: err.response?.data?.detail || err.message || "Failed to update role",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const declineMutation = useMutation({
+    mutationFn: (uid) => declineRoleRequest(uid),
+    onSuccess: () => {
+      queryClient.invalidateQueries(["admin-users"]);
+      toast({
+        title: "Request Declined",
+        description: "The clearance request was declined. The user's existing role remains unchanged."
+      });
+    },
+    onError: (err) => {
+      toast({
+        title: "Action Failed",
+        description: err.response?.data?.detail || err.message || "Failed to decline role request",
         variant: "destructive"
       });
     }
@@ -237,8 +255,8 @@ const AdminDashboard = () => {
                       <UserCheck size={14} /> Approve as {u.requestedRole}
                     </button>
                     <button
-                      onClick={() => roleMutation.mutate({ uid: u.id, role: "CITIZEN" })}
-                      disabled={roleMutation.isPending}
+                      onClick={() => declineMutation.mutate(u.id)}
+                      disabled={roleMutation.isPending || declineMutation.isPending}
                       className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium border border-slate-700 transition-colors flex items-center gap-1"
                     >
                       <X size={14} /> Decline

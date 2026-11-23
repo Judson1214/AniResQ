@@ -1074,6 +1074,7 @@ def test_notifications_sent_on_system_events(monkeypatch):
         mock_table.eq.return_value = mock_table
         mock_table.execute.side_effect = [
             MagicMock(data=[{"id": "app-10", "animal_id": "a-1", "applicant_id": "applicant-99"}]), # select app
+            MagicMock(data=[{"id": "a-1", "shelter_id": "shelter-admin"}]), # check animal belongs to shelter
             MagicMock(data=[{"id": "app-10", "status": "APPROVED", "animal_id": "a-1", "applicant_id": "applicant-99", "living_environment": "HOUSE", "prior_pet_experience": "Many years", "family_members": 2}]), # update app
             MagicMock(data=[{"id": "a-1"}]), # update animal status
         ]
@@ -1087,6 +1088,224 @@ def test_notifications_sent_on_system_events(monkeypatch):
         assert "approved" in app_notif["message"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_decline_role_request_preserves_existing_role(monkeypatch):
+    from routers import users as users_module
+    notifications_sent = []
+    audits_inserted = []
+
+    def mock_notif(user_id, notif_type, title, message, related_entity_id=None, related_entity_type=None):
+        notifications_sent.append({"user_id": user_id, "type": notif_type, "title": title, "message": message})
+
+    monkeypatch.setattr(users_module, "create_system_notification", mock_notif)
+
+    # 1. Non-admin cannot decline role requests (403)
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "citizen-1", "email": "cit@test.com", "name": "Citizen", "role": "CITIZEN"
+    }
+    try:
+        res = client.post("/api/users/vol-123/role-request/decline")
+        assert res.status_code == 403
+    finally:
+        app.dependency_overrides.clear()
+
+    # 2. Admin declines a VOLUNTEER who requested NGO -> role remains VOLUNTEER!
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "admin-1", "email": "admin@aniresq.org", "name": "Admin", "role": "ADMIN"
+    }
+    try:
+        updated_payload = {}
+        mock_table = MagicMock()
+        mock_table.select.return_value = mock_table
+        mock_table.update.side_effect = lambda data: updated_payload.update(data) or mock_table
+        mock_table.insert.side_effect = lambda data: audits_inserted.append(data) or mock_table
+        mock_table.eq.return_value = mock_table
+        mock_table.execute.side_effect = [
+            # 1. Fetch user (has role VOLUNTEER and requested_role NGO)
+            MagicMock(data=[{"id": "vol-123", "role": "VOLUNTEER", "requested_role": "NGO", "display_name": "Dave Volunteer"}]),
+            # 2. Update user
+            MagicMock(data=[{"id": "vol-123", "role": "VOLUNTEER", "requested_role": None, "display_name": "Dave Volunteer"}]),
+            # 3. Audit log insert
+            MagicMock(data=[]),
+        ]
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+        res = client.post("/api/users/vol-123/role-request/decline")
+        assert res.status_code == 200
+        data = res.json()
+        # Verify role was PRESERVED as VOLUNTEER, NOT demoted to CITIZEN!
+        assert data["role"] == "VOLUNTEER"
+        assert data["requestedRole"] is None
+        # Verify only requested_role was updated in DB
+        assert updated_payload == {"requested_role": None}
+
+        # Verify audit record
+        assert len(audits_inserted) == 1
+        assert audits_inserted[0]["action"] == "ROLE_REQUEST_DECLINED"
+        assert audits_inserted[0]["entity_id"] == "vol-123"
+
+        # Verify user received notification that role is unchanged
+        assert len(notifications_sent) == 1
+        assert notifications_sent[0]["user_id"] == "vol-123"
+        assert "Clearance Request Declined" in notifications_sent[0]["title"]
+        assert "remains unchanged" in notifications_sent[0]["message"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_shelter_cannot_edit_or_delete_other_shelter_animal(monkeypatch):
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    # Animal belongs to shelter-B
+    mock_table.execute.return_value = MagicMock(data=[{"id": "animal-1", "shelter_id": "shelter-B"}])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+    # Shelter A attempts to edit Shelter B's animal -> 403 Forbidden
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "shelter-A", "email": "sheltera@test.com", "name": "Shelter A", "role": "SHELTER"
+    }
+    try:
+        res = client.patch("/api/animals/animal-1", json={"name": "Renamed By Unauthorized Shelter"})
+        assert res.status_code == 403
+        assert "Forbidden" in res.json()["detail"]
+
+        del_res = client.delete("/api/animals/animal-1")
+        assert del_res.status_code == 403
+        assert "Forbidden" in del_res.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_shelter_cannot_review_other_shelter_adoption_application(monkeypatch):
+    # Application for animal-99 which belongs to shelter-B
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    # 1. Fetch application -> animal_id: animal-99
+    # 2. Fetch animal-99 -> shelter_id: shelter-B
+    mock_table.execute.side_effect = [
+        MagicMock(data=[{"id": "app-1", "animal_id": "animal-99", "applicant_id": "citizen-1"}]),
+        MagicMock(data=[{"id": "animal-99", "shelter_id": "shelter-B"}]),
+    ]
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+    # Shelter A attempts to review Shelter B's animal application -> 403 Forbidden
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "shelter-A", "email": "sheltera@test.com", "name": "Shelter A", "role": "SHELTER"
+    }
+    try:
+        res = client.patch("/api/adoptions/app-1/status", json={"status": "APPROVED"})
+        assert res.status_code == 403
+        assert "Forbidden: You can only review applications for animals in your shelter facility" in res.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_adoption_status_notification_readable_labels(monkeypatch):
+    from routers import adoptions as adoptions_module
+    notifications_sent = []
+
+    def mock_notif(user_id, notif_type, title, message, related_entity_id=None, related_entity_type=None):
+        notifications_sent.append({"user_id": user_id, "title": title, "message": message})
+
+    monkeypatch.setattr(adoptions_module, "create_system_notification", mock_notif)
+
+    # Shelter reviews application to UNDER_REVIEW
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "shelter-A", "email": "sheltera@test.com", "name": "Shelter A", "role": "SHELTER"
+    }
+    try:
+        mock_table = MagicMock()
+        mock_table.select.return_value = mock_table
+        mock_table.update.return_value = mock_table
+        mock_table.eq.return_value = mock_table
+        mock_table.execute.side_effect = [
+            MagicMock(data=[{"id": "app-under-review", "animal_id": "animal-A", "applicant_id": "citizen-user"}]),
+            MagicMock(data=[{"id": "animal-A", "shelter_id": "shelter-A"}]), # check animal belongs to shelter-A
+            MagicMock(data=[{"id": "app-under-review", "animal_id": "animal-A", "status": "UNDER_REVIEW", "applicant_id": "citizen-user"}]),
+        ]
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+        res = client.patch("/api/adoptions/app-under-review/status", json={"status": "UNDER_REVIEW"})
+        assert res.status_code == 200
+        assert len(notifications_sent) == 1
+        # Title must be "Adoption Application Under Review" (NOT Under_review)
+        assert notifications_sent[0]["title"] == "Adoption Application Under Review"
+        assert "is currently under review by our shelter team" in notifications_sent[0]["message"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_high_severity_rescue_broadcasts_alert_to_volunteers(monkeypatch):
+    from routers import rescues as rescues_module
+    notifications_sent = []
+
+    def mock_notif(user_id, notif_type, title, message, related_entity_id=None, related_entity_type=None):
+        notifications_sent.append({
+            "user_id": user_id,
+            "type": notif_type,
+            "title": title,
+            "message": message,
+            "related_id": related_entity_id
+        })
+
+    monkeypatch.setattr(rescues_module, "create_system_notification", mock_notif)
+
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "citizen-reporter", "email": "cit@test.com", "name": "Citizen", "role": "CITIZEN"
+    }
+    try:
+        mock_table = MagicMock()
+        mock_table.select.return_value = mock_table
+        mock_table.insert.return_value = mock_table
+        mock_table.in_.return_value = mock_table
+        mock_table.limit.return_value = mock_table
+        mock_table.execute.side_effect = [
+            # 1. Insert rescue
+            MagicMock(data=[{
+                "id": "rescue-critical-1",
+                "title": "Dog hit by car",
+                "species": "DOG",
+                "severity": "CRITICAL",
+                "status": "PENDING",
+                "reporter_id": "citizen-reporter",
+                "latitude": 12.97,
+                "longitude": 77.59,
+                "address": "MG Road",
+                "images": [],
+                "created_at": "2026-11-23T00:00:00Z",
+                "updated_at": "2026-11-23T00:00:00Z",
+            }]),
+            # 2. Timeline insert
+            MagicMock(data=[]),
+            # 3. Fetch active volunteers/NGOs
+            MagicMock(data=[{"id": "vol-1"}, {"id": "vol-2"}]),
+        ]
+        monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+        res = client.post("/api/rescues/", json={
+            "title": "Dog hit by car",
+            "description": "Urgent assistance needed",
+            "species": "DOG",
+            "severity": "CRITICAL",
+            "address": "MG Road",
+            "location": {"latitude": 12.97, "longitude": 77.59},
+            "photoUrls": []
+        })
+        assert res.status_code == 201
+        # Volunteer responders vol-1 and vol-2 should have received RESCUE_ALERT notifications
+        alerts = [n for n in notifications_sent if n["type"] == "RESCUE_ALERT"]
+        assert len(alerts) == 2
+        alert_uids = {a["user_id"] for a in alerts}
+        assert alert_uids == {"vol-1", "vol-2"}
+        assert "CRITICAL" in alerts[0]["title"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+
 
 
 

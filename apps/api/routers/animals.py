@@ -243,6 +243,14 @@ def update_animal(id: str, payload: AnimalUpdate, user: dict = Depends(require_r
         if not existing.data:
             raise HTTPException(status_code=404, detail="Animal not found")
             
+        existing_animal = existing.data[0]
+        user_role = user.get("role", "CITIZEN")
+        if user_role != "ADMIN" and existing_animal.get("shelter_id") != user["uid"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: You can only edit animals assigned to your shelter facility",
+            )
+            
         update_data = {}
         if payload.name is not None: update_data["name"] = payload.name
         if payload.species is not None: 
@@ -343,9 +351,17 @@ def claim_animal(id: str, user: dict = Depends(require_roles(["ADMIN", "SHELTER"
 @router.delete("/{id}")
 def delete_animal(id: str, user: dict = Depends(require_roles(STAFF_ROLES))):
     try:
-        existing = supabase.table("animals").select("id").eq("id", id).execute()
+        existing = supabase.table("animals").select("id, shelter_id").eq("id", id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Animal not found")
+            
+        existing_animal = existing.data[0]
+        user_role = user.get("role", "CITIZEN")
+        if user_role != "ADMIN" and existing_animal.get("shelter_id") != user["uid"]:
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: You can only delete animals assigned to your shelter facility",
+            )
             
         supabase.table("animals").delete().eq("id", id).execute()
         return {"id": id, "deleted": True}

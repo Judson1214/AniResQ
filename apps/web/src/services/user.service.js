@@ -62,7 +62,13 @@ const updateUserRole = async (uid, role) => {
   return response.data;
 };
 
+const declineRoleRequest = async (uid) => {
+  const response = await api.post(`/users/${uid}/role-request/decline`);
+  return response.data;
+};
+
 export {
+  declineRoleRequest,
   getUserById,
   getUsers,
   getUsersByRole,
