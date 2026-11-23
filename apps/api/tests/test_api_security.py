@@ -1389,6 +1389,98 @@ def test_shelter_adoptions_uses_database_join(monkeypatch):
         app.dependency_overrides.clear()
 
 
+def test_user_coordinates_redacted_for_third_parties(monkeypatch):
+    mock_user_db = {
+        "id": "vol-private",
+        "display_name": "Private Volunteer",
+        "email": "vol@example.com",
+        "phone": "555-9876",
+        "role": "VOLUNTEER",
+        "latitude": 12.9716,
+        "longitude": 77.5946,
+        "service_radius_km": 20,
+        "alerts_enabled": True,
+        "created_at": "2026-11-01T00:00:00Z"
+    }
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    mock_table.execute.return_value = MagicMock(data=[mock_user_db])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+    # 1. Citizen viewing volunteer's profile: coordinates and alert settings must be redacted
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "other-citizen", "email": "citizen@test.com", "name": "Citizen", "role": "CITIZEN"
+    }
+    try:
+        res = client.get("/api/users/vol-private")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["latitude"] is None
+        assert data["longitude"] is None
+        assert data["serviceRadiusKm"] is None
+        assert data["alertsEnabled"] is None
+    finally:
+        app.dependency_overrides.clear()
+
+    # 2. Volunteer viewing their own profile: coordinates and radius are available
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "vol-private", "email": "vol@example.com", "name": "Private Volunteer", "role": "VOLUNTEER"
+    }
+    try:
+        res_self = client.get("/api/users/vol-private")
+        assert res_self.status_code == 200
+        self_data = res_self.json()
+        assert self_data["latitude"] == 12.9716
+        assert self_data["longitude"] == 77.5946
+        assert self_data["serviceRadiusKm"] == 20
+        assert self_data["alertsEnabled"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_nearby_responder_alert_haversine_dispatch(monkeypatch):
+    from routers import rescues as rescues_module
+    dispatched_notifications = []
+
+    def mock_bulk(notifs):
+        dispatched_notifications.extend(notifs)
+
+    monkeypatch.setattr(rescues_module, "create_bulk_system_notifications", mock_bulk)
+
+    # Mock Haversine RPC returning nearby responder within 15km
+    mock_rpc = MagicMock()
+    mock_rpc.execute.return_value = MagicMock(data=[
+        {"id": "vol-nearby-1", "distance_km": 4.2},
+        {"id": "vol-nearby-2", "distance_km": 11.5},
+    ])
+    monkeypatch.setattr(supabase_config.supabase, "rpc", MagicMock(return_value=mock_rpc))
+
+    rescues_module.dispatch_nearby_responder_alerts(
+        rescue_id="rescue-loc-1",
+        species="DOG",
+        severity="HIGH",
+        latitude=12.97,
+        longitude=77.59,
+        address="Koramangala 4th Block",
+        reporter_id="citizen-reporter",
+    )
+
+    # Verify RPC called with correct coordinates
+    supabase_config.supabase.rpc.assert_called_with("get_nearby_responders", {
+        "p_lat": 12.97,
+        "p_lon": 77.59,
+        "p_max_radius_km": 50,
+    })
+
+    # Verify notifications dispatched
+    assert len(dispatched_notifications) == 2
+    uids = {n["user_id"] for n in dispatched_notifications}
+    assert uids == {"vol-nearby-1", "vol-nearby-2"}
+    assert "HIGH" in dispatched_notifications[0]["title"]
+
+
+
 
 
 

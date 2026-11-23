@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status, BackgroundTasks
 from pydantic import BaseModel, Field
 
 from supabase_config import supabase
@@ -177,8 +177,80 @@ def get_rescue_by_id(rescue_id: str, user: dict = Depends(get_current_user)):
         logger.error(f"Error fetching rescue {rescue_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve rescue request")
 
+def dispatch_nearby_responder_alerts(
+    rescue_id: str,
+    species: str,
+    severity: str,
+    latitude: float,
+    longitude: float,
+    address: str,
+    reporter_id: str,
+):
+    """
+    Background worker: locates active volunteer and NGO responders within geographic range
+    using the Haversine RPC, falling back to all active responders if coordinates are not set.
+    """
+    try:
+        nearby_responders = []
+        try:
+            # 1. Spatial Haversine lookup via Supabase RPC
+            rpc_res = supabase.rpc("get_nearby_responders", {
+                "p_lat": latitude,
+                "p_lon": longitude,
+                "p_max_radius_km": 50,
+            }).execute()
+            if rpc_res.data:
+                nearby_responders = rpc_res.data
+        except Exception as rpc_err:
+            logger.warning(f"Haversine RPC get_nearby_responders unavailable or failed: {rpc_err}")
+
+        target_responder_ids = []
+        if nearby_responders:
+            for r in nearby_responders:
+                rid = r.get("id")
+                if rid and rid != reporter_id:
+                    target_responder_ids.append(rid)
+        else:
+            # Fallback to active responders if no volunteers have saved coordinates yet
+            all_resp = (
+                supabase.table("users")
+                .select("id")
+                .in_("role", ["VOLUNTEER", "NGO"])
+                .execute()
+            )
+            if all_resp.data:
+                for r in all_resp.data:
+                    rid = r.get("id")
+                    if rid and rid != reporter_id:
+                        target_responder_ids.append(rid)
+
+        # Batch insert rescue alert notifications
+        if target_responder_ids:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            notifications = [
+                {
+                    "user_id": uid,
+                    "type": "RESCUE_ALERT",
+                    "title": f"Emergency SOS Alert: {severity} Priority",
+                    "message": f"New {severity.lower()} emergency rescue ({species}) reported near {address[:40]}.",
+                    "related_entity_id": rescue_id,
+                    "related_entity_type": "RESCUE",
+                    "is_read": False,
+                    "created_at": now_iso,
+                }
+                for uid in target_responder_ids
+            ]
+            create_bulk_system_notifications(notifications)
+            logger.info(f"Dispatched {len(notifications)} nearby rescue alerts for case {rescue_id}")
+    except Exception as e:
+        logger.warning(f"Failed to execute background nearby responder alert dispatch: {e}")
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
-def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get_current_user)):
+def create_rescue_request(
+    request: RescueRequestCreate,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(get_current_user),
+):
     target_sev = request.severity.upper()
     if target_sev not in VALID_SEVERITIES:
         raise HTTPException(status_code=422, detail=f"Invalid severity '{request.severity}'. Must be one of {sorted(VALID_SEVERITIES)}")
@@ -219,31 +291,18 @@ def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get
         except Exception as te_err:
             logger.warning(f"Failed to record initial timeline: {te_err}")
 
-        # Broadcast volunteer emergency alert for CRITICAL or HIGH severity incidents
+        # Offload spatial responder alert broadcast to background task so the API responds instantly
         if target_sev in ["CRITICAL", "HIGH"]:
-            try:
-                # Notify all registered responders without arbitrary 20-person caps, in a single batch insert
-                responders = supabase.table("users").select("id").in_("role", ["VOLUNTEER", "NGO"]).execute()
-                if responders.data:
-                    now_iso = datetime.now(timezone.utc).isoformat()
-                    notifications_to_insert = [
-                        {
-                            "user_id": resp["id"],
-                            "type": "RESCUE_ALERT",
-                            "title": f"Emergency SOS Alert: {target_sev} Priority",
-                            "message": f"New {target_sev.lower()} emergency rescue ({request.species}) reported at {request.address[:40]}.",
-                            "related_entity_id": doc_id,
-                            "related_entity_type": "RESCUE",
-                            "is_read": False,
-                            "created_at": now_iso,
-                        }
-                        for resp in responders.data
-                        if resp.get("id") and resp["id"] != user["uid"]
-                    ]
-                    if notifications_to_insert:
-                        create_bulk_system_notifications(notifications_to_insert)
-            except Exception as alert_err:
-                logger.warning(f"Failed to broadcast volunteer emergency alerts: {alert_err}")
+            background_tasks.add_task(
+                dispatch_nearby_responder_alerts,
+                rescue_id=doc_id,
+                species=request.species,
+                severity=target_sev,
+                latitude=request.location.latitude,
+                longitude=request.location.longitude,
+                address=request.address,
+                reporter_id=user["uid"],
+            )
         
         return {"id": doc_id, **res.data[0]}
     except HTTPException:

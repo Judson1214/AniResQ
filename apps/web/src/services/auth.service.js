@@ -69,6 +69,10 @@ const getUserProfile = async (uid) => {
     avatarUrl: data.avatar_url || "",
     isVerified: data.is_verified || false,
     requestedRole: data.requested_role || null,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
+    serviceRadiusKm: data.service_radius_km ?? 15,
+    alertsEnabled: data.alerts_enabled ?? true,
     createdAt: data.created_at
   };
 };
@@ -88,6 +92,10 @@ const updateUserProfile = async (uid, updateData) => {
   if (updateData.address !== undefined) payload.address = updateData.address;
   if (updateData.bio !== undefined) payload.bio = updateData.bio;
   if (updateData.requestedRole !== undefined) payload.requestedRole = updateData.requestedRole;
+  if (updateData.latitude !== undefined) payload.latitude = updateData.latitude;
+  if (updateData.longitude !== undefined) payload.longitude = updateData.longitude;
+  if (updateData.serviceRadiusKm !== undefined) payload.serviceRadiusKm = updateData.serviceRadiusKm;
+  if (updateData.alertsEnabled !== undefined) payload.alertsEnabled = updateData.alertsEnabled;
   // NOTE: role is strictly excluded to prevent privilege escalation from the browser
 
   const response = await api.patch(`/users/${uid}`, payload);

@@ -57,6 +57,10 @@ describe('Auth Service', () => {
       avatarUrl: 'https://example.com/avatar.jpg',
       isVerified: false,
       requestedRole: null,
+      latitude: null,
+      longitude: null,
+      serviceRadiusKm: 15,
+      alertsEnabled: true,
       createdAt: '2026-10-31T00:00:00Z',
     });
   });

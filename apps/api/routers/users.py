@@ -29,6 +29,10 @@ class UserProfileUpdate(BaseModel):
     bio: Optional[str] = None
     avatarUrl: Optional[str] = None
     requestedRole: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    serviceRadiusKm: Optional[int] = None
+    alertsEnabled: Optional[bool] = None
 
 class UserRoleUpdate(BaseModel):
     role: str
@@ -176,6 +180,10 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
             "phoneNumber": data.get("phone", "") if can_view_contact else "",
             "address": data.get("address", "") if can_view_contact else "",
             "bio": data.get("bio", ""),
+            "latitude": data.get("latitude") if (is_self or is_admin) else None,
+            "longitude": data.get("longitude") if (is_self or is_admin) else None,
+            "serviceRadiusKm": data.get("service_radius_km", 15) if (is_self or is_admin) else None,
+            "alertsEnabled": data.get("alerts_enabled", True) if (is_self or is_admin) else None,
         }
     except HTTPException:
         raise
@@ -260,6 +268,20 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
         if raw_req == "ADMIN" or (raw_req and raw_req not in ALLOWED_REQUESTED_ROLES):
             raise HTTPException(status_code=400, detail="Cannot request ADMIN or invalid role")
         update_data["requested_role"] = raw_req
+    if profile.latitude is not None:
+        if not (-90.0 <= profile.latitude <= 90.0):
+            raise HTTPException(status_code=422, detail="Latitude must be between -90 and 90")
+        update_data["latitude"] = profile.latitude
+    if profile.longitude is not None:
+        if not (-180.0 <= profile.longitude <= 180.0):
+            raise HTTPException(status_code=422, detail="Longitude must be between -180 and 180")
+        update_data["longitude"] = profile.longitude
+    if profile.serviceRadiusKm is not None:
+        if not (1 <= profile.serviceRadiusKm <= 200):
+            raise HTTPException(status_code=422, detail="Service radius must be between 1 and 200 km")
+        update_data["service_radius_km"] = profile.serviceRadiusKm
+    if profile.alertsEnabled is not None:
+        update_data["alerts_enabled"] = profile.alertsEnabled
     
     try:
         if not update_data:

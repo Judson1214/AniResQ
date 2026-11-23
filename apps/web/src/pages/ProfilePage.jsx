@@ -16,7 +16,11 @@ import {
   Clock, 
   ShieldCheck, 
   CheckCircle2, 
-  Loader2
+  Loader2,
+  MapPin,
+  BellRing,
+  Navigation,
+  Info
 } from "lucide-react";
 import { updateUserProfile } from "@/services/auth.service";
 import { useToast } from "@/components/ui/use-toast";
@@ -28,6 +32,8 @@ const ALLOWED_REQUESTED_ROLES = [
   { value: "NGO", label: "Welfare Organization (NGO)", description: "Coordinate rescue dispatches and organize community operations." },
   { value: "VET", label: "Licensed Veterinary Clinic", description: "Provide medical care, health status updates, and emergency triage." },
 ];
+
+const RADIUS_OPTIONS = [5, 10, 15, 25, 50];
 
 const ProfilePage = () => {
   const { user } = useAuth();
@@ -44,9 +50,20 @@ const ProfilePage = () => {
     phone: user?.phone || "",
   });
 
+  // Responder alerts & spatial radius state
+  const [alertsEnabled, setAlertsEnabled] = useState(user?.alertsEnabled ?? true);
+  const [serviceRadiusKm, setServiceRadiusKm] = useState(user?.serviceRadiusKm || 15);
+  const [location, setLocation] = useState({
+    lat: user?.latitude ?? null,
+    lon: user?.longitude ?? null,
+  });
+  const [isSavingAlerts, setIsSavingAlerts] = useState(false);
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
+
   if (!user) return null;
 
   const hasPendingRoleRequest = user.requestedRole && user.requestedRole !== user.role;
+  const isResponder = ["VOLUNTEER", "NGO", "STAFF", "ADMIN"].includes(user.role);
 
   const getInitials = (name) => {
     if (!name) return "";
@@ -96,6 +113,59 @@ const ProfilePage = () => {
       });
     } finally {
       setIsSubmittingRole(false);
+    }
+  };
+
+  const handleDetectLocation = () => {
+    if (!navigator.geolocation) {
+      toast({ title: "Geolocation Unavailable", description: "Browser does not support GPS geolocation", variant: "destructive" });
+      return;
+    }
+    setIsDetectingGps(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = Number(pos.coords.latitude.toFixed(4));
+        const lon = Number(pos.coords.longitude.toFixed(4));
+        setLocation({ lat, lon });
+        setIsDetectingGps(false);
+        toast({ title: "Base Location Detected", description: `Coordinates set to ${lat}, ${lon}` });
+      },
+      (err) => {
+        setIsDetectingGps(false);
+        toast({ title: "GPS Error", description: err.message || "Failed to detect coordinates", variant: "destructive" });
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
+
+  const handleSaveAlerts = async () => {
+    setIsSavingAlerts(true);
+    try {
+      await updateUserProfile(user.uid, {
+        latitude: location.lat,
+        longitude: location.lon,
+        serviceRadiusKm: Number(serviceRadiusKm),
+        alertsEnabled: Boolean(alertsEnabled),
+      });
+      setUser({
+        ...user,
+        latitude: location.lat,
+        longitude: location.lon,
+        serviceRadiusKm: Number(serviceRadiusKm),
+        alertsEnabled: Boolean(alertsEnabled),
+      });
+      toast({
+        title: "Alert Settings Saved",
+        description: "Your responder dispatch radius and base coordinates have been updated.",
+      });
+    } catch (err) {
+      toast({
+        title: "Save Failed",
+        description: err.response?.data?.detail || err.message || "Failed to update alert preferences.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSavingAlerts(false);
     }
   };
 
@@ -222,6 +292,129 @@ const ProfilePage = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* RESPONDER LOCATION & ALERT PREFERENCES (Only for VOLUNTEER, NGO, STAFF, ADMIN) */}
+        {isResponder && (
+          <Card className="border-slate-800 bg-[#0A0F1C] shadow-xl rounded-2xl overflow-hidden">
+            <CardHeader className="border-b border-slate-800 bg-slate-900/40 py-4 px-6 flex flex-row items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                  <BellRing size={18} />
+                </div>
+                <div>
+                  <CardTitle className="text-base font-bold text-white">Emergency Dispatch Alerts & Location Range</CardTitle>
+                  <CardDescription className="text-xs text-slate-400">
+                    Set your base deployment coordinates and radius to receive alerts for nearby critical rescues.
+                  </CardDescription>
+                </div>
+              </div>
+              <Badge className={alertsEnabled ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs" : "bg-slate-800 text-slate-400 text-xs"}>
+                {alertsEnabled ? "Alerts Active" : "Alerts Paused"}
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-6 space-y-5">
+              {/* Alert Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                <div className="space-y-0.5">
+                  <span className="text-sm font-bold text-white">Receive Emergency SOS Notifications</span>
+                  <p className="text-xs text-slate-400">
+                    Get real-time notification alerts when critical or high severity rescues are reported in your area.
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={alertsEnabled}
+                    onChange={(e) => setAlertsEnabled(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+
+              {/* GPS Base Coordinates */}
+              <div className="grid gap-4 sm:grid-cols-2 items-center">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-slate-300 flex items-center gap-1.5">
+                    <MapPin size={14} className="text-emerald-400" /> Dispatch Base Coordinates
+                  </Label>
+                  <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs font-mono text-slate-300 flex items-center justify-between">
+                    <span>
+                      {location.lat && location.lon ? `${location.lat}, ${location.lon}` : "Not set (fallback to city broadcast)"}
+                    </span>
+                    {location.lat && (
+                      <button
+                        onClick={() => setLocation({ lat: null, lon: null })}
+                        className="text-[11px] text-slate-500 hover:text-slate-300 underline"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-5 flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDetectLocation}
+                    disabled={isDetectingGps}
+                    className="border-slate-700 text-slate-300 hover:bg-slate-800 text-xs h-9 flex items-center gap-1.5"
+                  >
+                    {isDetectingGps ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Navigation className="w-3.5 h-3.5 text-blue-400" />}
+                    Detect GPS Location
+                  </Button>
+                </div>
+              </div>
+
+              {/* Service Radius Selector */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <Label className="text-slate-300 font-semibold">Service Coverage Radius</Label>
+                  <span className="font-bold text-emerald-400">{serviceRadiusKm} km</span>
+                </div>
+                <div className="flex gap-2">
+                  {RADIUS_OPTIONS.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setServiceRadiusKm(r)}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold border transition-colors ${
+                        serviceRadiusKm === r
+                          ? "bg-emerald-500 text-emerald-950 border-emerald-400 font-black"
+                          : "bg-slate-900/60 border-slate-800 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {r} km
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Privacy Notice */}
+              <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800/80 flex items-start gap-2.5 text-[11px] text-slate-400">
+                <Info size={14} className="text-blue-400 shrink-0 mt-0.5" />
+                <span>
+                  Your dispatch coordinates are confidential and never shared with citizens. The system uses a secure 
+                  Haversine database lookup to notify you only when an animal requires rescue within your specified radius.
+                </span>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <Button
+                  size="sm"
+                  onClick={handleSaveAlerts}
+                  disabled={isSavingAlerts}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4"
+                >
+                  {isSavingAlerts ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+                  Save Alert Settings
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ROLE CLEARANCE REQUEST CARD */}
         <Card className="border-slate-800 bg-[#0A0F1C] shadow-xl rounded-2xl overflow-hidden">
