@@ -1240,18 +1240,12 @@ def test_adoption_status_notification_readable_labels(monkeypatch):
 
 def test_high_severity_rescue_broadcasts_alert_to_volunteers(monkeypatch):
     from routers import rescues as rescues_module
-    notifications_sent = []
+    bulk_alerts_sent = []
 
-    def mock_notif(user_id, notif_type, title, message, related_entity_id=None, related_entity_type=None):
-        notifications_sent.append({
-            "user_id": user_id,
-            "type": notif_type,
-            "title": title,
-            "message": message,
-            "related_id": related_entity_id
-        })
+    def mock_bulk_notif(notifications_list):
+        bulk_alerts_sent.extend(notifications_list)
 
-    monkeypatch.setattr(rescues_module, "create_system_notification", mock_notif)
+    monkeypatch.setattr(rescues_module, "create_bulk_system_notifications", mock_bulk_notif)
 
     app.dependency_overrides[get_current_user] = lambda: {
         "uid": "citizen-reporter", "email": "cit@test.com", "name": "Citizen", "role": "CITIZEN"
@@ -1261,7 +1255,6 @@ def test_high_severity_rescue_broadcasts_alert_to_volunteers(monkeypatch):
         mock_table.select.return_value = mock_table
         mock_table.insert.return_value = mock_table
         mock_table.in_.return_value = mock_table
-        mock_table.limit.return_value = mock_table
         mock_table.execute.side_effect = [
             # 1. Insert rescue
             MagicMock(data=[{
@@ -1280,7 +1273,7 @@ def test_high_severity_rescue_broadcasts_alert_to_volunteers(monkeypatch):
             }]),
             # 2. Timeline insert
             MagicMock(data=[]),
-            # 3. Fetch active volunteers/NGOs
+            # 3. Fetch active volunteers/NGOs without limit cap
             MagicMock(data=[{"id": "vol-1"}, {"id": "vol-2"}]),
         ]
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
@@ -1295,14 +1288,106 @@ def test_high_severity_rescue_broadcasts_alert_to_volunteers(monkeypatch):
             "photoUrls": []
         })
         assert res.status_code == 201
-        # Volunteer responders vol-1 and vol-2 should have received RESCUE_ALERT notifications
-        alerts = [n for n in notifications_sent if n["type"] == "RESCUE_ALERT"]
-        assert len(alerts) == 2
-        alert_uids = {a["user_id"] for a in alerts}
+        # Volunteer responders vol-1 and vol-2 should have received RESCUE_ALERT notifications via single batch call
+        assert len(bulk_alerts_sent) == 2
+        alert_uids = {a["user_id"] for a in bulk_alerts_sent}
         assert alert_uids == {"vol-1", "vol-2"}
-        assert "CRITICAL" in alerts[0]["title"]
+        assert "CRITICAL" in bulk_alerts_sent[0]["title"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_vet_can_update_animal_health_records_on_any_animal(monkeypatch):
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.update.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    # Animal belongs to shelter-B
+    mock_table.execute.side_effect = [
+        MagicMock(data=[{"id": "animal-1", "shelter_id": "shelter-B"}]), # select animal
+        MagicMock(data=[{
+            "id": "animal-1",
+            "name": "Buddy",
+            "species": "DOG",
+            "health_status": "RECOVERING",
+            "vaccinations": ["Rabies", "DHPP"],
+            "is_neutered": True,
+            "special_needs": "Requires daily wound dressing",
+            "shelter_id": "shelter-B",
+            "created_at": "2026-11-01T00:00:00Z",
+            "updated_at": "2026-11-23T00:00:00Z"
+        }])
+    ]
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+    # Vet updating medical/health fields on shelter B's animal succeeds
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "vet-dr-smith", "email": "vet@clinic.com", "name": "Dr. Smith", "role": "VET"
+    }
+    try:
+        res = client.patch("/api/animals/animal-1", json={
+            "healthStatus": "RECOVERING",
+            "vaccinations": ["Rabies", "DHPP"],
+            "isNeutered": True,
+            "specialNeeds": "Requires daily wound dressing"
+        })
+        assert res.status_code == 200
+        data = res.json()
+        assert data["healthStatus"] == "RECOVERING"
+        assert data["isNeutered"] is True
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_vet_cannot_update_administrative_fields_or_delete_animal(monkeypatch):
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    mock_table.execute.return_value = MagicMock(data=[{"id": "animal-1", "shelter_id": "shelter-B"}])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "vet-dr-smith", "email": "vet@clinic.com", "name": "Dr. Smith", "role": "VET"
+    }
+    try:
+        # VET attempting to change animal name or adoption status -> 403 Forbidden
+        res = client.patch("/api/animals/animal-1", json={"name": "New Name"})
+        assert res.status_code == 403
+        assert "Veterinary providers can only update clinical health fields" in res.json()["detail"]
+
+        res_adopt = client.patch("/api/animals/animal-1", json={"adoptionStatus": "ADOPTED"})
+        assert res_adopt.status_code == 403
+        assert "Veterinary providers can only update clinical health fields" in res_adopt.json()["detail"]
+
+        # VET attempting to delete an animal -> 403 Forbidden
+        del_res = client.delete("/api/animals/animal-1")
+        assert del_res.status_code == 403
+        assert "Forbidden" in del_res.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_shelter_adoptions_uses_database_join(monkeypatch):
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    mock_table.order.return_value = mock_table
+    mock_table.range.return_value = mock_table
+    mock_table.execute.return_value = MagicMock(data=[])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "shelter-X", "email": "shelterx@test.com", "name": "Shelter X", "role": "SHELTER"
+    }
+    try:
+        res = client.get("/api/adoptions/")
+        assert res.status_code == 200
+        # Verify select used the PostgREST inner join on animals!inner(shelter_id)
+        mock_table.select.assert_called_with("*, animals!inner(shelter_id)")
+        mock_table.eq.assert_called_with("animals.shelter_id", "shelter-X")
+    finally:
+        app.dependency_overrides.clear()
+
 
 
 

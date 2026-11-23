@@ -79,16 +79,12 @@ def get_adoptions(
             if applicantId and applicantId == user["uid"]:
                 query = query.eq("applicant_id", user["uid"])
             else:
-                shelter_animals = (
-                    supabase.table("animals")
-                    .select("id")
-                    .eq("shelter_id", user["uid"])
-                    .execute()
+                # Use database-level inner join to avoid URL query string length limits on large shelter rosters
+                query = (
+                    supabase.table("adoption_applications")
+                    .select("*, animals!inner(shelter_id)")
+                    .eq("animals.shelter_id", user["uid"])
                 )
-                animal_ids = [a["id"] for a in shelter_animals.data] if shelter_animals.data else []
-                if not animal_ids:
-                    return []
-                query = query.in_("animal_id", animal_ids)
                 if applicantId:
                     query = query.eq("applicant_id", applicantId)
         elif applicantId:

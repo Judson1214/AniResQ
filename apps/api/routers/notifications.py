@@ -45,6 +45,14 @@ def create_system_notification(
     except Exception as e:
         logger.warning(f"Failed to create system notification for user {user_id}: {e}")
 
+def create_bulk_system_notifications(notifications_list: List[dict]):
+    if not notifications_list:
+        return
+    try:
+        supabase.table("notifications").insert(notifications_list).execute()
+    except Exception as e:
+        logger.warning(f"Failed to bulk insert system notifications ({len(notifications_list)} items): {e}")
+
 @router.get("/")
 def get_notifications(
     limit: int = Query(default=50, ge=1, le=100),

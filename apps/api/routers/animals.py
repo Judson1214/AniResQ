@@ -245,7 +245,23 @@ def update_animal(id: str, payload: AnimalUpdate, user: dict = Depends(require_r
             
         existing_animal = existing.data[0]
         user_role = user.get("role", "CITIZEN")
-        if user_role != "ADMIN" and existing_animal.get("shelter_id") != user["uid"]:
+        is_admin = user_role == "ADMIN"
+        is_vet = user_role == "VET"
+        is_shelter_owner = existing_animal.get("shelter_id") == user["uid"]
+
+        if is_vet:
+            # Vets can update clinical health records on any animal, but cannot modify shelter/administrative fields
+            non_health_fields = [
+                payload.name, payload.species, payload.breed, payload.ageEstimate,
+                payload.gender, payload.weight, payload.adoptionStatus,
+                payload.description, payload.photos
+            ]
+            if any(f is not None for f in non_health_fields):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Forbidden: Veterinary providers can only update clinical health fields (healthStatus, vaccinations, isNeutered, specialNeeds)"
+                )
+        elif not is_admin and not is_shelter_owner:
             raise HTTPException(
                 status_code=403,
                 detail="Forbidden: You can only edit animals assigned to your shelter facility",

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 from supabase_config import supabase
 from auth import get_current_user
 from validators import validate_photo_urls
-from .notifications import create_system_notification
+from .notifications import create_system_notification, create_bulk_system_notifications
 
 router = APIRouter(prefix="/api/rescues", tags=["rescues"])
 logger = logging.getLogger("rescues")
@@ -222,18 +222,26 @@ def create_rescue_request(request: RescueRequestCreate, user: dict = Depends(get
         # Broadcast volunteer emergency alert for CRITICAL or HIGH severity incidents
         if target_sev in ["CRITICAL", "HIGH"]:
             try:
-                responders = supabase.table("users").select("id").in_("role", ["VOLUNTEER", "NGO"]).limit(20).execute()
+                # Notify all registered responders without arbitrary 20-person caps, in a single batch insert
+                responders = supabase.table("users").select("id").in_("role", ["VOLUNTEER", "NGO"]).execute()
                 if responders.data:
-                    for resp in responders.data:
-                        if resp["id"] != user["uid"]:
-                            create_system_notification(
-                                user_id=resp["id"],
-                                notif_type="RESCUE_ALERT",
-                                title=f"Emergency SOS Alert: {target_sev} Priority",
-                                message=f"New {target_sev.lower()} emergency rescue ({request.species}) reported at {request.address[:40]}.",
-                                related_entity_id=doc_id,
-                                related_entity_type="RESCUE",
-                            )
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    notifications_to_insert = [
+                        {
+                            "user_id": resp["id"],
+                            "type": "RESCUE_ALERT",
+                            "title": f"Emergency SOS Alert: {target_sev} Priority",
+                            "message": f"New {target_sev.lower()} emergency rescue ({request.species}) reported at {request.address[:40]}.",
+                            "related_entity_id": doc_id,
+                            "related_entity_type": "RESCUE",
+                            "is_read": False,
+                            "created_at": now_iso,
+                        }
+                        for resp in responders.data
+                        if resp.get("id") and resp["id"] != user["uid"]
+                    ]
+                    if notifications_to_insert:
+                        create_bulk_system_notifications(notifications_to_insert)
             except Exception as alert_err:
                 logger.warning(f"Failed to broadcast volunteer emergency alerts: {alert_err}")
         
