@@ -340,7 +340,7 @@ const ProfilePage = () => {
                   </Label>
                   <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs font-mono text-slate-300 flex items-center justify-between">
                     <span>
-                      {location.lat && location.lon ? `${location.lat}, ${location.lon}` : "Not set (fallback to city broadcast)"}
+                      {location.lat && location.lon ? `${location.lat}, ${location.lon}` : "Not configured (spatial alerts disabled)"}
                     </span>
                     {location.lat && (
                       <button
@@ -396,8 +396,10 @@ const ProfilePage = () => {
               <div className="p-3 rounded-xl bg-slate-900/40 border border-slate-800/80 flex items-start gap-2.5 text-[11px] text-slate-400">
                 <Info size={14} className="text-blue-400 shrink-0 mt-0.5" />
                 <span>
-                  Your dispatch coordinates are confidential and never shared with citizens. The system uses a secure 
-                  Haversine database lookup to notify you only when an animal requires rescue within your specified radius.
+                  Your dispatch coordinates are private and strictly confidential—they are never shared with citizens, 
+                  other responders, or exposed via public APIs. The system uses secure backend distance calculation 
+                  to notify you only when an animal requires rescue within your specified radius. Resetting coordinates 
+                  or pausing alerts stops nearby notifications.
                 </span>
               </div>
 

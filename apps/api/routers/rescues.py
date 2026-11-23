@@ -188,16 +188,17 @@ def dispatch_nearby_responder_alerts(
 ):
     """
     Background worker: locates active volunteer and NGO responders within geographic range
-    using the Haversine RPC, falling back to all active responders if coordinates are not set.
+    using the Haversine RPC, falling back only to responders without configured coordinates
+    if no nearby responders are found within range.
     """
     try:
         nearby_responders = []
         try:
-            # 1. Spatial Haversine lookup via Supabase RPC
+            # 1. Spatial Haversine lookup via Supabase RPC (100km max search ceiling)
             rpc_res = supabase.rpc("get_nearby_responders", {
                 "p_lat": latitude,
                 "p_lon": longitude,
-                "p_max_radius_km": 50,
+                "p_max_radius_km": 100,
             }).execute()
             if rpc_res.data:
                 nearby_responders = rpc_res.data
@@ -211,11 +212,14 @@ def dispatch_nearby_responder_alerts(
                 if rid and rid != reporter_id:
                     target_responder_ids.append(rid)
         else:
-            # Fallback to active responders if no volunteers have saved coordinates yet
+            # Geofence protection: only fallback to active responders who haven't configured coordinates yet.
+            # Responders with explicit locations set outside this radius are NOT alerted.
             all_resp = (
                 supabase.table("users")
                 .select("id")
                 .in_("role", ["VOLUNTEER", "NGO"])
+                .is_("latitude", "null")
+                .eq("alerts_enabled", True)
                 .execute()
             )
             if all_resp.data:
@@ -223,6 +227,10 @@ def dispatch_nearby_responder_alerts(
                     rid = r.get("id")
                     if rid and rid != reporter_id:
                         target_responder_ids.append(rid)
+            logger.warning(
+                f"No location-configured responders in range for rescue {rescue_id}. "
+                f"Dispatched alerts to {len(target_responder_ids)} unconfigured responders."
+            )
 
         # Batch insert rescue alert notifications
         if target_responder_ids:

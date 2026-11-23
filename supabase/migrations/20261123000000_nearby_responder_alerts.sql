@@ -12,7 +12,7 @@ ALTER TABLE public.users
 -- 2. Add partial index for fast spatial candidate lookups on active responders
 CREATE INDEX IF NOT EXISTS idx_users_responder_location
   ON public.users (latitude, longitude)
-  WHERE role IN ('VOLUNTEER', 'NGO', 'STAFF')
+  WHERE role IN ('VOLUNTEER', 'NGO')
     AND alerts_enabled = TRUE
     AND latitude IS NOT NULL
     AND longitude IS NOT NULL;
@@ -21,11 +21,10 @@ CREATE INDEX IF NOT EXISTS idx_users_responder_location
 CREATE OR REPLACE FUNCTION public.get_nearby_responders(
   p_lat NUMERIC,
   p_lon NUMERIC,
-  p_max_radius_km INTEGER DEFAULT 50
+  p_max_radius_km INTEGER DEFAULT 100
 )
 RETURNS TABLE (
   id UUID,
-  display_name TEXT,
   role user_role,
   distance_km NUMERIC
 )
@@ -37,7 +36,6 @@ BEGIN
   RETURN QUERY
   SELECT
     u.id,
-    u.display_name,
     u.role,
     ROUND(
       (
@@ -52,7 +50,7 @@ BEGIN
       2
     ) AS distance_km
   FROM public.users u
-  WHERE u.role IN ('VOLUNTEER', 'NGO', 'STAFF')
+  WHERE u.role IN ('VOLUNTEER', 'NGO')
     AND u.alerts_enabled = TRUE
     AND u.latitude IS NOT NULL
     AND u.longitude IS NOT NULL
@@ -69,8 +67,8 @@ BEGIN
 END;
 $$;
 
--- 4. Permissions: service_role (API backend) and authenticated users can execute the RPC
-REVOKE ALL ON FUNCTION public.get_nearby_responders(NUMERIC, NUMERIC, INTEGER) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_nearby_responders(NUMERIC, NUMERIC, INTEGER) TO service_role, authenticated;
+-- 4. Permissions: service_role (API backend) ONLY. Explicitly revoke from public, anon, and authenticated
+REVOKE ALL ON FUNCTION public.get_nearby_responders(NUMERIC, NUMERIC, INTEGER) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_nearby_responders(NUMERIC, NUMERIC, INTEGER) TO service_role;
 
 COMMENT ON FUNCTION public.get_nearby_responders IS 'Calculates great-circle distance to find active volunteer and NGO responders whose service radius covers the rescue coordinates.';

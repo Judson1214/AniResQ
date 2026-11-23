@@ -1255,6 +1255,8 @@ def test_high_severity_rescue_broadcasts_alert_to_volunteers(monkeypatch):
         mock_table.select.return_value = mock_table
         mock_table.insert.return_value = mock_table
         mock_table.in_.return_value = mock_table
+        mock_table.is_.return_value = mock_table
+        mock_table.eq.return_value = mock_table
         mock_table.execute.side_effect = [
             # 1. Insert rescue
             MagicMock(data=[{
@@ -1470,7 +1472,7 @@ def test_nearby_responder_alert_haversine_dispatch(monkeypatch):
     supabase_config.supabase.rpc.assert_called_with("get_nearby_responders", {
         "p_lat": 12.97,
         "p_lon": 77.59,
-        "p_max_radius_km": 50,
+        "p_max_radius_km": 100,
     })
 
     # Verify notifications dispatched
@@ -1478,6 +1480,58 @@ def test_nearby_responder_alert_haversine_dispatch(monkeypatch):
     uids = {n["user_id"] for n in dispatched_notifications}
     assert uids == {"vol-nearby-1", "vol-nearby-2"}
     assert "HIGH" in dispatched_notifications[0]["title"]
+
+
+def test_nearby_responder_alert_fallback_to_unconfigured_responders_only(monkeypatch):
+    """
+    When no location-configured responders are within range, dispatch must ONLY fallback
+    to active responders whose latitude IS NULL and alerts_enabled is True.
+    Responders with explicit coordinates set elsewhere must NOT receive out-of-range alerts.
+    """
+    from routers import rescues as rescues_module
+    dispatched_notifications = []
+
+    def mock_bulk(notifs):
+        dispatched_notifications.extend(notifs)
+
+    monkeypatch.setattr(rescues_module, "create_bulk_system_notifications", mock_bulk)
+
+    # 1. Haversine RPC returns 0 responders in range
+    mock_rpc = MagicMock()
+    mock_rpc.execute.return_value = MagicMock(data=[])
+    monkeypatch.setattr(supabase_config.supabase, "rpc", MagicMock(return_value=mock_rpc))
+
+    # 2. Mock users table query with chained filters (.in_, .is_, .eq_)
+    mock_query = MagicMock()
+    mock_query.select.return_value = mock_query
+    mock_query.in_.return_value = mock_query
+    mock_query.is_.return_value = mock_query
+    mock_query.eq.return_value = mock_query
+    # Return unconfigured responder
+    mock_query.execute.return_value = MagicMock(data=[
+        {"id": "vol-no-location-1"},
+        {"id": "citizen-reporter"}, # should be skipped as reporter
+    ])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+
+    rescues_module.dispatch_nearby_responder_alerts(
+        rescue_id="rescue-remote-1",
+        species="CAT",
+        severity="HIGH",
+        latitude=28.7041,
+        longitude=77.1025,
+        address="Rural Outpost",
+        reporter_id="citizen-reporter",
+    )
+
+    # Verify users table was filtered for latitude is null and alerts_enabled is True
+    mock_query.is_.assert_called_with("latitude", "null")
+    mock_query.eq.assert_called_with("alerts_enabled", True)
+
+    # Reporter was excluded, only unconfigured volunteer was alerted
+    assert len(dispatched_notifications) == 1
+    assert dispatched_notifications[0]["user_id"] == "vol-no-location-1"
+
 
 
 
