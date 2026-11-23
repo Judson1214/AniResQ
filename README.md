@@ -4,11 +4,12 @@ A community-driven animal rescue, adoption, and lost-and-found management platfo
 
 [![React](https://img.shields.io/badge/React-18.3-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-5.4-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
-[![JavaScript](https://img.shields.io/badge/JavaScript-ES2024-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL%20%26%20Auth-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
 [![TailwindCSS](https://img.shields.io/badge/TailwindCSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
 ---
 
@@ -44,6 +45,67 @@ AniResQ is engineered as a Turborepo monorepo with a decoupled FastAPI Python ba
 4. **Role-Based Access Control (RBAC)**
    - 6 distinct roles: `CITIZEN`, `VOLUNTEER`, `NGO`, `SHELTER`, `VET`, and `ADMIN`.
    - Hardened with database-level triggers and RLS against unauthorized privilege escalation.
+
+---
+
+## Visual Showcase & Core Modules
+
+AniResQ is built around 4 map-driven, interactive workflows for citizens, field responders, and shelter personnel:
+
+### 1. Interactive Emergency SOS Map & Incident Triage
+- **Live Spatial Map**: Powered by React-Leaflet, displaying open rescue incidents color-coded by severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
+- **Privacy-Preserving Public Markers**: Public endpoints obfuscate GPS coordinates to ~1.1 km precision, protecting citizens from harassment while mobilizing local help.
+- **Incident Dispatch Timeline**: Volunteers and NGOs accept assignments, log chronological triage updates, and coordinate veterinary transfers.
+
+### 2. Shelter Intake & Adoption Management Queue
+- **Intake Pipeline**: Citizens surrender animals into the system (`NOT_READY` state). Shelters review, atomically claim, and transition animals to `AVAILABLE`.
+- **Staff Review Queue**: Dedicated shelter dashboard queue using PostgREST inner joins (`animals!inner(shelter_id)`) to review adoption applicants, approve/reject screenings, and notify applicants in real time.
+- **Role-Gated Clinical Updates**: Registered `VET` personnel can update clinical medical fields (vaccinations, neuter status, medical treatments) on any animal without administrative shelter ownership blocks.
+
+### 3. Geofenced Responder Alerting (Haversine & PostGIS)
+- **Private Volunteer Base Coordinates**: Responders can set their dispatch base and service radius (5–50 km) securely in their profile.
+- **Database Distance RPC**: A `SECURITY DEFINER` Haversine RPC calculates great-circle distance server-side. Coordinates are never exposed to clients or unauthenticated callers.
+- **Batched Dispatch**: When high-priority emergencies occur, the backend notifies nearby volunteers in a single batch notification.
+
+### 4. Community Lost & Found Bulletin
+- **Public Community Board**: Neighborhood missing pet alerts with last-seen markers, clear privacy disclosures, and contact details.
+- **Direct Sighting Threads**: Chronological community sightings and comment threads facilitating rapid reunions.
+
+---
+
+## Type Safety & Schema Synchronization (FastAPI to TypeScript)
+
+To prevent contract drift between backend Pydantic v2 schemas and frontend forms/services, AniResQ provides automated OpenAPI schema extraction:
+
+```bash
+# 1. Export FastAPI OpenAPI JSON specification
+pnpm run generate:openapi
+# Outputs schema directly to packages/shared-types/openapi.json
+
+# 2. Hybrid TypeScript/JavaScript frontend
+# apps/web is configured with tsconfig.json (allowJs: true),
+# allowing seamless incremental migration from .jsx to .tsx with full autocomplete.
+```
+
+---
+
+## Geospatial & Real-time Scaling Roadmap
+
+- **PostGIS Spatial Engine**: For high-volume spatial scaling, the database schema is architected to transition from Haversine trigonometric queries to native PostGIS geometry/geography indexing:
+  ```sql
+  CREATE EXTENSION IF NOT EXISTS postgis;
+  CREATE INDEX idx_users_location_gist ON public.users USING GIST (
+    ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)::geography
+  );
+  ```
+- **Supabase Realtime SOS Channels**: Enables instant push dispatch to active volunteer dashboards over WebSocket subscriptions without polling:
+  ```javascript
+  const channel = supabase.channel('realtime:rescues')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'rescues' }, (payload) => {
+      // Instantly pin new emergency marker to Leaflet map
+    })
+    .subscribe();
+  ```
 
 ---
 
