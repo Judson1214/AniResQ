@@ -1533,6 +1533,143 @@ def test_nearby_responder_alert_fallback_to_unconfigured_responders_only(monkeyp
     assert dispatched_notifications[0]["user_id"] == "vol-no-location-1"
 
 
+def test_patch_user_profile_returns_complete_camelcase_and_no_500_on_empty(monkeypatch):
+    """Test that PATCH /api/users/{uid} maps snake_case DB columns to camelCase UserResponse,
+    and returns 200 without 500 when no update fields are passed."""
+    mock_user_db = {
+        "id": "user-patch-1",
+        "display_name": "Patch User",
+        "email": "patch@example.com",
+        "phone": "+1234567890",
+        "role": "CITIZEN",
+        "requested_role": "VOLUNTEER",
+        "avatar_url": "https://example.com/avatar.png",
+        "address": "123 Green Way",
+        "bio": "Animal lover",
+        "latitude": 13.0827,
+        "longitude": 80.2707,
+        "service_radius_km": 25,
+        "alerts_enabled": True,
+        "created_at": "2026-11-24T00:00:00Z",
+    }
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.update.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    mock_table.execute.return_value = MagicMock(data=[mock_user_db])
+    monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-patch-1", "email": "patch@example.com", "name": "Patch User", "role": "CITIZEN"
+    }
+    try:
+        # 1. Empty PATCH payload should return 200 with full UserResponse (including uid and camelCase)
+        res_empty = client.patch("/api/users/user-patch-1", json={})
+        assert res_empty.status_code == 200
+        data_empty = res_empty.json()
+        assert data_empty["uid"] == "user-patch-1"
+        assert data_empty["displayName"] == "Patch User"
+        assert data_empty["avatarUrl"] == "https://example.com/avatar.png"
+        assert data_empty["requestedRole"] == "VOLUNTEER"
+        assert data_empty["serviceRadiusKm"] == 25
+        assert data_empty["alertsEnabled"] is True
+
+        # 2. PATCH with recognized fields should return complete camelCase shape without blank strings
+        res_update = client.patch("/api/users/user-patch-1", json={"displayName": "Updated Patch Name"})
+        assert res_update.status_code == 200
+        data_update = res_update.json()
+        assert data_update["uid"] == "user-patch-1"
+        assert data_update["displayName"] == "Updated Patch Name"
+        assert data_update["avatarUrl"] == "https://example.com/avatar.png"
+        assert data_update["requestedRole"] == "VOLUNTEER"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_nullable_db_columns_safe_in_lostfound_and_animals(monkeypatch):
+    """Test that NULL values in database columns (lost_and_found.color, animals.vaccinations,
+    is_neutered, images) do not trigger ResponseValidationError 500s."""
+    # 1. Lost and found with NULL color and images
+    mock_lf_row = {
+        "id": "lf-null-1",
+        "type": "LOST",
+        "title": "Lost Cat",
+        "description": "Missing tabby",
+        "species": "CAT",
+        "breed": None,
+        "color": None, # NULL in DB
+        "contact_phone": "+1234567890",
+        "contact_email": None,
+        "latitude": 12.9716,
+        "longitude": 77.5946,
+        "last_seen_address": "Indiranagar",
+        "last_seen_date": "2026-11-20",
+        "reporter_id": "rep-1",
+        "images": None, # NULL in DB
+        "status": "ACTIVE",
+        "created_at": "2026-11-20T10:00:00Z",
+        "updated_at": None,
+    }
+    mock_lf_table = MagicMock()
+    mock_lf_table.select.return_value = mock_lf_table
+    mock_lf_table.order.return_value = mock_lf_table
+    mock_lf_table.range.return_value = mock_lf_table
+    mock_lf_table.execute.return_value = MagicMock(data=[mock_lf_row])
+
+    # 2. Animals with NULL vaccinations, is_neutered, images
+    mock_animal_row = {
+        "id": "animal-null-1",
+        "name": "Stray Pup",
+        "species": "DOG",
+        "breed": None,
+        "age_estimate": "3 months",
+        "gender": "UNKNOWN",
+        "weight": None,
+        "health_status": "HEALTHY",
+        "adoption_status": "AVAILABLE",
+        "description": "Friendly pup",
+        "vaccinations": None, # NULL in DB
+        "is_neutered": None, # NULL in DB
+        "special_needs": None,
+        "shelter_id": "shelter-1",
+        "surrendered_by": None,
+        "images": None, # NULL in DB
+        "created_at": "2026-11-20T10:00:00Z",
+        "updated_at": None,
+    }
+    mock_animal_table = MagicMock()
+    mock_animal_table.select.return_value = mock_animal_table
+    mock_animal_table.neq.return_value = mock_animal_table
+    mock_animal_table.order.return_value = mock_animal_table
+    mock_animal_table.range.return_value = mock_animal_table
+    mock_animal_table.execute.return_value = MagicMock(data=[mock_animal_row])
+
+    def mock_table_router(table_name):
+        if table_name == "lost_and_found":
+            return mock_lf_table
+        elif table_name == "animals":
+            return mock_animal_table
+        return MagicMock()
+
+    monkeypatch.setattr(supabase_config.supabase, "table", mock_table_router)
+
+    res_lf = client.get("/api/lostfound/")
+    assert res_lf.status_code == 200
+    lf_items = res_lf.json()
+    assert len(lf_items) == 1
+    assert lf_items[0]["color"] is None
+    assert lf_items[0]["photoUrls"] == []
+
+    res_anim = client.get("/api/animals/")
+    assert res_anim.status_code == 200
+    anim_items = res_anim.json()
+    assert len(anim_items) == 1
+    assert anim_items[0]["vaccinations"] == []
+    assert anim_items[0]["isNeutered"] is False
+    assert anim_items[0]["photos"] == []
+
+
+
 
 
 

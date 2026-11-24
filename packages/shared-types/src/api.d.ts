@@ -782,7 +782,7 @@ export interface components {
             /** Breed */
             breed?: string | null;
             /** Color */
-            color: string;
+            color?: string | null;
             /** Contactphone */
             contactPhone: string;
             /**

@@ -54,6 +54,46 @@ class UserResponse(BaseModel):
     serviceRadiusKm: Optional[int] = None
     alertsEnabled: Optional[bool] = None
 
+def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool = True) -> dict:
+    """Map DB row to UserResponse shape with consistent camelCase attributes and PII redaction."""
+    user_id = data.get("id") or data.get("uid") or ""
+
+    # Sensitive geolocation & alert preferences
+    lat = data.get("latitude") if can_view_sensitive else None
+    lon = data.get("longitude") if can_view_sensitive else None
+
+    radius_val = data.get("service_radius_km")
+    if radius_val is None:
+        radius_val = data.get("serviceRadiusKm")
+    if radius_val is None and can_view_sensitive:
+        radius_val = 15
+    service_radius = radius_val if can_view_sensitive else None
+
+    alerts_val = data.get("alerts_enabled")
+    if alerts_val is None:
+        alerts_val = data.get("alertsEnabled")
+    if alerts_val is None and can_view_sensitive:
+        alerts_val = True
+    alerts_enabled = alerts_val if can_view_sensitive else None
+
+    return {
+        "id": user_id,
+        "uid": user_id,
+        "displayName": data.get("display_name") or data.get("displayName") or "",
+        "role": data.get("role") or "CITIZEN",
+        "requestedRole": (data.get("requested_role") if "requested_role" in data else data.get("requestedRole")) if can_view_sensitive else None,
+        "avatarUrl": data.get("avatar_url") or data.get("avatarUrl") or "",
+        "createdAt": data.get("created_at") or data.get("createdAt"),
+        "email": (data.get("email") or "") if can_view_contact else "",
+        "phoneNumber": (data.get("phone") or data.get("phoneNumber") or "") if can_view_contact else "",
+        "address": (data.get("address") or "") if can_view_contact else "",
+        "bio": data.get("bio") or "",
+        "latitude": lat,
+        "longitude": lon,
+        "serviceRadiusKm": service_radius,
+        "alertsEnabled": alerts_enabled,
+    }
+
 @router.get("", response_model=List[UserResponse])
 def list_users(
     role: Optional[str] = None,
@@ -82,18 +122,7 @@ def list_users(
         is_admin = current_user.get("role") == "ADMIN"
         
         return [
-            {
-                "id": d["id"],
-                "uid": d["id"],
-                "displayName": d.get("display_name", ""),
-                # Protect user PII: Only full system administrators can see emails and phone numbers across users
-                "email": d.get("email", "") if is_admin else "",
-                "phoneNumber": d.get("phone", "") if is_admin else "",
-                "role": d.get("role", "CITIZEN"),
-                "requestedRole": d.get("requested_role"),
-                "avatarUrl": d.get("avatar_url", ""),
-                "createdAt": d.get("created_at"),
-            }
+            map_user(d, can_view_contact=is_admin, can_view_sensitive=is_admin)
             for d in res.data
         ]
     except HTTPException:
@@ -185,23 +214,7 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
         elif caller_role in ["NGO", "SHELTER", "VOLUNTEER"]:
             can_view_contact = check_staff_has_active_case_with_user(current_user["uid"], uid)
         
-        return {
-            "id": data["id"],
-            "uid": data["id"],
-            "displayName": data.get("display_name", ""),
-            "role": data.get("role", "CITIZEN"),
-            "requestedRole": data.get("requested_role") if (is_self or is_admin) else None,
-            "avatarUrl": data.get("avatar_url", ""),
-            "createdAt": data.get("created_at"),
-            "email": data.get("email", "") if can_view_contact else "",
-            "phoneNumber": data.get("phone", "") if can_view_contact else "",
-            "address": data.get("address", "") if can_view_contact else "",
-            "bio": data.get("bio", ""),
-            "latitude": data.get("latitude") if (is_self or is_admin) else None,
-            "longitude": data.get("longitude") if (is_self or is_admin) else None,
-            "serviceRadiusKm": data.get("service_radius_km", 15) if (is_self or is_admin) else None,
-            "alertsEnabled": data.get("alerts_enabled", True) if (is_self or is_admin) else None,
-        }
+        return map_user(data, can_view_contact=can_view_contact, can_view_sensitive=(is_self or is_admin))
     except HTTPException:
         raise
     except Exception as e:
@@ -251,11 +264,8 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to create user profile")
             
-        dumped = profile.model_dump()
-        dumped["email"] = verified_email
-        dumped["role"] = target_role
-        dumped["requestedRole"] = req_role
-        return {"id": profile.uid, "uid": profile.uid, **dumped}
+        row_data = {**data, **(res.data[0] if res.data else {})}
+        return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -305,13 +315,14 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
             res = supabase.table("users").select("*").eq("id", uid).execute()
             if not res.data:
                 raise HTTPException(status_code=404, detail="User not found")
-            return res.data[0]
+            return map_user(res.data[0], can_view_contact=True, can_view_sensitive=True)
             
         res = supabase.table("users").update(update_data).eq("id", uid).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="User not found")
         
-        return {"id": uid, "uid": uid, **res.data[0]}
+        row_data = {**(res.data[0] if res.data else {}), **update_data}
+        return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -396,13 +407,8 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             f"AUDIT: Role changed for user {uid} from '{prev_role}' to '{target_role}' by admin '{current_user['uid']}'"
         )
             
-        return {
-            "id": uid,
-            "uid": uid,
-            "role": target_role,
-            "requestedRole": None,
-            "displayName": res.data[0].get("display_name", "")
-        }
+        row_data = {**(res.data[0] if res.data else {}), "role": target_role, "requested_role": None}
+        return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -462,13 +468,8 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
             f"AUDIT: Role request for {requested_role} by user {uid} declined by admin '{current_user['uid']}'. Role preserved as '{current_role}'."
         )
 
-        return {
-            "id": uid,
-            "uid": uid,
-            "role": current_role,
-            "requestedRole": None,
-            "displayName": res.data[0].get("display_name", "")
-        }
+        row_data = {**(res.data[0] if res.data else {}), "requested_role": None}
+        return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
     except HTTPException:
         raise
     except Exception as e:

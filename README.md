@@ -97,8 +97,10 @@ pnpm run generate:openapi
 # Ensuring pull requests fail if API schema modifications drift from committed types.
 
 # 3. Hybrid TypeScript/JavaScript frontend
-# apps/web is configured with tsconfig.json (allowJs: true) and imports
-# generated OpenAPI types from @aniresq/shared-types.
+# apps/web is configured with tsconfig.json in hybrid mode:
+# - strict: true, noUnusedLocals: true, and path aliases for .ts/.tsx files
+# - allowJs: true with checkJs: false for seamless incremental migration from JS/JSX
+# - Enforced via `tsc --noEmit` in CI web-ci pipeline
 ```
 
 ---

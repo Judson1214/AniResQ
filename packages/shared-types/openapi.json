@@ -3118,7 +3118,14 @@
             "title": "Breed"
           },
           "color": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Color"
           },
           "contactPhone": {
@@ -3191,7 +3198,6 @@
           "title",
           "description",
           "species",
-          "color",
           "contactPhone",
           "location",
           "lastSeenAddress",

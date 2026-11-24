@@ -79,6 +79,26 @@ class RescueAssignResponse(BaseModel):
     status: str
     assignedTo: str
 
+def map_rescue_to_camel(data: dict) -> dict:
+    lat = data.get("latitude")
+    lon = data.get("longitude")
+    loc = {"latitude": lat, "longitude": lon} if (lat is not None and lon is not None) else data.get("location", {"latitude": 0.0, "longitude": 0.0})
+    return {
+        "id": data["id"],
+        "title": data.get("title") or "",
+        "description": data.get("description") or "",
+        "species": data.get("species") or "",
+        "severity": data.get("severity") or "",
+        "status": data.get("status") or "PENDING",
+        "reporterId": data.get("reporter_id") or data.get("reporterId") or "",
+        "assignedTo": data.get("assigned_to") or data.get("assignedTo"),
+        "location": loc,
+        "address": data.get("address") or "",
+        "photoUrls": data.get("images") or data.get("photoUrls") or [],
+        "createdAt": data.get("created_at") or data.get("createdAt") or "",
+        "updatedAt": data.get("updated_at") or data.get("updatedAt") or data.get("created_at") or "",
+    }
+
 @router.get("/", response_model=List[RescueResponse])
 def get_all_rescues(
     status: Optional[str] = None,
@@ -110,24 +130,7 @@ def get_all_rescues(
             query = query.eq("reporter_id", user["uid"])
             
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
-        rescues = []
-        for data in res.data:
-            rescues.append({
-                "id": data["id"],
-                "title": data["title"],
-                "description": data["description"],
-                "species": data["species"],
-                "severity": data["severity"],
-                "status": data["status"],
-                "reporterId": data["reporter_id"],
-                "assignedTo": data["assigned_to"],
-                "location": {"latitude": data["latitude"], "longitude": data["longitude"]},
-                "address": data["address"],
-                "photoUrls": data.get("images", []),
-                "createdAt": data["created_at"],
-                "updatedAt": data["updated_at"],
-            })
-        return rescues
+        return [map_rescue_to_camel(data) for data in res.data]
     except Exception as e:
         logger.error(f"Error fetching rescues: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve rescues")
@@ -197,21 +200,7 @@ def get_rescue_by_id(rescue_id: str, user: dict = Depends(get_current_user)):
                 detail="Forbidden: You do not have permission to access this rescue request"
             )
 
-        return {
-            "id": data["id"],
-            "title": data["title"],
-            "description": data["description"],
-            "species": data["species"],
-            "severity": data["severity"],
-            "status": data["status"],
-            "reporterId": data["reporter_id"],
-            "assignedTo": data["assigned_to"],
-            "location": {"latitude": data["latitude"], "longitude": data["longitude"]},
-            "address": data["address"],
-            "photoUrls": data.get("images", []),
-            "createdAt": data["created_at"],
-            "updatedAt": data["updated_at"],
-        }
+        return map_rescue_to_camel(data)
     except HTTPException:
         raise
     except Exception as e:

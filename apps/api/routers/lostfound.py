@@ -45,7 +45,7 @@ class LostFoundResponse(BaseModel):
     description: str
     species: str
     breed: Optional[str] = None
-    color: str
+    color: Optional[str] = None
     contactPhone: str
     contactEmail: Optional[str] = ""
     location: Location
@@ -66,17 +66,17 @@ def map_post_to_camel(data: dict) -> dict:
         "description": data["description"],
         "species": data["species"],
         "breed": data.get("breed"),
-        "color": data["color"],
-        "contactPhone": data["contact_phone"],
+        "color": data.get("color"),
+        "contactPhone": data.get("contact_phone") or "",
         "contactEmail": data.get("contact_email") or "",
         "location": {"latitude": data["latitude"], "longitude": data["longitude"]},
-        "lastSeenAddress": data["last_seen_address"],
-        "lastSeenDate": data["last_seen_date"],
-        "reporterId": data["reporter_id"],
-        "userId": data["reporter_id"],
-        "photoUrls": data.get("images", []),
-        "status": data["status"],
-        "createdAt": data["created_at"],
+        "lastSeenAddress": data.get("last_seen_address") or "",
+        "lastSeenDate": data.get("last_seen_date") or "",
+        "reporterId": data.get("reporter_id") or "",
+        "userId": data.get("reporter_id") or "",
+        "photoUrls": data.get("images") or [],
+        "status": data.get("status") or "ACTIVE",
+        "createdAt": data.get("created_at") or "",
         "updatedAt": data.get("updated_at"),
     }
 

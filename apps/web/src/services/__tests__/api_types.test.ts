@@ -15,6 +15,10 @@ describe('OpenAPI Contract Verification', () => {
       | '/api/animals/{id}/claim'
       | '/api/users/{uid}/role-request/decline';
 
+    type CheckedEndpoints = ExpectedEndpoints extends keyof ApiPaths ? true : false;
+    const isCovered: CheckedEndpoints = true;
+    expect(isCovered).toBe(true);
+
     const sampleEndpoint: keyof ApiPaths = '/api/rescues/public';
     const claimEndpoint: keyof ApiPaths = '/api/animals/{id}/claim';
     expect(sampleEndpoint).toBe('/api/rescues/public');
@@ -40,5 +44,15 @@ describe('OpenAPI Contract Verification', () => {
       status: 'PENDING',
     };
     expect(mockRescue.severity).toBe('HIGH');
+
+    const mockAnimal: Partial<ApiAnimalResponse> = {
+      id: 'animal-123',
+      name: 'Bella',
+      species: 'DOG',
+      adoptionStatus: 'AVAILABLE',
+      isNeutered: true,
+      vaccinations: ['Rabies'],
+    };
+    expect(mockAnimal.name).toBe('Bella');
   });
 });
