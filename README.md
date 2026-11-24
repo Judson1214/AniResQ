@@ -53,11 +53,17 @@ AniResQ is engineered as a Turborepo monorepo with a decoupled FastAPI Python ba
 AniResQ is built around 4 map-driven, interactive workflows for citizens, field responders, and shelter personnel:
 
 ### 1. Interactive Emergency SOS Map & Incident Triage
+
+![Interactive Leaflet Emergency SOS Incident Map](docs/assets/sos-map-preview.svg)
+
 - **Live Spatial Map**: Powered by React-Leaflet, displaying open rescue incidents color-coded by severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
 - **Privacy-Preserving Public Markers**: Public endpoints obfuscate GPS coordinates to ~1.1 km precision, protecting citizens from harassment while mobilizing local help.
 - **Incident Dispatch Timeline**: Volunteers and NGOs accept assignments, log chronological triage updates, and coordinate veterinary transfers.
 
 ### 2. Shelter Intake & Adoption Management Queue
+
+![Shelter Intake Pipeline and Adoption Application Screening Queue](docs/assets/shelter-queue-preview.svg)
+
 - **Intake Pipeline**: Citizens surrender animals into the system (`NOT_READY` state). Shelters review, atomically claim, and transition animals to `AVAILABLE`.
 - **Staff Review Queue**: Dedicated shelter dashboard queue using PostgREST inner joins (`animals!inner(shelter_id)`) to review adoption applicants, approve/reject screenings, and notify applicants in real time.
 - **Role-Gated Clinical Updates**: Registered `VET` personnel can update clinical medical fields (vaccinations, neuter status, medical treatments) on any animal without administrative shelter ownership blocks.
@@ -75,12 +81,13 @@ AniResQ is built around 4 map-driven, interactive workflows for citizens, field 
 
 ## Type Safety & Schema Synchronization (FastAPI to TypeScript)
 
-To prevent contract drift between backend Pydantic v2 schemas and frontend forms/services, AniResQ provides automated OpenAPI schema extraction:
+To prevent contract drift between backend Pydantic v2 schemas and frontend forms/services, AniResQ provides automated OpenAPI schema extraction and TypeScript definition generation in a single command:
 
 ```bash
-# 1. Export FastAPI OpenAPI JSON specification
+# 1. Export FastAPI OpenAPI JSON spec and generate client TypeScript interfaces
 pnpm run generate:openapi
-# Outputs schema directly to packages/shared-types/openapi.json
+# - Extracts OpenAPI spec to packages/shared-types/openapi.json
+# - Runs openapi-typescript to produce packages/shared-types/src/api.d.ts
 
 # 2. Hybrid TypeScript/JavaScript frontend
 # apps/web is configured with tsconfig.json (allowJs: true),

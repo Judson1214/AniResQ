@@ -1,0 +1,106 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" width="100%" height="100%">
+  <defs>
+    <linearGradient id="shelterBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1000" height="560" rx="16" fill="url(#shelterBg)" stroke="#334155" stroke-width="1.5" />
+
+  <!-- Top Header -->
+  <rect x="0" y="0" width="1000" height="60" fill="#0B1120" stroke="#1E293B" stroke-width="1" />
+  <circle cx="36" cy="30" r="10" fill="#10B981" />
+  <text x="56" y="36" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="18" font-weight="bold">AniResQ</text>
+  <text x="140" y="36" fill="#94A3B8" font-family="sans-serif" font-size="14">/ Shelter Operations &amp; Intake Queue</text>
+  
+  <rect x="850" y="16" width="120" height="28" rx="6" fill="#10B981" fill-opacity="0.2" stroke="#10B981" stroke-opacity="0.4" stroke-width="1" />
+  <text x="910" y="34" fill="#34D399" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">SHELTER PORTAL</text>
+
+  <!-- Metric Summary Cards -->
+  <g transform="translate(40, 80)">
+    <!-- Card 1 -->
+    <rect x="0" y="0" width="280" height="85" rx="10" fill="#1E293B" stroke="#334155" stroke-width="1" />
+    <text x="20" y="28" fill="#94A3B8" font-family="sans-serif" font-size="12">Resident Animals</text>
+    <text x="20" y="62" fill="#F8FAFC" font-family="sans-serif" font-size="28" font-weight="bold">24</text>
+    <text x="65" y="60" fill="#10B981" font-family="sans-serif" font-size="12">+3 this week</text>
+
+    <!-- Card 2 -->
+    <rect x="310" y="0" width="280" height="85" rx="10" fill="#1E293B" stroke="#F59E0B" stroke-opacity="0.4" stroke-width="1" />
+    <text x="330" y="28" fill="#FBBF24" font-family="sans-serif" font-size="12">Pending Adoption Reviews</text>
+    <text x="330" y="62" fill="#F8FAFC" font-family="sans-serif" font-size="28" font-weight="bold">7</text>
+    <text x="360" y="60" fill="#F59E0B" font-family="sans-serif" font-size="12">Requires Staff Action</text>
+
+    <!-- Card 3 -->
+    <rect x="620" y="0" width="300" height="85" rx="10" fill="#1E293B" stroke="#3B82F6" stroke-opacity="0.4" stroke-width="1" />
+    <text x="640" y="28" fill="#60A5FA" font-family="sans-serif" font-size="12">Unclaimed Citizen Surrenders</text>
+    <text x="640" y="62" fill="#F8FAFC" font-family="sans-serif" font-size="28" font-weight="bold">2</text>
+    <text x="670" y="60" fill="#38BDF8" font-family="sans-serif" font-size="12">Available for Intake</text>
+  </g>
+
+  <!-- Applications Review Queue Table Container -->
+  <rect x="40" y="190" width="920" height="340" rx="12" fill="#0B1120" stroke="#334155" stroke-width="1" />
+  
+  <!-- Table Header -->
+  <rect x="40" y="190" width="920" height="45" rx="12" fill="#1E293B" />
+  <text x="60" y="218" fill="#94A3B8" font-family="sans-serif" font-size="12" font-weight="bold">APPLICANT</text>
+  <text x="240" y="218" fill="#94A3B8" font-family="sans-serif" font-size="12" font-weight="bold">TARGET ANIMAL</text>
+  <text x="440" y="218" fill="#94A3B8" font-family="sans-serif" font-size="12" font-weight="bold">HOUSING &amp; PETS</text>
+  <text x="660" y="218" fill="#94A3B8" font-family="sans-serif" font-size="12" font-weight="bold">STATUS</text>
+  <text x="820" y="218" fill="#94A3B8" font-family="sans-serif" font-size="12" font-weight="bold">DECISION</text>
+
+  <!-- Row 1 -->
+  <line x1="40" y1="295" x2="960" y2="295" stroke="#1E293B" stroke-width="1" />
+  <circle cx="75" cy="265" r="14" fill="#3B82F6" />
+  <text x="75" y="269" fill="#FFFFFF" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">AP</text>
+  <text x="100" y="262" fill="#F1F5F9" font-family="sans-serif" font-size="13" font-weight="bold">Ananya Patel</text>
+  <text x="100" y="278" fill="#64748B" font-family="sans-serif" font-size="11">citizen-applicant@email.com</text>
+
+  <text x="240" y="262" fill="#F1F5F9" font-family="sans-serif" font-size="13" font-weight="bold">Milo (Golden Retriever)</text>
+  <text x="240" y="278" fill="#10B981" font-family="sans-serif" font-size="11">● Vaccinated &amp; Neutered</text>
+
+  <text x="440" y="262" fill="#E2E8F0" font-family="sans-serif" font-size="12">Owns Villa • Fenced Yard (Yes)</text>
+  <text x="440" y="278" fill="#64748B" font-family="sans-serif" font-size="11">Has 1 companion dog (friendly)</text>
+
+  <rect x="660" y="252" width="85" height="24" rx="12" fill="#F59E0B" fill-opacity="0.2" stroke="#F59E0B" stroke-opacity="0.4" stroke-width="1" />
+  <text x="702" y="268" fill="#FBBF24" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">PENDING</text>
+
+  <rect x="800" y="252" width="70" height="26" rx="6" fill="#10B981" />
+  <text x="835" y="269" fill="#FFFFFF" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">Approve</text>
+  
+  <rect x="880" y="252" width="65" height="26" rx="6" fill="#EF4444" fill-opacity="0.2" stroke="#EF4444" stroke-opacity="0.4" stroke-width="1" />
+  <text x="912" y="269" fill="#F87171" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">Decline</text>
+
+  <!-- Row 2 -->
+  <line x1="40" y1="365" x2="960" y2="365" stroke="#1E293B" stroke-width="1" />
+  <circle cx="75" cy="330" r="14" fill="#8B5CF6" />
+  <text x="75" y="334" fill="#FFFFFF" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">RK</text>
+  <text x="100" y="327" fill="#F1F5F9" font-family="sans-serif" font-size="13" font-weight="bold">Rahul Kumar</text>
+  <text x="100" y="343" fill="#64748B" font-family="sans-serif" font-size="11">rahul.k@domain.com</text>
+
+  <text x="240" y="327" fill="#F1F5F9" font-family="sans-serif" font-size="13" font-weight="bold">Luna (Indie Cat)</text>
+  <text x="240" y="343" fill="#10B981" font-family="sans-serif" font-size="11">● Healthy • Microchipped</text>
+
+  <text x="440" y="327" fill="#E2E8F0" font-family="sans-serif" font-size="12">Apartment (Rented) • No Yard</text>
+  <text x="440" y="343" fill="#64748B" font-family="sans-serif" font-size="11">No other pets • First-time owner</text>
+
+  <rect x="660" y="318" width="90" height="24" rx="12" fill="#10B981" fill-opacity="0.2" stroke="#10B981" stroke-opacity="0.4" stroke-width="1" />
+  <text x="705" y="334" fill="#34D399" font-family="sans-serif" font-size="11" font-weight="bold" text-anchor="middle">APPROVED</text>
+
+  <text x="872" y="334" fill="#94A3B8" font-family="sans-serif" font-size="12">Adoption Finalized</text>
+
+  <!-- Row 3: Unclaimed Surrender Alert Banner -->
+  <rect x="60" y="390" width="880" height="110" rx="8" fill="#1E293B" stroke="#3B82F6" stroke-opacity="0.3" stroke-width="1" />
+  <circle cx="85" cy="425" r="12" fill="#3B82F6" fill-opacity="0.2" />
+  <text x="85" y="430" fill="#60A5FA" font-family="sans-serif" font-size="14" font-weight="bold" text-anchor="middle">i</text>
+  <text x="110" y="420" fill="#93C5FD" font-family="sans-serif" font-size="13" font-weight="bold">Citizen Surrender Intake Notice: "Rocky" (German Shepherd Mix, 2 yrs)</text>
+  <text x="110" y="440" fill="#94A3B8" font-family="sans-serif" font-size="12">Surrendered 2 hours ago by citizen due to relocation. Currently NOT_READY. Claim intake to manage triage and rehoming.</text>
+  
+  <rect x="110" y="455" width="160" height="30" rx="6" fill="#3B82F6" />
+  <text x="190" y="474" fill="#FFFFFF" font-family="sans-serif" font-size="12" font-weight="bold" text-anchor="middle">Claim Surrender Intake</text>
+</svg>

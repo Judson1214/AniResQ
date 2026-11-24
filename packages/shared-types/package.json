@@ -5,6 +5,10 @@
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
   "scripts": {
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "generate:types": "openapi-typescript openapi.json -o src/api.d.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0"
   }
 }
