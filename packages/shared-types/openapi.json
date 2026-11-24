@@ -112,7 +112,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RescueResponse"
+                  },
+                  "title": "Response Get All Rescues Api Rescues  Get"
+                }
               }
             }
           },
@@ -154,7 +160,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/RescueResponse"
+                }
               }
             }
           },
@@ -257,7 +265,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PublicRescueResponse"
+                  },
+                  "title": "Response Get Public Rescues Api Rescues Public Get"
+                }
               }
             }
           },
@@ -302,7 +316,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/RescueResponse"
+                }
               }
             }
           },
@@ -400,7 +416,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/RescueStatusUpdateResponse"
+                }
               }
             }
           },
@@ -455,7 +473,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/RescueAssignResponse"
+                }
               }
             }
           },
@@ -523,7 +543,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TimelineEventResponse"
+                  },
+                  "title": "Response Get Rescue Timeline Api Rescues  Rescue Id  Timeline Get"
+                }
               }
             }
           },
@@ -631,7 +657,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  },
+                  "title": "Response List Users Api Users Get"
+                }
               }
             }
           },
@@ -673,7 +705,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
               }
             }
           },
@@ -718,7 +752,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
               }
             }
           },
@@ -771,7 +807,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
               }
             }
           },
@@ -826,7 +864,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
               }
             }
           },
@@ -871,7 +911,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
               }
             }
           },
@@ -978,7 +1020,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AnimalResponse"
+                  },
+                  "title": "Response Get Animals Api Animals  Get"
+                }
               }
             }
           },
@@ -1020,7 +1068,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AnimalResponse"
+                }
               }
             }
           },
@@ -1065,7 +1115,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AnimalResponse"
+                }
               }
             }
           },
@@ -1118,7 +1170,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AnimalResponse"
+                }
               }
             }
           },
@@ -1201,7 +1255,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AnimalResponse"
+                }
               }
             }
           },
@@ -1252,7 +1308,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AnimalResponse"
+                }
               }
             }
           },
@@ -1359,7 +1417,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdoptionResponse"
+                  },
+                  "title": "Response Get Adoptions Api Adoptions  Get"
+                }
               }
             }
           },
@@ -1401,7 +1465,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptionResponse"
+                }
               }
             }
           },
@@ -1446,7 +1512,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptionResponse"
+                }
               }
             }
           },
@@ -1501,7 +1569,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AdoptionResponse"
+                }
               }
             }
           },
@@ -1603,7 +1673,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LostFoundResponse"
+                  },
+                  "title": "Response Get Lost Found Api Lostfound  Get"
+                }
               }
             }
           },
@@ -1645,7 +1721,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/LostFoundResponse"
+                }
               }
             }
           },
@@ -1685,7 +1763,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/LostFoundResponse"
+                }
               }
             }
           },
@@ -1783,7 +1863,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/LostFoundResponse"
+                }
               }
             }
           },
@@ -1958,7 +2040,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationResponse"
+                  },
+                  "title": "Response Get Notifications Api Notifications  Get"
+                }
               }
             }
           },
@@ -2003,7 +2091,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationResponse"
+                }
               }
             }
           },
@@ -2126,6 +2216,176 @@
           "whyAdopt"
         ],
         "title": "AdoptionCreate"
+      },
+      "AdoptionResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "animalId": {
+            "type": "string",
+            "title": "Animalid"
+          },
+          "applicantId": {
+            "type": "string",
+            "title": "Applicantid"
+          },
+          "livingEnvironment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Livingenvironment"
+          },
+          "hasYard": {
+            "type": "boolean",
+            "title": "Hasyard",
+            "default": false
+          },
+          "hasOtherPets": {
+            "type": "boolean",
+            "title": "Hasotherpets",
+            "default": false
+          },
+          "otherPetDetails": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Otherpetdetails"
+          },
+          "priorPetExperience": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priorpetexperience"
+          },
+          "familyMembers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Familymembers"
+          },
+          "hasChildren": {
+            "type": "boolean",
+            "title": "Haschildren",
+            "default": false
+          },
+          "workSchedule": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workschedule"
+          },
+          "whyAdopt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whyadopt"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "reviewerId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewerid"
+          },
+          "screeningNotes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screeningnotes"
+          },
+          "reviewedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewedat"
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "animalId",
+          "applicantId"
+        ],
+        "title": "AdoptionResponse"
       },
       "AdoptionStatusUpdate": {
         "properties": {
@@ -2287,6 +2547,182 @@
           "description"
         ],
         "title": "AnimalCreate"
+      },
+      "AnimalResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "species": {
+            "type": "string",
+            "title": "Species"
+          },
+          "breed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breed"
+          },
+          "ageEstimate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ageestimate"
+          },
+          "gender": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gender"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight"
+          },
+          "healthStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Healthstatus"
+          },
+          "adoptionStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adoptionstatus"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "vaccinations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Vaccinations",
+            "default": []
+          },
+          "isNeutered": {
+            "type": "boolean",
+            "title": "Isneutered",
+            "default": false
+          },
+          "specialNeeds": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Specialneeds"
+          },
+          "shelterId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shelterid"
+          },
+          "surrenderedBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surrenderedby"
+          },
+          "photos": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Photos",
+            "default": []
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "species"
+        ],
+        "title": "AnimalResponse"
       },
       "AnimalSurrenderCreate": {
         "properties": {
@@ -2648,6 +3084,125 @@
         ],
         "title": "LostFoundReply"
       },
+      "LostFoundResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "species": {
+            "type": "string",
+            "title": "Species"
+          },
+          "breed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breed"
+          },
+          "color": {
+            "type": "string",
+            "title": "Color"
+          },
+          "contactPhone": {
+            "type": "string",
+            "title": "Contactphone"
+          },
+          "contactEmail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contactemail",
+            "default": ""
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "lastSeenAddress": {
+            "type": "string",
+            "title": "Lastseenaddress"
+          },
+          "lastSeenDate": {
+            "type": "string",
+            "title": "Lastseendate"
+          },
+          "reporterId": {
+            "type": "string",
+            "title": "Reporterid"
+          },
+          "userId": {
+            "type": "string",
+            "title": "Userid"
+          },
+          "photoUrls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Photourls",
+            "default": []
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title",
+          "description",
+          "species",
+          "color",
+          "contactPhone",
+          "location",
+          "lastSeenAddress",
+          "lastSeenDate",
+          "reporterId",
+          "userId",
+          "status",
+          "createdAt"
+        ],
+        "title": "LostFoundResponse"
+      },
       "LostFoundStatusUpdate": {
         "properties": {
           "status": {
@@ -2660,6 +3215,148 @@
           "status"
         ],
         "title": "LostFoundStatusUpdate"
+      },
+      "NotificationResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "userId": {
+            "type": "string",
+            "title": "Userid"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "isRead": {
+            "type": "boolean",
+            "title": "Isread",
+            "default": false
+          },
+          "relatedEntityId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relatedentityid"
+          },
+          "relatedEntityType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relatedentitytype"
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "type",
+          "title",
+          "message"
+        ],
+        "title": "NotificationResponse"
+      },
+      "PublicRescueResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "species": {
+            "type": "string",
+            "title": "Species"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Location"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "species",
+          "severity",
+          "status",
+          "createdAt"
+        ],
+        "title": "PublicRescueResponse"
+      },
+      "RescueAssignResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "assignedTo": {
+            "type": "string",
+            "title": "Assignedto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "assignedTo"
+        ],
+        "title": "RescueAssignResponse"
       },
       "RescueRequestCreate": {
         "properties": {
@@ -2729,6 +3426,161 @@
           "status"
         ],
         "title": "RescueRequestStatusUpdate"
+      },
+      "RescueResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "species": {
+            "type": "string",
+            "title": "Species"
+          },
+          "severity": {
+            "type": "string",
+            "title": "Severity"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "reporterId": {
+            "type": "string",
+            "title": "Reporterid"
+          },
+          "assignedTo": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignedto"
+          },
+          "location": {
+            "$ref": "#/components/schemas/Location"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "photoUrls": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Photourls",
+            "default": []
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description",
+          "species",
+          "severity",
+          "status",
+          "reporterId",
+          "location",
+          "address",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "RescueResponse"
+      },
+      "RescueStatusUpdateResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "RescueStatusUpdateResponse"
+      },
+      "TimelineEventResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "updatedBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedby"
+          },
+          "updatedByName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updatedbyname"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "createdAt"
+        ],
+        "title": "TimelineEventResponse"
       },
       "UserProfileCreate": {
         "properties": {
@@ -2919,6 +3771,167 @@
         },
         "type": "object",
         "title": "UserProfileUpdate"
+      },
+      "UserResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "uid": {
+            "type": "string",
+            "title": "Uid"
+          },
+          "displayName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Displayname",
+            "default": ""
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": "CITIZEN"
+          },
+          "requestedRole": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requestedrole"
+          },
+          "avatarUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatarurl",
+            "default": ""
+          },
+          "createdAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Createdat"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "default": ""
+          },
+          "phoneNumber": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phonenumber",
+            "default": ""
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address",
+            "default": ""
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio",
+            "default": ""
+          },
+          "latitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latitude"
+          },
+          "longitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longitude"
+          },
+          "serviceRadiusKm": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Serviceradiuskm"
+          },
+          "alertsEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alertsenabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "uid"
+        ],
+        "title": "UserResponse"
       },
       "UserRoleUpdate": {
         "properties": {

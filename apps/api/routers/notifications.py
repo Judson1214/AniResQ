@@ -10,6 +10,17 @@ from auth import get_current_user
 router = APIRouter(prefix="/api/notifications", tags=["notifications"])
 logger = logging.getLogger("notifications")
 
+class NotificationResponse(BaseModel):
+    id: str
+    userId: str
+    type: str
+    title: str
+    message: str
+    isRead: bool = False
+    relatedEntityId: Optional[str] = None
+    relatedEntityType: Optional[str] = None
+    createdAt: Optional[str] = None
+
 def map_notification(db_data: dict) -> dict:
     return {
         "id": db_data["id"],
@@ -53,7 +64,7 @@ def create_bulk_system_notifications(notifications_list: List[dict]):
     except Exception as e:
         logger.warning(f"Failed to bulk insert system notifications ({len(notifications_list)} items): {e}")
 
-@router.get("/")
+@router.get("/", response_model=List[NotificationResponse])
 def get_notifications(
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
@@ -73,7 +84,7 @@ def get_notifications(
         logger.error(f"Error fetching notifications: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve notifications")
 
-@router.patch("/{id}/read")
+@router.patch("/{id}/read", response_model=NotificationResponse)
 def mark_as_read(id: str, user: dict = Depends(get_current_user)):
     try:
         existing = supabase.table("notifications").select("id, user_id").eq("id", id).execute()

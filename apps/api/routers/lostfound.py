@@ -38,6 +38,26 @@ class LostFoundStatusUpdate(BaseModel):
 class LostFoundReply(BaseModel):
     text: str
 
+class LostFoundResponse(BaseModel):
+    id: str
+    type: str
+    title: str
+    description: str
+    species: str
+    breed: Optional[str] = None
+    color: str
+    contactPhone: str
+    contactEmail: Optional[str] = ""
+    location: Location
+    lastSeenAddress: str
+    lastSeenDate: str
+    reporterId: str
+    userId: str
+    photoUrls: List[str] = []
+    status: str
+    createdAt: str
+    updatedAt: Optional[str] = None
+
 def map_post_to_camel(data: dict) -> dict:
     return {
         "id": data["id"],
@@ -60,7 +80,7 @@ def map_post_to_camel(data: dict) -> dict:
         "updatedAt": data.get("updated_at"),
     }
 
-@router.get("/")
+@router.get("/", response_model=List[LostFoundResponse])
 def get_lost_found(
     type: Optional[str] = None,
     status: Optional[str] = None,
@@ -83,7 +103,7 @@ def get_lost_found(
         logger.error(f"Error fetching lost/found posts: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve lost and found posts")
 
-@router.get("/{id}")
+@router.get("/{id}", response_model=LostFoundResponse)
 def get_lost_found_by_id(id: str):
     try:
         res = supabase.table("lost_and_found").select("*").eq("id", id).execute()
@@ -96,7 +116,7 @@ def get_lost_found_by_id(id: str):
         logger.error(f"Error fetching lost/found post {id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve lost/found report")
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=LostFoundResponse, status_code=status.HTTP_201_CREATED)
 def create_lost_found(report: LostFoundCreate, user: dict = Depends(get_current_user)):
     target_type = report.type.upper()
     if target_type not in VALID_TYPES:
@@ -135,7 +155,7 @@ def create_lost_found(report: LostFoundCreate, user: dict = Depends(get_current_
         logger.error(f"Error creating lost/found post: {e}")
         raise HTTPException(status_code=500, detail="Failed to create lost/found post")
 
-@router.patch("/{id}/status")
+@router.patch("/{id}/status", response_model=LostFoundResponse)
 def update_lost_found_status(id: str, status_update: LostFoundStatusUpdate, user: dict = Depends(get_current_user)):
     target_status = status_update.status.upper()
     if target_status not in VALID_STATUSES:
@@ -157,7 +177,7 @@ def update_lost_found_status(id: str, status_update: LostFoundStatusUpdate, user
         if not res.data:
             raise HTTPException(status_code=404, detail="Lost/found post not found")
         
-        return {"id": res.data[0]["id"], "status": res.data[0]["status"]}
+        return map_post_to_camel(res.data[0])
     except HTTPException:
         raise
     except Exception as e:

@@ -31,6 +31,9 @@ jobs:
       - name: Run lint
         run: pnpm lint
 
+      - name: Type check (TypeScript)
+        run: pnpm --filter @aniresq/web exec tsc --noEmit
+
       - name: Run unit tests (Vitest)
         run: pnpm test
         env:

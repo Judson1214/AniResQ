@@ -37,7 +37,24 @@ class UserProfileUpdate(BaseModel):
 class UserRoleUpdate(BaseModel):
     role: str
 
-@router.get("")
+class UserResponse(BaseModel):
+    id: str
+    uid: str
+    displayName: Optional[str] = ""
+    role: str = "CITIZEN"
+    requestedRole: Optional[str] = None
+    avatarUrl: Optional[str] = ""
+    createdAt: Optional[str] = None
+    email: Optional[str] = ""
+    phoneNumber: Optional[str] = ""
+    address: Optional[str] = ""
+    bio: Optional[str] = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    serviceRadiusKm: Optional[int] = None
+    alertsEnabled: Optional[bool] = None
+
+@router.get("", response_model=List[UserResponse])
 def list_users(
     role: Optional[str] = None,
     has_requested_role: Optional[bool] = None,
@@ -146,7 +163,7 @@ def check_staff_has_active_case_with_user(staff_id: str, target_user_id: str) ->
         logger.warning(f"Error checking staff relationship for {staff_id} -> {target_user_id}: {e}")
         return False
 
-@router.get("/{uid}")
+@router.get("/{uid}", response_model=UserResponse)
 def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
     try:
         res = supabase.table("users").select("*").eq("id", uid).execute()
@@ -191,7 +208,7 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
         logger.error(f"Error fetching user profile {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve user profile")
 
-@router.post("")
+@router.post("", response_model=UserResponse)
 def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends(get_current_user)):
     # Authenticated user can only create/sync their own profile
     if current_user["uid"] != profile.uid and current_user.get("role") != "ADMIN":
@@ -245,7 +262,7 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         logger.error(f"Error creating user profile: {e}")
         raise HTTPException(status_code=500, detail="Failed to create user profile")
 
-@router.patch("/{uid}")
+@router.patch("/{uid}", response_model=UserResponse)
 def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict = Depends(get_current_user)):
     # Users can only update their own profile, unless they are an ADMIN
     if current_user["uid"] != uid and current_user.get("role") != "ADMIN":
@@ -301,7 +318,7 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
         logger.error(f"Error updating user profile {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update user profile")
 
-@router.patch("/{uid}/role")
+@router.patch("/{uid}/role", response_model=UserResponse)
 def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends(get_current_user)):
     if current_user.get("role") != "ADMIN":
         raise HTTPException(status_code=403, detail="Forbidden: Only administrators can assign user roles")
@@ -392,7 +409,7 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
         logger.error(f"Error updating role for user {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update user role")
 
-@router.post("/{uid}/role-request/decline")
+@router.post("/{uid}/role-request/decline", response_model=UserResponse)
 def decline_role_request(uid: str, current_user: dict = Depends(get_current_user)):
     if current_user.get("role") != "ADMIN":
         raise HTTPException(status_code=403, detail="Forbidden: Only administrators can decline role requests")

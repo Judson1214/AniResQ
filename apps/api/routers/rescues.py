@@ -38,7 +38,48 @@ class AssignVolunteerRequest(BaseModel):
     volunteerId: str
     volunteerName: str
 
-@router.get("/")
+class RescueResponse(BaseModel):
+    id: str
+    title: str
+    description: str
+    species: str
+    severity: str
+    status: str
+    reporterId: str
+    assignedTo: Optional[str] = None
+    location: Location
+    address: str
+    photoUrls: List[str] = []
+    createdAt: str
+    updatedAt: str
+
+class PublicRescueResponse(BaseModel):
+    id: str
+    title: str
+    species: str
+    severity: str
+    status: str
+    location: Optional[Location] = None
+    createdAt: str
+
+class TimelineEventResponse(BaseModel):
+    id: str
+    status: str
+    message: Optional[str] = None
+    updatedBy: Optional[str] = None
+    updatedByName: Optional[str] = None
+    createdAt: str
+
+class RescueStatusUpdateResponse(BaseModel):
+    id: str
+    status: str
+
+class RescueAssignResponse(BaseModel):
+    id: str
+    status: str
+    assignedTo: str
+
+@router.get("/", response_model=List[RescueResponse])
 def get_all_rescues(
     status: Optional[str] = None,
     severity: Optional[str] = None,
@@ -91,7 +132,7 @@ def get_all_rescues(
         logger.error(f"Error fetching rescues: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve rescues")
 
-@router.get("/public")
+@router.get("/public", response_model=List[PublicRescueResponse])
 def get_public_rescues(
     status: Optional[str] = None,
     severity: Optional[str] = None,
@@ -137,7 +178,7 @@ def get_public_rescues(
         logger.error(f"Error fetching public rescues: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve public rescue markers")
 
-@router.get("/{rescue_id}")
+@router.get("/{rescue_id}", response_model=RescueResponse)
 def get_rescue_by_id(rescue_id: str, user: dict = Depends(get_current_user)):
     try:
         res = supabase.table("rescues").select("*").eq("id", rescue_id).execute()
@@ -253,7 +294,7 @@ def dispatch_nearby_responder_alerts(
     except Exception as e:
         logger.warning(f"Failed to execute background nearby responder alert dispatch: {e}")
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=RescueResponse, status_code=status.HTTP_201_CREATED)
 def create_rescue_request(
     request: RescueRequestCreate,
     background_tasks: BackgroundTasks,
@@ -312,14 +353,29 @@ def create_rescue_request(
                 reporter_id=user["uid"],
             )
         
-        return {"id": doc_id, **res.data[0]}
+        row = res.data[0]
+        return {
+            "id": doc_id,
+            "title": row.get("title", request.title),
+            "description": row.get("description", request.description),
+            "species": row.get("species", request.species),
+            "severity": target_sev,
+            "status": row.get("status", "PENDING"),
+            "reporterId": user["uid"],
+            "assignedTo": row.get("assigned_to"),
+            "location": {"latitude": request.location.latitude, "longitude": request.location.longitude},
+            "address": row.get("address", request.address),
+            "photoUrls": valid_photos,
+            "createdAt": row.get("created_at") or datetime.now(timezone.utc).isoformat(),
+            "updatedAt": row.get("updated_at") or row.get("created_at") or datetime.now(timezone.utc).isoformat(),
+        }
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error creating rescue: {e}")
         raise HTTPException(status_code=500, detail="Failed to create rescue request")
 
-@router.patch("/{rescue_id}/status")
+@router.patch("/{rescue_id}/status", response_model=RescueStatusUpdateResponse)
 def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user: dict = Depends(get_current_user)):
     target_status = update.status.upper()
     if target_status not in VALID_STATUSES:
@@ -368,7 +424,7 @@ def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user
         logger.error(f"Error updating rescue status: {e}")
         raise HTTPException(status_code=500, detail="Failed to update rescue status")
 
-@router.post("/{rescue_id}/assign")
+@router.post("/{rescue_id}/assign", response_model=RescueAssignResponse)
 def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = Depends(get_current_user)):
     try:
         user_role = user.get("role", "CITIZEN")
@@ -458,7 +514,7 @@ def delete_rescue(rescue_id: str, user: dict = Depends(get_current_user)):
         logger.error(f"Error deleting rescue {rescue_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to delete rescue request")
 
-@router.get("/{rescue_id}/timeline")
+@router.get("/{rescue_id}/timeline", response_model=List[TimelineEventResponse])
 def get_rescue_timeline(
     rescue_id: str,
     limit: int = Query(default=50, ge=1, le=100),

@@ -497,6 +497,54 @@ export interface components {
             /** Whyadopt */
             whyAdopt: string;
         };
+        /** AdoptionResponse */
+        AdoptionResponse: {
+            /** Id */
+            id: string;
+            /** Animalid */
+            animalId: string;
+            /** Applicantid */
+            applicantId: string;
+            /** Livingenvironment */
+            livingEnvironment?: string | null;
+            /**
+             * Hasyard
+             * @default false
+             */
+            hasYard: boolean;
+            /**
+             * Hasotherpets
+             * @default false
+             */
+            hasOtherPets: boolean;
+            /** Otherpetdetails */
+            otherPetDetails?: string | null;
+            /** Priorpetexperience */
+            priorPetExperience?: string | null;
+            /** Familymembers */
+            familyMembers?: number | null;
+            /**
+             * Haschildren
+             * @default false
+             */
+            hasChildren: boolean;
+            /** Workschedule */
+            workSchedule?: string | null;
+            /** Whyadopt */
+            whyAdopt?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Reviewerid */
+            reviewerId?: string | null;
+            /** Screeningnotes */
+            screeningNotes?: string | null;
+            /** Reviewedat */
+            reviewedAt?: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /** Updatedat */
+            updatedAt?: string | null;
+        };
         /** AdoptionStatusUpdate */
         AdoptionStatusUpdate: {
             /** Status */
@@ -558,6 +606,54 @@ export interface components {
              * @default []
              */
             photos: string[];
+        };
+        /** AnimalResponse */
+        AnimalResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Species */
+            species: string;
+            /** Breed */
+            breed?: string | null;
+            /** Ageestimate */
+            ageEstimate?: string | null;
+            /** Gender */
+            gender?: string | null;
+            /** Weight */
+            weight?: number | null;
+            /** Healthstatus */
+            healthStatus?: string | null;
+            /** Adoptionstatus */
+            adoptionStatus?: string | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Vaccinations
+             * @default []
+             */
+            vaccinations: string[];
+            /**
+             * Isneutered
+             * @default false
+             */
+            isNeutered: boolean;
+            /** Specialneeds */
+            specialNeeds?: string | null;
+            /** Shelterid */
+            shelterId?: string | null;
+            /** Surrenderedby */
+            surrenderedBy?: string | null;
+            /**
+             * Photos
+             * @default []
+             */
+            photos: string[];
+            /** Createdat */
+            createdAt?: string | null;
+            /** Updatedat */
+            updatedAt?: string | null;
         };
         /** AnimalSurrenderCreate */
         AnimalSurrenderCreate: {
@@ -671,10 +767,103 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** LostFoundResponse */
+        LostFoundResponse: {
+            /** Id */
+            id: string;
+            /** Type */
+            type: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Species */
+            species: string;
+            /** Breed */
+            breed?: string | null;
+            /** Color */
+            color: string;
+            /** Contactphone */
+            contactPhone: string;
+            /**
+             * Contactemail
+             * @default
+             */
+            contactEmail: string | null;
+            location: components["schemas"]["Location"];
+            /** Lastseenaddress */
+            lastSeenAddress: string;
+            /** Lastseendate */
+            lastSeenDate: string;
+            /** Reporterid */
+            reporterId: string;
+            /** Userid */
+            userId: string;
+            /**
+             * Photourls
+             * @default []
+             */
+            photoUrls: string[];
+            /** Status */
+            status: string;
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt?: string | null;
+        };
         /** LostFoundStatusUpdate */
         LostFoundStatusUpdate: {
             /** Status */
             status: string;
+        };
+        /** NotificationResponse */
+        NotificationResponse: {
+            /** Id */
+            id: string;
+            /** Userid */
+            userId: string;
+            /** Type */
+            type: string;
+            /** Title */
+            title: string;
+            /** Message */
+            message: string;
+            /**
+             * Isread
+             * @default false
+             */
+            isRead: boolean;
+            /** Relatedentityid */
+            relatedEntityId?: string | null;
+            /** Relatedentitytype */
+            relatedEntityType?: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+        };
+        /** PublicRescueResponse */
+        PublicRescueResponse: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Species */
+            species: string;
+            /** Severity */
+            severity: string;
+            /** Status */
+            status: string;
+            location?: components["schemas"]["Location"] | null;
+            /** Createdat */
+            createdAt: string;
+        };
+        /** RescueAssignResponse */
+        RescueAssignResponse: {
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+            /** Assignedto */
+            assignedTo: string;
         };
         /** RescueRequestCreate */
         RescueRequestCreate: {
@@ -701,6 +890,59 @@ export interface components {
             status: string;
             /** Message */
             message?: string | null;
+        };
+        /** RescueResponse */
+        RescueResponse: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Description */
+            description: string;
+            /** Species */
+            species: string;
+            /** Severity */
+            severity: string;
+            /** Status */
+            status: string;
+            /** Reporterid */
+            reporterId: string;
+            /** Assignedto */
+            assignedTo?: string | null;
+            location: components["schemas"]["Location"];
+            /** Address */
+            address: string;
+            /**
+             * Photourls
+             * @default []
+             */
+            photoUrls: string[];
+            /** Createdat */
+            createdAt: string;
+            /** Updatedat */
+            updatedAt: string;
+        };
+        /** RescueStatusUpdateResponse */
+        RescueStatusUpdateResponse: {
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+        };
+        /** TimelineEventResponse */
+        TimelineEventResponse: {
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+            /** Message */
+            message?: string | null;
+            /** Updatedby */
+            updatedBy?: string | null;
+            /** Updatedbyname */
+            updatedByName?: string | null;
+            /** Createdat */
+            createdAt: string;
         };
         /** UserProfileCreate */
         UserProfileCreate: {
@@ -736,6 +978,60 @@ export interface components {
             avatarUrl?: string | null;
             /** Requestedrole */
             requestedRole?: string | null;
+            /** Latitude */
+            latitude?: number | null;
+            /** Longitude */
+            longitude?: number | null;
+            /** Serviceradiuskm */
+            serviceRadiusKm?: number | null;
+            /** Alertsenabled */
+            alertsEnabled?: boolean | null;
+        };
+        /** UserResponse */
+        UserResponse: {
+            /** Id */
+            id: string;
+            /** Uid */
+            uid: string;
+            /**
+             * Displayname
+             * @default
+             */
+            displayName: string | null;
+            /**
+             * Role
+             * @default CITIZEN
+             */
+            role: string;
+            /** Requestedrole */
+            requestedRole?: string | null;
+            /**
+             * Avatarurl
+             * @default
+             */
+            avatarUrl: string | null;
+            /** Createdat */
+            createdAt?: string | null;
+            /**
+             * Email
+             * @default
+             */
+            email: string | null;
+            /**
+             * Phonenumber
+             * @default
+             */
+            phoneNumber: string | null;
+            /**
+             * Address
+             * @default
+             */
+            address: string | null;
+            /**
+             * Bio
+             * @default
+             */
+            bio: string | null;
             /** Latitude */
             latitude?: number | null;
             /** Longitude */
@@ -794,7 +1090,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RescueResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -827,7 +1123,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RescueResponse"];
                 };
             };
             /** @description Validation Error */
@@ -862,7 +1158,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PublicRescueResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -893,7 +1189,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RescueResponse"];
                 };
             };
             /** @description Validation Error */
@@ -959,7 +1255,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RescueStatusUpdateResponse"];
                 };
             };
             /** @description Validation Error */
@@ -994,7 +1290,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RescueAssignResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1028,7 +1324,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TimelineEventResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -1063,7 +1359,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UserResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -1096,7 +1392,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1127,7 +1423,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1162,7 +1458,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1197,7 +1493,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1228,7 +1524,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1263,7 +1559,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnimalResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -1296,7 +1592,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnimalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1327,7 +1623,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnimalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1393,7 +1689,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnimalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1426,7 +1722,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnimalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1457,7 +1753,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AnimalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1492,7 +1788,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AdoptionResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -1525,7 +1821,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AdoptionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1556,7 +1852,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AdoptionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1591,7 +1887,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AdoptionResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1626,7 +1922,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LostFoundResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -1659,7 +1955,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LostFoundResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1690,7 +1986,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LostFoundResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1756,7 +2052,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LostFoundResponse"];
                 };
             };
             /** @description Validation Error */
@@ -1857,7 +2153,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["NotificationResponse"][];
                 };
             };
             /** @description Validation Error */
@@ -1888,7 +2184,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["NotificationResponse"];
                 };
             };
             /** @description Validation Error */

@@ -31,6 +31,26 @@ class AdoptionStatusUpdate(BaseModel):
     status: str
     screeningNotes: Optional[str] = None
 
+class AdoptionResponse(BaseModel):
+    id: str
+    animalId: str
+    applicantId: str
+    livingEnvironment: Optional[str] = None
+    hasYard: bool = False
+    hasOtherPets: bool = False
+    otherPetDetails: Optional[str] = None
+    priorPetExperience: Optional[str] = None
+    familyMembers: Optional[int] = None
+    hasChildren: bool = False
+    workSchedule: Optional[str] = None
+    whyAdopt: Optional[str] = None
+    status: Optional[str] = None
+    reviewerId: Optional[str] = None
+    screeningNotes: Optional[str] = None
+    reviewedAt: Optional[str] = None
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
+
 def map_adoption(db_data: dict) -> dict:
     return {
         "id": db_data["id"],
@@ -53,7 +73,7 @@ def map_adoption(db_data: dict) -> dict:
         "updatedAt": db_data.get("updated_at"),
     }
 
-@router.get("/")
+@router.get("/", response_model=List[AdoptionResponse])
 def get_adoptions(
     applicantId: Optional[str] = None,
     animalId: Optional[str] = None,
@@ -101,7 +121,7 @@ def get_adoptions(
         logger.error(f"Error fetching adoption applications: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve adoption applications")
 
-@router.get("/{id}")
+@router.get("/{id}", response_model=AdoptionResponse)
 def get_adoption(id: str, user: dict = Depends(get_current_user)):
     try:
         res = supabase.table("adoption_applications").select("*").eq("id", id).execute()
@@ -131,7 +151,7 @@ def get_adoption(id: str, user: dict = Depends(get_current_user)):
         logger.error(f"Error fetching application {id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve adoption application")
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=AdoptionResponse, status_code=status.HTTP_201_CREATED)
 def submit_adoption_application(payload: AdoptionCreate, user: dict = Depends(get_current_user)):
     env = payload.livingEnvironment.upper()
     if env not in VALID_ENVIRONMENTS:
@@ -163,7 +183,7 @@ def submit_adoption_application(payload: AdoptionCreate, user: dict = Depends(ge
         logger.error(f"Error creating adoption application: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit application")
 
-@router.patch("/{id}/status")
+@router.patch("/{id}/status", response_model=AdoptionResponse)
 def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = Depends(require_roles(STAFF_ROLES))):
     target_status = payload.status.upper()
     if target_status not in VALID_APP_STATUSES:

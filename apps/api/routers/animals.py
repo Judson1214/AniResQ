@@ -57,6 +57,26 @@ class AnimalUpdate(BaseModel):
     specialNeeds: Optional[str] = None
     photos: Optional[List[str]] = None
 
+class AnimalResponse(BaseModel):
+    id: str
+    name: str
+    species: str
+    breed: Optional[str] = None
+    ageEstimate: Optional[str] = None
+    gender: Optional[str] = None
+    weight: Optional[float] = None
+    healthStatus: Optional[str] = None
+    adoptionStatus: Optional[str] = None
+    description: Optional[str] = None
+    vaccinations: List[str] = []
+    isNeutered: bool = False
+    specialNeeds: Optional[str] = None
+    shelterId: Optional[str] = None
+    surrenderedBy: Optional[str] = None
+    photos: List[str] = []
+    createdAt: Optional[str] = None
+    updatedAt: Optional[str] = None
+
 def map_animal(db_data: dict, viewer: dict = None) -> dict:
     """Map DB row to API response. Redacts surrenderedBy unless viewer is owner or staff."""
     is_staff = viewer and viewer.get("role") in STAFF_ROLES
@@ -82,7 +102,7 @@ def map_animal(db_data: dict, viewer: dict = None) -> dict:
         "updatedAt": db_data.get("updated_at"),
     }
 
-@router.get("/")
+@router.get("/", response_model=List[AnimalResponse])
 def get_animals(
     status: Optional[str] = None,
     species: Optional[str] = None,
@@ -123,7 +143,7 @@ def get_animals(
         logger.error(f"Error fetching animals: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve animals")
 
-@router.get("/{id}")
+@router.get("/{id}", response_model=AnimalResponse)
 def get_animal(id: str, user: Optional[dict] = Depends(get_optional_user)):
     try:
         res = supabase.table("animals").select("*").eq("id", id).execute()
@@ -145,7 +165,7 @@ def get_animal(id: str, user: Optional[dict] = Depends(get_optional_user)):
         logger.error(f"Error fetching animal {id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve animal details")
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=AnimalResponse, status_code=status.HTTP_201_CREATED)
 def create_animal(payload: AnimalCreate, user: dict = Depends(require_roles(STAFF_ROLES))):
     target_species = payload.species.upper()
     if target_species not in VALID_SPECIES:
@@ -193,7 +213,7 @@ def create_animal(payload: AnimalCreate, user: dict = Depends(require_roles(STAF
         logger.error(f"Error creating animal: {e}")
         raise HTTPException(status_code=500, detail="Failed to create animal record")
 
-@router.post("/surrender", status_code=status.HTTP_201_CREATED)
+@router.post("/surrender", response_model=AnimalResponse, status_code=status.HTTP_201_CREATED)
 def surrender_animal(payload: AnimalSurrenderCreate, user: dict = Depends(get_current_user)):
     """Allows citizens to surrender or donate an animal for shelter intake review."""
     target_species = payload.species.upper()
@@ -236,7 +256,7 @@ def surrender_animal(payload: AnimalSurrenderCreate, user: dict = Depends(get_cu
         logger.error(f"Error surrendering animal: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit animal surrender request")
 
-@router.patch("/{id}")
+@router.patch("/{id}", response_model=AnimalResponse)
 def update_animal(id: str, payload: AnimalUpdate, user: dict = Depends(require_roles(STAFF_ROLES))):
     try:
         existing = supabase.table("animals").select("id, shelter_id").eq("id", id).execute()
@@ -312,7 +332,7 @@ def update_animal(id: str, payload: AnimalUpdate, user: dict = Depends(require_r
         logger.error(f"Error updating animal {id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update animal record")
 
-@router.post("/{id}/claim")
+@router.post("/{id}/claim", response_model=AnimalResponse)
 def claim_animal(id: str, user: dict = Depends(require_roles(["ADMIN", "SHELTER", "NGO"]))):
     """Allows a shelter/NGO to claim a surrendered animal for intake."""
     try:
