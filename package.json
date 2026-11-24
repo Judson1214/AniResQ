@@ -7,7 +7,7 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "clean": "turbo clean",
-    "generate:openapi": "python apps/api/scripts/export_openapi.py && pnpm --filter @aniresq/shared-types run generate:types",
+    "generate:openapi": "node scripts/generate-openapi.mjs",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
   },
   "devDependencies": {

@@ -54,7 +54,8 @@ AniResQ is built around 4 map-driven, interactive workflows for citizens, field 
 
 ### 1. Interactive Emergency SOS Map & Incident Triage
 
-![Interactive Leaflet Emergency SOS Incident Map](docs/assets/sos-map-preview.svg)
+![Emergency SOS Incident Map Preview](docs/assets/sos-map-preview.svg)
+*Preview / UI Illustration: Real-time Emergency SOS Command Map & Incident Dispatch Queue*
 
 - **Live Spatial Map**: Powered by React-Leaflet, displaying open rescue incidents color-coded by severity (`CRITICAL`, `HIGH`, `MEDIUM`, `LOW`).
 - **Privacy-Preserving Public Markers**: Public endpoints obfuscate GPS coordinates to ~1.1 km precision, protecting citizens from harassment while mobilizing local help.
@@ -62,11 +63,12 @@ AniResQ is built around 4 map-driven, interactive workflows for citizens, field 
 
 ### 2. Shelter Intake & Adoption Management Queue
 
-![Shelter Intake Pipeline and Adoption Application Screening Queue](docs/assets/shelter-queue-preview.svg)
+![Shelter Operations and Intake Queue Preview](docs/assets/shelter-queue-preview.svg)
+*Preview / UI Illustration: Shelter Intake Pipeline and Multi-Step Adoption Application Screening*
 
 - **Intake Pipeline**: Citizens surrender animals into the system (`NOT_READY` state). Shelters review, atomically claim, and transition animals to `AVAILABLE`.
-- **Staff Review Queue**: Dedicated shelter dashboard queue using PostgREST inner joins (`animals!inner(shelter_id)`) to review adoption applicants, approve/reject screenings, and notify applicants in real time.
-- **Role-Gated Clinical Updates**: Registered `VET` personnel can update clinical medical fields (vaccinations, neuter status, medical treatments) on any animal without administrative shelter ownership blocks.
+- **Staff Review Queue**: Dedicated shelter dashboard queue using PostgREST inner joins (`animals!inner(shelter_id)`) to review adoption applicants, approve/reject screenings, and notify applicants in near real-time (5s polling queue).
+- **Role-Gated Clinical Updates**: Registered `VET` personnel can update clinical medical fields (`healthStatus`, `vaccinations`, `isNeutered`, and `specialNeeds`) on any animal without administrative shelter ownership blocks.
 
 ### 3. Geofenced Responder Alerting (Haversine & PostGIS)
 - **Private Volunteer Base Coordinates**: Responders can set their dispatch base and service radius (5–50 km) securely in their profile.
@@ -81,17 +83,22 @@ AniResQ is built around 4 map-driven, interactive workflows for citizens, field 
 
 ## Type Safety & Schema Synchronization (FastAPI to TypeScript)
 
-To prevent contract drift between backend Pydantic v2 schemas and frontend forms/services, AniResQ provides automated OpenAPI schema extraction and TypeScript definition generation in a single command:
+To prevent contract drift between backend Pydantic v2 schemas and frontend forms/services, AniResQ provides automated OpenAPI schema extraction and TypeScript definition generation, enforced via CI:
 
 ```bash
 # 1. Export FastAPI OpenAPI JSON spec and generate client TypeScript interfaces
 pnpm run generate:openapi
-# - Extracts OpenAPI spec to packages/shared-types/openapi.json
+# - Extracts OpenAPI spec to packages/shared-types/openapi.json (with fallback env vars)
 # - Runs openapi-typescript to produce packages/shared-types/src/api.d.ts
 
-# 2. Hybrid TypeScript/JavaScript frontend
-# apps/web is configured with tsconfig.json (allowJs: true),
-# allowing seamless incremental migration from .jsx to .tsx with full autocomplete.
+# 2. CI Contract Enforcement
+# The contract-ci GitHub Actions job regenerates the spec and runs:
+# git diff --exit-code packages/shared-types/openapi.json packages/shared-types/src/api.d.ts
+# Ensuring pull requests fail if API schema modifications drift from committed types.
+
+# 3. Hybrid TypeScript/JavaScript frontend
+# apps/web is configured with tsconfig.json (allowJs: true) and imports
+# generated OpenAPI types from @aniresq/shared-types.
 ```
 
 ---
