@@ -115,20 +115,25 @@ def list_users(
         raise HTTPException(status_code=403, detail="Forbidden: Only administrators and shelter/NGO coordinators can list users")
         
     try:
-        query = supabase.table("users").select("id, display_name, email, phone, role, requested_role, avatar_url, created_at, address, bio")
+        query = supabase.table("users").select("*")
         if role:
             query = query.eq("role", role.upper())
-        if has_requested_role:
-            query = query.not_.is_("requested_role", "null")
         if search:
             query = query.ilike("display_name", f"%{search}%")
             
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         is_admin = current_user.get("role") == "ADMIN"
         
+        users_data = res.data or []
+        if has_requested_role:
+            users_data = [
+                d for d in users_data
+                if (d.get("requested_role") or d.get("requestedRole"))
+            ]
+        
         return [
             map_user(d, can_view_contact=is_admin, can_view_sensitive=is_admin)
-            for d in res.data
+            for d in users_data
         ]
     except HTTPException:
         raise

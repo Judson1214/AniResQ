@@ -18,6 +18,8 @@ const DonationPage = lazy(() => import("@/pages/DonationPage"));
 const SurrenderPage = lazy(() => import("@/pages/SurrenderPage"));
 const MyApplicationsPage = lazy(() => import("@/pages/MyApplicationsPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const OperatorRegistryPage = lazy(() => import("@/pages/OperatorRegistryPage"));
+const SystemSettingsPage = lazy(() => import("@/pages/SystemSettingsPage"));
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const UnauthorizedPage = lazy(() => import("@/pages/UnauthorizedPage"));
@@ -134,7 +136,7 @@ function App() {
             path="/dashboard/users"
             element={
               <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
-                <DashboardPage />
+                <OperatorRegistryPage />
               </ProtectedRoute>
             }
           />
@@ -142,7 +144,7 @@ function App() {
             path="/dashboard/settings"
             element={
               <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
-                <DashboardPage />
+                <SystemSettingsPage />
               </ProtectedRoute>
             }
           />

@@ -458,6 +458,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get System Settings
+         * @description Admin-only endpoint to retrieve global system configuration and telemetry.
+         */
+        get: operations["get_system_settings_api_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update System Settings
+         * @description Admin-only endpoint to update global dispatch, broadcast, and routing configurations.
+         */
+        patch: operations["update_system_settings_api_settings_patch"];
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -971,6 +995,70 @@ export interface components {
             id: string;
             /** Status */
             status: string;
+        };
+        /** SystemSettings */
+        SystemSettings: {
+            /**
+             * Defaultdispatchradiuskm
+             * @default 15
+             */
+            defaultDispatchRadiusKm: number;
+            /**
+             * Maxbroadcastceilingkm
+             * @default 100
+             */
+            maxBroadcastCeilingKm: number;
+            /**
+             * Autoalerthighseverity
+             * @default true
+             */
+            autoAlertHighSeverity: boolean;
+            /**
+             * Autodispatchenabled
+             * @default true
+             */
+            autoDispatchEnabled: boolean;
+            /**
+             * Appendonlyauditenforced
+             * @default true
+             */
+            appendOnlyAuditEnforced: boolean;
+            /**
+             * Directmutationprotection
+             * @default true
+             */
+            directMutationProtection: boolean;
+            /**
+             * Platformversion
+             * @default 1.0.0
+             */
+            platformVersion: string;
+            /**
+             * Environment
+             * @default Localhost Environment
+             */
+            environment: string;
+            /**
+             * Activeadmincount
+             * @default 1
+             */
+            activeAdminCount: number;
+            /**
+             * Totaloperatorscount
+             * @default 0
+             */
+            totalOperatorsCount: number;
+        };
+        /** SystemSettingsUpdate */
+        SystemSettingsUpdate: {
+            /** Defaultdispatchradiuskm */
+            defaultDispatchRadiusKm?: number | null;
+            /** Maxbroadcastceilingkm */
+            maxBroadcastCeilingKm?: number | null;
+            /** Autoalerthighseverity */
+            autoAlertHighSeverity?: boolean | null;
+            /** Autodispatchenabled */
+            autoDispatchEnabled?: boolean | null;
         };
         /** TimelineEventResponse */
         TimelineEventResponse: {
@@ -2283,6 +2371,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditLogResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_system_settings_api_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemSettings"];
+                };
+            };
+        };
+    };
+    update_system_settings_api_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SystemSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemSettings"];
                 };
             };
             /** @description Validation Error */

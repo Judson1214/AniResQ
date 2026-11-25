@@ -2248,6 +2248,78 @@
         }
       }
     },
+    "/api/settings": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Get System Settings",
+        "description": "Admin-only endpoint to retrieve global system configuration and telemetry.",
+        "operationId": "get_system_settings_api_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettings"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "Update System Settings",
+        "description": "Admin-only endpoint to update global dispatch, broadcast, and routing configurations.",
+        "operationId": "update_system_settings_api_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/": {
       "get": {
         "summary": "Root",
@@ -3707,6 +3779,120 @@
           "status"
         ],
         "title": "RescueStatusUpdateResponse"
+      },
+      "SystemSettings": {
+        "properties": {
+          "defaultDispatchRadiusKm": {
+            "type": "integer",
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Defaultdispatchradiuskm",
+            "default": 15
+          },
+          "maxBroadcastCeilingKm": {
+            "type": "integer",
+            "maximum": 500.0,
+            "minimum": 10.0,
+            "title": "Maxbroadcastceilingkm",
+            "default": 100
+          },
+          "autoAlertHighSeverity": {
+            "type": "boolean",
+            "title": "Autoalerthighseverity",
+            "default": true
+          },
+          "autoDispatchEnabled": {
+            "type": "boolean",
+            "title": "Autodispatchenabled",
+            "default": true
+          },
+          "appendOnlyAuditEnforced": {
+            "type": "boolean",
+            "title": "Appendonlyauditenforced",
+            "default": true
+          },
+          "directMutationProtection": {
+            "type": "boolean",
+            "title": "Directmutationprotection",
+            "default": true
+          },
+          "platformVersion": {
+            "type": "string",
+            "title": "Platformversion",
+            "default": "1.0.0"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment",
+            "default": "Localhost Environment"
+          },
+          "activeAdminCount": {
+            "type": "integer",
+            "title": "Activeadmincount",
+            "default": 1
+          },
+          "totalOperatorsCount": {
+            "type": "integer",
+            "title": "Totaloperatorscount",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "SystemSettings"
+      },
+      "SystemSettingsUpdate": {
+        "properties": {
+          "defaultDispatchRadiusKm": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 200.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Defaultdispatchradiuskm"
+          },
+          "maxBroadcastCeilingKm": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 500.0,
+                "minimum": 10.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxbroadcastceilingkm"
+          },
+          "autoAlertHighSeverity": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autoalerthighseverity"
+          },
+          "autoDispatchEnabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Autodispatchenabled"
+          }
+        },
+        "type": "object",
+        "title": "SystemSettingsUpdate"
       },
       "TimelineEventResponse": {
         "properties": {
