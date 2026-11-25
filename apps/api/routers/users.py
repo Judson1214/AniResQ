@@ -382,7 +382,7 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
                     "42883" in err_msg
                     or "PGRST202" in err_msg
                     or "could not find the function" in err_msg.lower()
-                    or "function public.admin_update_user_role" in err_msg.lower()
+                    or ("admin_update_user_role" in err_msg.lower() and "does not exist" in err_msg.lower())
                 )
             )
             if not is_missing_fn:
@@ -512,7 +512,7 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
                     "42883" in err_msg
                     or "PGRST202" in err_msg
                     or "could not find the function" in err_msg.lower()
-                    or "function public.admin_decline_role_request" in err_msg.lower()
+                    or ("admin_decline_role_request" in err_msg.lower() and "does not exist" in err_msg.lower())
                 )
             )
             if not is_missing_fn:
