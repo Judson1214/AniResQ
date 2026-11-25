@@ -217,6 +217,35 @@ def test_audit_fail_closed_aborts_role_mutation(monkeypatch):
         app.dependency_overrides.clear()
 
 
+def test_rpc_audit_failure_fails_closed_without_fallback(monkeypatch):
+    """Test that when transactional RPC admin_update_user_role fails (e.g. audit constraint error),
+    the endpoint fails-closed immediately with 500 and NEVER falls back to direct table update."""
+    mock_users = MagicMock()
+    mock_users.select.return_value = mock_users
+    mock_users.update.return_value = mock_users
+    mock_users.eq.return_value = mock_users
+    mock_users.execute.return_value = MagicMock(data=[{"id": "target-user", "role": "CITIZEN", "display_name": "Target"}])
+
+    mock_rpc = MagicMock()
+    # Transactional RPC fails inside PostgreSQL (e.g. audit constraint violation)
+    mock_rpc.execute.side_effect = Exception("audit_logs constraint check failed: append-only violation")
+
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_users)
+    monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
+
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "admin-1", "email": "admin@aniresq.org", "name": "Admin", "role": "ADMIN"
+    }
+    try:
+        res = client.patch("/api/users/target-user/role", json={"role": "VOLUNTEER"})
+        assert res.status_code == 500
+        assert "audit logging failed" in res.json()["detail"].lower()
+        # Verify table("users").update was NEVER called as a fallback!
+        assert mock_users.update.call_count == 0
+    finally:
+        app.dependency_overrides.clear()
+
+
 def test_volunteer_cannot_take_over_assigned_rescue(monkeypatch):
     """Test that a volunteer cannot take over a rescue already assigned to someone else.
     Only coordinators, current assignees, or self-assign on unassigned rescues are permitted."""

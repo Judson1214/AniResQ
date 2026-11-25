@@ -67,7 +67,7 @@ EXCEPTION
 END $$;
 RESET ROLE;
 
--- 6 & 7. Verify audit_logs is append-only: UPDATE and DELETE are blocked by trigger
+-- 6 & 7. Verify service_role mutations on audit_logs are blocked (via privilege revocation or trigger)
 SET LOCAL ROLE service_role;
 DO $$
 DECLARE
@@ -77,33 +77,72 @@ BEGIN
   INSERT INTO public.audit_logs (id, action, entity_type, entity_id, performed_by)
   VALUES (v_test_id, 'TEST_AUDIT', 'TEST', 'test-1', 'service_role');
 
-  -- Attempt UPDATE: Must be blocked by trigger
+  -- Attempt UPDATE: Must be blocked by privilege revocation or append-only trigger
   BEGIN
     UPDATE public.audit_logs SET action = 'TAMPERED' WHERE id = v_test_id;
     RAISE EXCEPTION 'SECURITY VIOLATION: UPDATE succeeded on audit_logs';
   EXCEPTION
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'PASS: service_role UPDATE blocked by privilege revocation';
     WHEN OTHERS THEN
-      IF SQLERRM LIKE '%audit_logs table is append-only%' THEN
-        RAISE NOTICE 'PASS: UPDATE on audit_logs blocked by append-only trigger';
+      IF SQLERRM LIKE '%audit_logs table is append-only%' OR SQLERRM LIKE '%permission denied%' THEN
+        RAISE NOTICE 'PASS: service_role UPDATE blocked (message: %)', SQLERRM;
       ELSE
-        RAISE EXCEPTION 'Unexpected error on UPDATE: %', SQLERRM;
+        RAISE EXCEPTION 'Unexpected error on service_role UPDATE: %', SQLERRM;
       END IF;
   END;
 
-  -- Attempt DELETE: Must be blocked by trigger
+  -- Attempt DELETE: Must be blocked by privilege revocation or append-only trigger
   BEGIN
     DELETE FROM public.audit_logs WHERE id = v_test_id;
     RAISE EXCEPTION 'SECURITY VIOLATION: DELETE succeeded on audit_logs';
   EXCEPTION
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'PASS: service_role DELETE blocked by privilege revocation';
     WHEN OTHERS THEN
-      IF SQLERRM LIKE '%audit_logs table is append-only%' THEN
-        RAISE NOTICE 'PASS: DELETE on audit_logs blocked by append-only trigger';
+      IF SQLERRM LIKE '%audit_logs table is append-only%' OR SQLERRM LIKE '%permission denied%' THEN
+        RAISE NOTICE 'PASS: service_role DELETE blocked (message: %)', SQLERRM;
       ELSE
-        RAISE EXCEPTION 'Unexpected error on DELETE: %', SQLERRM;
+        RAISE EXCEPTION 'Unexpected error on service_role DELETE: %', SQLERRM;
       END IF;
   END;
 END $$;
 RESET ROLE;
+
+-- 7b. Verify append-only trigger directly as table owner (bypasses table privileges to trigger check)
+DO $$
+DECLARE
+  v_owner_test_id UUID := '00000000-0000-0000-0000-666666666666';
+BEGIN
+  INSERT INTO public.audit_logs (id, action, entity_type, entity_id, performed_by)
+  VALUES (v_owner_test_id, 'OWNER_TEST', 'TEST', 'test-1', 'postgres');
+
+  -- Attempt UPDATE as table owner: Must be blocked by trigger
+  BEGIN
+    UPDATE public.audit_logs SET action = 'TAMPERED' WHERE id = v_owner_test_id;
+    RAISE EXCEPTION 'SECURITY VIOLATION: table owner UPDATE succeeded on audit_logs';
+  EXCEPTION
+    WHEN OTHERS THEN
+      IF SQLERRM LIKE '%audit_logs table is append-only%' THEN
+        RAISE NOTICE 'PASS: table owner UPDATE blocked by append-only trigger';
+      ELSE
+        RAISE EXCEPTION 'Unexpected error on table owner UPDATE: %', SQLERRM;
+      END IF;
+  END;
+
+  -- Attempt DELETE as table owner: Must be blocked by trigger
+  BEGIN
+    DELETE FROM public.audit_logs WHERE id = v_owner_test_id;
+    RAISE EXCEPTION 'SECURITY VIOLATION: table owner DELETE succeeded on audit_logs';
+  EXCEPTION
+    WHEN OTHERS THEN
+      IF SQLERRM LIKE '%audit_logs table is append-only%' THEN
+        RAISE NOTICE 'PASS: table owner DELETE blocked by append-only trigger';
+      ELSE
+        RAISE EXCEPTION 'Unexpected error on table owner DELETE: %', SQLERRM;
+      END IF;
+  END;
+END $$;
 
 -- 8. Verify service_role lacks UPDATE, DELETE, TRUNCATE table privileges on audit_logs
 DO $$

@@ -371,8 +371,22 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             err_msg = str(rpc_err)
             if "USER_NOT_FOUND" in err_msg:
                 raise HTTPException(status_code=404, detail="User not found")
+            # Only fall back if the RPC function itself does not exist (unmigrated DB or unmocked unit test)
+            is_missing_fn = (
+                "42883" in err_msg
+                or "PGRST202" in err_msg
+                or "could not find the function" in err_msg.lower()
+                or "function public.admin_update_user_role" in err_msg.lower()
+                or isinstance(rpc_err, (AttributeError, TypeError))
+            )
+            if not is_missing_fn:
+                logger.error(f"SECURITY CRITICAL: Transactional RPC admin_update_user_role failed: {rpc_err}")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Security audit logging failed for ROLE_CHANGE. Action was aborted to ensure an append-only audit trail."
+                )
             logger.warning(
-                f"RPC admin_update_user_role failed or unavailable ({rpc_err}), falling back to direct table update with rollback protection"
+                f"RPC admin_update_user_role not installed ({rpc_err}); using test fallback with compensating rollback"
             )
 
         if updated_row is None:
@@ -485,8 +499,22 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
                 raise HTTPException(status_code=404, detail="User not found")
             if "NO_PENDING_REQUEST" in err_msg:
                 raise HTTPException(status_code=400, detail="User has no pending role request to decline")
+            # Only fall back if the RPC function itself does not exist (unmigrated DB or unmocked unit test)
+            is_missing_fn = (
+                "42883" in err_msg
+                or "PGRST202" in err_msg
+                or "could not find the function" in err_msg.lower()
+                or "function public.admin_decline_role_request" in err_msg.lower()
+                or isinstance(rpc_err, (AttributeError, TypeError))
+            )
+            if not is_missing_fn:
+                logger.error(f"SECURITY CRITICAL: Transactional RPC admin_decline_role_request failed: {rpc_err}")
+                raise HTTPException(
+                    status_code=500,
+                    detail="Security audit logging failed for ROLE_REQUEST_DECLINED. Action was aborted to ensure an append-only audit trail."
+                )
             logger.warning(
-                f"RPC admin_decline_role_request failed or unavailable ({rpc_err}), falling back to direct table update with rollback protection"
+                f"RPC admin_decline_role_request not installed ({rpc_err}); using test fallback with compensating rollback"
             )
 
         if updated_row is None:
@@ -541,8 +569,6 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error declining role request for user {uid}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to decline role request")
         logger.error(f"Error declining role request for user {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to decline role request")
 
