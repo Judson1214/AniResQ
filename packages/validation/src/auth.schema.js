@@ -7,7 +7,10 @@ const registerSchema = z.object({
   phone: z.string().optional(),
   role: z.nativeEnum(UserRole, {
     errorMap: () => ({ message: "Invalid role" })
-  })
+  }),
+  idCardType: z.string().optional(),
+  idCardNumber: z.string().optional(),
+  idCardUrl: z.string().optional()
 });
 const loginSchema = z.object({
   email: z.string().email("Invalid email address"),

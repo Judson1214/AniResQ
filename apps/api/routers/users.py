@@ -25,6 +25,9 @@ class UserProfileCreate(BaseModel):
     role: Optional[str] = "CITIZEN"
     phoneNumber: Optional[str] = None
     requestedRole: Optional[str] = None
+    idCardType: Optional[str] = None
+    idCardNumber: Optional[str] = None
+    idCardUrl: Optional[str] = None
 
 class UserProfileUpdate(BaseModel):
     displayName: Optional[str] = None
@@ -34,6 +37,9 @@ class UserProfileUpdate(BaseModel):
     bio: Optional[str] = None
     avatarUrl: Optional[str] = None
     requestedRole: Optional[str] = None
+    idCardType: Optional[str] = None
+    idCardNumber: Optional[str] = None
+    idCardUrl: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     serviceRadiusKm: Optional[int] = None
@@ -48,6 +54,9 @@ class UserResponse(BaseModel):
     displayName: Optional[str] = ""
     role: str = "CITIZEN"
     requestedRole: Optional[str] = None
+    idCardType: Optional[str] = None
+    idCardNumber: Optional[str] = None
+    idCardUrl: Optional[str] = None
     avatarUrl: Optional[str] = ""
     createdAt: Optional[str] = None
     email: Optional[str] = ""
@@ -58,6 +67,31 @@ class UserResponse(BaseModel):
     longitude: Optional[float] = None
     serviceRadiusKm: Optional[int] = None
     alertsEnabled: Optional[bool] = None
+
+def notify_admins_of_role_request(
+    user_id: str,
+    user_name: str,
+    user_email: str,
+    req_role: str,
+    id_card_type: Optional[str] = None,
+    id_card_number: Optional[str] = None
+):
+    """Pushes a high-priority system notification to all administrators when an operator applies for elevated clearance."""
+    try:
+        admins = supabase.table("users").select("id").eq("role", "ADMIN").execute()
+        id_info = f"{id_card_type}: {id_card_number}" if (id_card_type or id_card_number) else "Pending ID documentation"
+        for admin in (admins.data or []):
+            create_system_notification(
+                user_id=admin["id"],
+                notif_type="ROLE_REQUEST",
+                title=f"New Clearance Request: {req_role}",
+                message=f"Operator '{user_name}' ({user_email}) has requested clearance for {req_role}. Verification: {id_info}.",
+                related_entity_id=user_id,
+                related_entity_type="USER"
+            )
+        logger.info(f"Dispatched clearance request notifications to {len(admins.data or [])} admins for {user_id} ({req_role})")
+    except Exception as e:
+        logger.warning(f"Failed to notify admins of role request: {e}")
 
 def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool = True) -> dict:
     """Map DB row to UserResponse shape with consistent camelCase attributes and PII redaction."""
@@ -81,12 +115,40 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
         alerts_val = True
     alerts_enabled = alerts_val if can_view_sensitive else None
 
+    # Parse identification card proof
+    id_card_type = data.get("id_card_type") or data.get("idCardType")
+    id_card_number = data.get("id_card_number") or data.get("idCardNumber")
+    id_card_url = data.get("id_card_url") or data.get("idCardUrl")
+
+    bio_text = data.get("bio") or ""
+    if not id_card_number and "[ID:" in bio_text:
+        try:
+            raw_id = bio_text.split("[ID:")[1].split("]")[0].strip()
+            if " | " in raw_id:
+                parts = raw_id.split(" | ")
+                id_card_type = parts[0].strip()
+                id_card_number = parts[1].strip()
+                if len(parts) > 2 and parts[2].strip():
+                    id_card_url = parts[2].strip()
+            elif " - " in raw_id:
+                parts = raw_id.split(" - ")
+                id_card_type = parts[0].strip()
+                id_card_number = parts[1].strip()
+            else:
+                id_card_type = "ID Document"
+                id_card_number = raw_id
+        except Exception:
+            pass
+
     return {
         "id": user_id,
         "uid": user_id,
         "displayName": data.get("display_name") or data.get("displayName") or "",
         "role": data.get("role") or "CITIZEN",
         "requestedRole": (data.get("requested_role") if "requested_role" in data else data.get("requestedRole")) if can_view_sensitive else None,
+        "idCardType": id_card_type if can_view_sensitive else None,
+        "idCardNumber": id_card_number if can_view_sensitive else None,
+        "idCardUrl": id_card_url if can_view_sensitive else None,
         "avatarUrl": data.get("avatar_url") or data.get("avatarUrl") or "",
         "createdAt": data.get("created_at") or data.get("createdAt"),
         "email": (data.get("email") or "") if can_view_contact else "",
@@ -125,6 +187,24 @@ def list_users(
         is_admin = current_user.get("role") == "ADMIN"
         
         users_data = res.data or []
+        if is_admin:
+            try:
+                auth_users = supabase.auth.admin.list_users()
+                auth_metadata_map = {au.id: au.user_metadata for au in auth_users if au.user_metadata}
+                for d in users_data:
+                    meta = auth_metadata_map.get(d.get("id") or d.get("uid"), {})
+                    if meta:
+                        if not d.get("requested_role") and meta.get("requested_role"):
+                            d["requested_role"] = meta.get("requested_role")
+                        if meta.get("id_card_type"):
+                            d["id_card_type"] = meta.get("id_card_type")
+                        if meta.get("id_card_number"):
+                            d["id_card_number"] = meta.get("id_card_number")
+                        if meta.get("id_card_url"):
+                            d["id_card_url"] = meta.get("id_card_url")
+            except Exception as meta_err:
+                logger.warning(f"Failed to load auth metadata: {meta_err}")
+
         if has_requested_role:
             users_data = [
                 d for d in users_data
@@ -269,6 +349,17 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         }
         if req_role:
             data["requested_role"] = req_role
+            if profile.idCardType or profile.idCardNumber:
+                id_card_tag = f"[ID: {profile.idCardType or 'Document'} | {profile.idCardNumber or ''} | {profile.idCardUrl or ''}]"
+                data["bio"] = f"{id_card_tag} {data.get('bio', '')}".strip()
+            notify_admins_of_role_request(
+                user_id=profile.uid,
+                user_name=profile.displayName,
+                user_email=verified_email,
+                req_role=req_role,
+                id_card_type=profile.idCardType,
+                id_card_number=profile.idCardNumber
+            )
         
         res = supabase.table("users").upsert(data).execute()
         if not res.data:
@@ -300,11 +391,32 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
         update_data["bio"] = profile.bio
     if profile.avatarUrl is not None: 
         update_data["avatar_url"] = validate_avatar_url(profile.avatarUrl)
+    if profile.idCardType or profile.idCardNumber:
+        clean_bio = profile.bio if profile.bio is not None else ""
+        if "[ID:" in clean_bio:
+            clean_bio = clean_bio.split("]", 1)[1].strip()
+        id_tag = f"[ID: {profile.idCardType or 'Document'} | {profile.idCardNumber or ''} | {profile.idCardUrl or ''}]"
+        update_data["bio"] = f"{id_tag} {clean_bio}".strip()
     if profile.requestedRole is not None:
         raw_req = profile.requestedRole.strip().upper() if profile.requestedRole.strip() else None
         if raw_req == "ADMIN" or (raw_req and raw_req not in ALLOWED_REQUESTED_ROLES):
             raise HTTPException(status_code=400, detail="Cannot request ADMIN or invalid role")
         update_data["requested_role"] = raw_req
+        if raw_req:
+            try:
+                user_info = supabase.table("users").select("display_name, email").eq("id", uid).execute()
+                u_name = user_info.data[0].get("display_name", "Operator") if user_info.data else "Operator"
+                u_email = user_info.data[0].get("email", "") if user_info.data else ""
+                notify_admins_of_role_request(
+                    user_id=uid,
+                    user_name=u_name,
+                    user_email=u_email,
+                    req_role=raw_req,
+                    id_card_type=profile.idCardType,
+                    id_card_number=profile.idCardNumber
+                )
+            except Exception as e:
+                logger.warning(f"Failed to dispatch admin notification: {e}")
     if profile.latitude is not None:
         if not (-90.0 <= profile.latitude <= 90.0):
             raise HTTPException(status_code=422, detail="Latitude must be between -90 and 90")
@@ -338,6 +450,52 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
     except Exception as e:
         logger.error(f"Error updating user profile {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update user profile")
+
+class RoleClearanceRequest(BaseModel):
+    requestedRole: str
+    idCardType: Optional[str] = "Government Photo ID"
+    idCardNumber: str
+    idCardUrl: Optional[str] = None
+    notes: Optional[str] = None
+
+@router.post("/request-clearance", response_model=UserResponse)
+def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict = Depends(get_current_user)):
+    """Allows authenticated operators to submit clearance verification with identification details."""
+    target_role = req.requestedRole.strip().upper()
+    if target_role == "ADMIN" or target_role not in ALLOWED_REQUESTED_ROLES:
+        raise HTTPException(status_code=400, detail="Cannot request ADMIN or invalid role")
+    
+    uid = current_user["uid"]
+    id_tag = f"[ID: {req.idCardType or 'Document'} | {req.idCardNumber} | {req.idCardUrl or ''}]"
+    
+    existing = supabase.table("users").select("bio, display_name, email").eq("id", uid).execute()
+    curr_bio = existing.data[0].get("bio", "") if existing.data else ""
+    if "[ID:" in curr_bio:
+        curr_bio = curr_bio.split("]", 1)[1].strip()
+    
+    new_bio = f"{id_tag} {curr_bio}".strip()
+    update_data = {
+        "requested_role": target_role,
+        "bio": new_bio
+    }
+    
+    res = supabase.table("users").update(update_data).eq("id", uid).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    u_name = current_user.get("name") or current_user.get("displayName") or (existing.data[0].get("display_name") if existing.data else "Operator")
+    u_email = current_user.get("email") or (existing.data[0].get("email") if existing.data else "")
+    
+    notify_admins_of_role_request(
+        user_id=uid,
+        user_name=u_name,
+        user_email=u_email,
+        req_role=target_role,
+        id_card_type=req.idCardType,
+        id_card_number=req.idCardNumber
+    )
+    
+    return map_user(res.data[0], can_view_contact=True, can_view_sensitive=True)
 
 @router.patch("/{uid}/role", response_model=UserResponse)
 def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends(get_current_user)):

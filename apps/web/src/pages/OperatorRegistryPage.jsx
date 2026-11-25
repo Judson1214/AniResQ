@@ -19,7 +19,9 @@ import {
   AlertCircle,
   Loader2,
   RefreshCw,
-  Edit2
+  Edit2,
+  CreditCard,
+  ExternalLink
 } from "lucide-react";
 
 const ROLES = ["ALL", "VOLUNTEER", "NGO", "SHELTER", "VET", "CITIZEN", "ADMIN"];
@@ -265,6 +267,7 @@ export default function OperatorRegistryPage() {
                       <th className="py-3.5 px-6">Operator</th>
                       <th className="py-3.5 px-4">Role Clearance</th>
                       <th className="py-3.5 px-4">Pending Request</th>
+                      <th className="py-3.5 px-4">ID Verification</th>
                       <th className="py-3.5 px-4">Coverage & Alerting</th>
                       <th className="py-3.5 px-4">Joined Date</th>
                       <th className="py-3.5 px-6 text-right">Actions</th>
@@ -349,6 +352,23 @@ export default function OperatorRegistryPage() {
                             )}
                           </td>
 
+                          {/* ID Verification */}
+                          <td className="py-4 px-4 text-xs">
+                            {u.idCardNumber || u.idCardType ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1 font-bold text-slate-200">
+                                  <CreditCard size={12} className="text-purple-400" />
+                                  {u.idCardType || "Government Photo ID"}
+                                </span>
+                                <span className="text-[11px] font-mono text-purple-300">
+                                  {u.idCardNumber || "ID Document Provided"}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-600">—</span>
+                            )}
+                          </td>
+
                           {/* Coverage / Alerts */}
                           <td className="py-4 px-4 text-xs">
                             {u.latitude && u.longitude ? (
@@ -419,6 +439,74 @@ export default function OperatorRegistryPage() {
               </div>
 
               <div className="space-y-4">
+                {editingUser.requestedRole && editingUser.requestedRole !== editingUser.role && (
+                  <div className="p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                        <CreditCard size={14} />
+                        Identity Card Verification
+                      </span>
+                      <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                        Pending Clearance
+                      </span>
+                    </div>
+
+                    <div className="text-xs space-y-1.5 text-slate-300 bg-[#0A0F1C] p-3 rounded-xl border border-slate-800">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Requested Clearance:</span>
+                        <span className="font-bold text-emerald-400">{editingUser.requestedRole}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Document Type:</span>
+                        <span className="font-medium text-slate-200">{editingUser.idCardType || "Government Photo ID"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Credential / Reg No:</span>
+                        <span className="font-mono text-purple-300 font-bold">{editingUser.idCardNumber || "Verified Document"}</span>
+                      </div>
+                      {editingUser.idCardUrl && (
+                        <div className="pt-1">
+                          <a
+                            href={editingUser.idCardUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 underline"
+                          >
+                            <ExternalLink size={11} />
+                            Inspect ID Document Proof
+                          </a>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          roleMutation.mutate({ uid: editingUser.id, role: editingUser.requestedRole });
+                          setEditingUser(null);
+                        }}
+                        disabled={roleMutation.isPending}
+                        className="flex-1 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20"
+                      >
+                        <UserCheck size={14} />
+                        Verify & Approve {editingUser.requestedRole}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          declineMutation.mutate(editingUser.id);
+                          setEditingUser(null);
+                        }}
+                        disabled={declineMutation.isPending}
+                        className="px-3 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold transition-colors"
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
                     Current Clearance

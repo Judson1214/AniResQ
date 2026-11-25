@@ -1,21 +1,35 @@
 import { supabase } from "@/config/supabase";
 import api from "@/lib/api";
 
-const signUp = async (email, password, displayName, role = "CITIZEN", phone = "") => {
+const signUp = async (
+  email,
+  password,
+  displayName,
+  role = "CITIZEN",
+  phone = "",
+  idCardType = "",
+  idCardNumber = "",
+  idCardUrl = ""
+) => {
   // Prevent users from requesting ADMIN role via signup metadata
   const requestedRole = (role && role.toUpperCase() !== "ADMIN" && ["VOLUNTEER", "NGO", "SHELTER", "VET"].includes(role.toUpperCase()))
     ? role.toUpperCase()
     : null;
 
+  const metadata = {
+    display_name: displayName,
+    phone: phone || "",
+    requested_role: requestedRole,
+  };
+  if (idCardType) metadata.id_card_type = idCardType;
+  if (idCardNumber) metadata.id_card_number = idCardNumber;
+  if (idCardUrl) metadata.id_card_url = idCardUrl;
+
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: {
-        display_name: displayName,
-        phone: phone || "",
-        requested_role: requestedRole,
-      }
+      data: metadata
     }
   });
 
@@ -29,6 +43,25 @@ const signUp = async (email, password, displayName, role = "CITIZEN", phone = ""
     role: "CITIZEN", // Default role enforced by backend database trigger
     phone: phone || "",
   };
+
+  // If user requested an elevated role and session created, notify backend to trigger admin push notification
+  if (requestedRole && user?.id) {
+    try {
+      await api.post("/users", {
+        uid: user.id,
+        email: user.email,
+        displayName,
+        role: "CITIZEN",
+        phoneNumber: phone || "",
+        requestedRole,
+        idCardType: idCardType || "",
+        idCardNumber: idCardNumber || "",
+        idCardUrl: idCardUrl || "",
+      });
+    } catch (syncErr) {
+      console.warn("Background clearance sync deferred:", syncErr);
+    }
+  }
   
   return { ...newUser, id: user.id, avatarUrl: "", isVerified: false, createdAt: new Date() };
 };

@@ -153,6 +153,26 @@ export interface paths {
         patch: operations["update_user_profile_api_users__uid__patch"];
         trace?: never;
     };
+    "/api/users/request-clearance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Role Clearance Request
+         * @description Allows authenticated operators to submit clearance verification with identification details.
+         */
+        post: operations["submit_role_clearance_request_api_users_request_clearance_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{uid}/role": {
         parameters: {
             query?: never;
@@ -396,6 +416,23 @@ export interface paths {
         };
         /** Get Notifications */
         get: operations["get_notifications_api_notifications__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Notifications */
+        get: operations["get_notifications_api_notifications_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -996,6 +1033,22 @@ export interface components {
             /** Status */
             status: string;
         };
+        /** RoleClearanceRequest */
+        RoleClearanceRequest: {
+            /** Requestedrole */
+            requestedRole: string;
+            /**
+             * Idcardtype
+             * @default Government Photo ID
+             */
+            idCardType: string | null;
+            /** Idcardnumber */
+            idCardNumber: string;
+            /** Idcardurl */
+            idCardUrl?: string | null;
+            /** Notes */
+            notes?: string | null;
+        };
         /** SystemSettings */
         SystemSettings: {
             /**
@@ -1092,6 +1145,12 @@ export interface components {
             phoneNumber?: string | null;
             /** Requestedrole */
             requestedRole?: string | null;
+            /** Idcardtype */
+            idCardType?: string | null;
+            /** Idcardnumber */
+            idCardNumber?: string | null;
+            /** Idcardurl */
+            idCardUrl?: string | null;
         };
         /** UserProfileUpdate */
         UserProfileUpdate: {
@@ -1109,6 +1168,12 @@ export interface components {
             avatarUrl?: string | null;
             /** Requestedrole */
             requestedRole?: string | null;
+            /** Idcardtype */
+            idCardType?: string | null;
+            /** Idcardnumber */
+            idCardNumber?: string | null;
+            /** Idcardurl */
+            idCardUrl?: string | null;
             /** Latitude */
             latitude?: number | null;
             /** Longitude */
@@ -1136,6 +1201,12 @@ export interface components {
             role: string;
             /** Requestedrole */
             requestedRole?: string | null;
+            /** Idcardtype */
+            idCardType?: string | null;
+            /** Idcardnumber */
+            idCardNumber?: string | null;
+            /** Idcardurl */
+            idCardUrl?: string | null;
             /**
              * Avatarurl
              * @default
@@ -1580,6 +1651,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UserProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_role_clearance_request_api_users_request_clearance_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleClearanceRequest"];
             };
         };
         responses: {
@@ -2267,6 +2371,38 @@ export interface operations {
         };
     };
     get_notifications_api_notifications__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_notifications_api_notifications_get: {
         parameters: {
             query?: {
                 limit?: number;

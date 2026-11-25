@@ -64,6 +64,7 @@ def create_bulk_system_notifications(notifications_list: List[dict]):
     except Exception as e:
         logger.warning(f"Failed to bulk insert system notifications ({len(notifications_list)} items): {e}")
 
+@router.get("", response_model=List[NotificationResponse])
 @router.get("/", response_model=List[NotificationResponse])
 def get_notifications(
     limit: int = Query(default=50, ge=1, le=100),

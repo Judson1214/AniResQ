@@ -826,6 +826,53 @@
         }
       }
     },
+    "/api/users/request-clearance": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Submit Role Clearance Request",
+        "description": "Allows authenticated operators to submit clearance verification with identification details.",
+        "operationId": "submit_role_clearance_request_api_users_request_clearance_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleClearanceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/users/{uid}/role": {
       "patch": {
         "tags": [
@@ -2046,6 +2093,71 @@
                     "$ref": "#/components/schemas/NotificationResponse"
                   },
                   "title": "Response Get Notifications Api Notifications  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Get Notifications",
+        "operationId": "get_notifications_api_notifications_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationResponse"
+                  },
+                  "title": "Response Get Notifications Api Notifications Get"
                 }
               }
             }
@@ -3780,6 +3892,58 @@
         ],
         "title": "RescueStatusUpdateResponse"
       },
+      "RoleClearanceRequest": {
+        "properties": {
+          "requestedRole": {
+            "type": "string",
+            "title": "Requestedrole"
+          },
+          "idCardType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardtype",
+            "default": "Government Photo ID"
+          },
+          "idCardNumber": {
+            "type": "string",
+            "title": "Idcardnumber"
+          },
+          "idCardUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardurl"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "requestedRole",
+          "idCardNumber"
+        ],
+        "title": "RoleClearanceRequest"
+      },
       "SystemSettings": {
         "properties": {
           "defaultDispatchRadiusKm": {
@@ -4004,6 +4168,39 @@
               }
             ],
             "title": "Requestedrole"
+          },
+          "idCardType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardtype"
+          },
+          "idCardNumber": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardnumber"
+          },
+          "idCardUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardurl"
           }
         },
         "type": "object",
@@ -4092,6 +4289,39 @@
             ],
             "title": "Requestedrole"
           },
+          "idCardType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardtype"
+          },
+          "idCardNumber": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardnumber"
+          },
+          "idCardUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardurl"
+          },
           "latitude": {
             "anyOf": [
               {
@@ -4177,6 +4407,39 @@
               }
             ],
             "title": "Requestedrole"
+          },
+          "idCardType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardtype"
+          },
+          "idCardNumber": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardnumber"
+          },
+          "idCardUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardurl"
           },
           "avatarUrl": {
             "anyOf": [

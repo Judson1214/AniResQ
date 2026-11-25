@@ -44,6 +44,9 @@ const ProfilePage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmittingRole, setIsSubmittingRole] = useState(false);
   const [selectedRole, setSelectedRole] = useState("VOLUNTEER");
+  const [idCardType, setIdCardType] = useState("Government Photo ID");
+  const [idCardNumber, setIdCardNumber] = useState("");
+  const [idCardUrl, setIdCardUrl] = useState("");
   
   const [formData, setFormData] = useState({
     name: user?.displayName || "",
@@ -99,11 +102,14 @@ const ProfilePage = () => {
     try {
       await updateUserProfile(user.uid, {
         requestedRole: selectedRole,
+        idCardType,
+        idCardNumber,
+        idCardUrl,
       });
       setUser({ ...user, requestedRole: selectedRole });
       toast({
         title: "Clearance Request Submitted",
-        description: `Your request for ${selectedRole} clearance is pending administrator verification.`,
+        description: `Your request for ${selectedRole} clearance with ID verification is pending administrator review.`,
       });
     } catch (error) {
       toast({
@@ -483,6 +489,57 @@ const ProfilePage = () => {
                       <p className="text-xs text-slate-400 mt-2">{role.description}</p>
                     </label>
                   ))}
+                </div>
+
+                <div className="p-4 rounded-xl border border-slate-800 bg-slate-900/40 space-y-3 mt-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Identification Card & Credential Verification</span>
+                  </div>
+                  
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                        Document Type
+                      </label>
+                      <select
+                        value={idCardType}
+                        onChange={(e) => setIdCardType(e.target.value)}
+                        className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="Government Photo ID">Government Photo ID (Aadhaar / DL / Passport)</option>
+                        <option value="NGO Registration Certificate">NGO Registration / Society Certificate</option>
+                        <option value="Animal Shelter License">Shelter / Animal Welfare License</option>
+                        <option value="Veterinary Medical Council ID">Veterinary Council Registration</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                        ID / License / Reg Number *
+                      </label>
+                      <input
+                        type="text"
+                        value={idCardNumber}
+                        onChange={(e) => setIdCardNumber(e.target.value)}
+                        placeholder="e.g. DL-1420110012345 or NGO/2023/8921"
+                        className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                      ID Card / Certificate Document Link (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={idCardUrl}
+                      onChange={(e) => setIdCardUrl(e.target.value)}
+                      placeholder="https://... or certificate cloud drive URL"
+                      className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-2 flex justify-end">
