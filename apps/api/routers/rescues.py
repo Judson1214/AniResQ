@@ -460,7 +460,8 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
         # Scoped clearance: Only coordinators (ADMIN, NGO, SHELTER) or the volunteer themselves can assign/reassign
         DISPATCH_COORDINATOR_ROLES = {"ADMIN", "NGO", "SHELTER"}
         is_coordinator = user_role in DISPATCH_COORDINATOR_ROLES
-        is_self_assign = user_role == "VOLUNTEER" and req.volunteerId == user["uid"]
+        is_unassigned = current_rescue.get("assigned_to") is None
+        is_self_assign = user_role == "VOLUNTEER" and req.volunteerId == user["uid"] and is_unassigned
         is_current_assignee = user_role == "VOLUNTEER" and current_rescue.get("assigned_to") == user["uid"]
 
         if not (is_coordinator or is_self_assign or is_current_assignee):

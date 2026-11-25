@@ -7,6 +7,7 @@
 REVOKE ALL ON TABLE public.audit_logs FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON TABLE public.audit_logs TO authenticated;
 GRANT SELECT, INSERT ON TABLE public.audit_logs TO service_role;
+REVOKE UPDATE, DELETE, TRUNCATE ON TABLE public.audit_logs FROM service_role;
 
 -- Unconditional trigger function blocking UPDATE and DELETE across all roles
 CREATE OR REPLACE FUNCTION public.block_audit_log_mutation()

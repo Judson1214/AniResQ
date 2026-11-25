@@ -348,29 +348,67 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
     try:
         # Fetch current role and requested role for audit log and user notification
         current_rec = supabase.table("users").select("role, display_name, requested_role").eq("id", uid).execute()
-        user_row = current_rec.data[0] if (current_rec.data and len(current_rec.data) > 0) else {}
+        if not current_rec.data:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        user_row = current_rec.data[0]
         prev_role = user_row.get("role", "UNKNOWN")
         prev_requested = user_row.get("requested_role")
 
-        # Update role and clear pending requested_role
-        res = supabase.table("users").update({
-            "role": target_role,
-            "requested_role": None
-        }).eq("id", uid).execute()
-        
-        if not res.data:
-            raise HTTPException(status_code=404, detail="User not found")
+        updated_row = None
+        # Primary transactional path: atomic update + audit log via PostgreSQL RPC
+        try:
+            rpc_res = supabase.rpc("admin_update_user_role", {
+                "p_user_id": uid,
+                "p_new_role": target_role,
+                "p_admin_id": current_user["uid"],
+            }).execute()
+            if rpc_res and rpc_res.data:
+                updated_row = rpc_res.data
+        except HTTPException:
+            raise
+        except Exception as rpc_err:
+            err_msg = str(rpc_err)
+            if "USER_NOT_FOUND" in err_msg:
+                raise HTTPException(status_code=404, detail="User not found")
+            logger.warning(
+                f"RPC admin_update_user_role failed or unavailable ({rpc_err}), falling back to direct table update with rollback protection"
+            )
 
-        # Audit role change in database audit_logs (performed_by records real admin) and structured logs
-        log_audit_event(
-            action="ROLE_CHANGE",
-            entity_type="USER",
-            entity_id=uid,
-            performed_by=current_user["uid"],
-            old_value={"role": prev_role},
-            new_value={"role": target_role},
-            fail_closed=True,
-        )
+        if updated_row is None:
+            # Direct table update with fail-closed compensating rollback
+            res = supabase.table("users").update({
+                "role": target_role,
+                "requested_role": None
+            }).eq("id", uid).execute()
+            
+            if not res.data:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            try:
+                # Audit role change in database audit_logs (performed_by records real admin)
+                log_audit_event(
+                    action="ROLE_CHANGE",
+                    entity_type="USER",
+                    entity_id=uid,
+                    performed_by=current_user["uid"],
+                    old_value={"role": prev_role},
+                    new_value={"role": target_role},
+                    fail_closed=True,
+                )
+            except Exception:
+                # Compensating rollback: revert mutation immediately so no unauthorized privilege persists
+                try:
+                    supabase.table("users").update({
+                        "role": prev_role,
+                        "requested_role": prev_requested
+                    }).eq("id", uid).execute()
+                    logger.info(f"Compensating rollback: reverted role mutation for user {uid} to {prev_role}")
+                except Exception as revert_err:
+                    logger.error(f"CRITICAL: Failed to revert user {uid} role after audit failure: {revert_err}")
+                raise
+
+            updated_row = {**(res.data[0] if res.data else {}), "role": target_role, "requested_role": None}
 
         # Send notification to user regarding clearance decision
         if prev_requested and target_role == prev_requested:
@@ -405,7 +443,7 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             f"AUDIT: Role changed for user {uid} from '{prev_role}' to '{target_role}' by admin '{current_user['uid']}'"
         )
             
-        row_data = {**(res.data[0] if res.data else {}), "role": target_role, "requested_role": None}
+        row_data = {**updated_row, "role": target_role, "requested_role": None}
         return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
     except HTTPException:
         raise
@@ -430,24 +468,59 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
         if not requested_role:
             raise HTTPException(status_code=400, detail="User has no pending role request to decline")
 
-        # Clear requested_role only, leave existing role untouched
-        res = supabase.table("users").update({
-            "requested_role": None
-        }).eq("id", uid).execute()
-        
-        if not res.data:
-            raise HTTPException(status_code=404, detail="User not found")
+        updated_row = None
+        # Primary transactional path: atomic update + audit log via PostgreSQL RPC
+        try:
+            rpc_res = supabase.rpc("admin_decline_role_request", {
+                "p_user_id": uid,
+                "p_admin_id": current_user["uid"],
+            }).execute()
+            if rpc_res and rpc_res.data:
+                updated_row = rpc_res.data
+        except HTTPException:
+            raise
+        except Exception as rpc_err:
+            err_msg = str(rpc_err)
+            if "USER_NOT_FOUND" in err_msg:
+                raise HTTPException(status_code=404, detail="User not found")
+            if "NO_PENDING_REQUEST" in err_msg:
+                raise HTTPException(status_code=400, detail="User has no pending role request to decline")
+            logger.warning(
+                f"RPC admin_decline_role_request failed or unavailable ({rpc_err}), falling back to direct table update with rollback protection"
+            )
 
-        # Audit role request decline
-        log_audit_event(
-            action="ROLE_REQUEST_DECLINED",
-            entity_type="USER",
-            entity_id=uid,
-            performed_by=current_user["uid"],
-            old_value={"requested_role": requested_role, "role": current_role},
-            new_value={"requested_role": None, "role": current_role},
-            fail_closed=True,
-        )
+        if updated_row is None:
+            # Clear requested_role only, leave existing role untouched
+            res = supabase.table("users").update({
+                "requested_role": None
+            }).eq("id", uid).execute()
+            
+            if not res.data:
+                raise HTTPException(status_code=404, detail="User not found")
+
+            try:
+                # Audit role request decline
+                log_audit_event(
+                    action="ROLE_REQUEST_DECLINED",
+                    entity_type="USER",
+                    entity_id=uid,
+                    performed_by=current_user["uid"],
+                    old_value={"requested_role": requested_role, "role": current_role},
+                    new_value={"requested_role": None, "role": current_role},
+                    fail_closed=True,
+                )
+            except Exception:
+                # Compensating rollback: restore requested_role so state remains unmodified
+                try:
+                    supabase.table("users").update({
+                        "requested_role": requested_role
+                    }).eq("id", uid).execute()
+                    logger.info(f"Compensating rollback: restored requested_role for user {uid} after audit failure")
+                except Exception as revert_err:
+                    logger.error(f"CRITICAL: Failed to revert user {uid} requested_role after audit failure: {revert_err}")
+                raise
+
+            updated_row = {**(res.data[0] if res.data else {}), "requested_role": None}
 
         # Send notification to user that request was declined and current role is preserved
         create_system_notification(
@@ -463,11 +536,13 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
             f"AUDIT: Role request for {requested_role} by user {uid} declined by admin '{current_user['uid']}'. Role preserved as '{current_role}'."
         )
 
-        row_data = {**(res.data[0] if res.data else {}), "requested_role": None}
+        row_data = {**updated_row, "requested_role": None}
         return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error declining role request for user {uid}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to decline role request")
         logger.error(f"Error declining role request for user {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to decline role request")
 

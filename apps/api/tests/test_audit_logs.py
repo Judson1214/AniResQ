@@ -208,6 +208,79 @@ def test_audit_fail_closed_aborts_role_mutation(monkeypatch):
         res = client.patch("/api/users/target-user/role", json={"role": "VOLUNTEER"})
         assert res.status_code == 500
         assert "audit logging failed" in res.json()["detail"].lower()
+        # Verify compensating rollback was executed so no untracked role change persisted
+        assert any(
+            call.args and call.args[0] == {"role": "CITIZEN", "requested_role": None}
+            for call in mock_users.update.call_args_list
+        )
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_volunteer_cannot_take_over_assigned_rescue(monkeypatch):
+    """Test that a volunteer cannot take over a rescue already assigned to someone else.
+    Only coordinators, current assignees, or self-assign on unassigned rescues are permitted."""
+    mock_users = MagicMock()
+    mock_users.select.return_value = mock_users
+    mock_users.eq.return_value = mock_users
+    mock_users.execute.return_value = MagicMock(data=[{"id": "vol-2", "role": "VOLUNTEER", "display_name": "Vol Two"}])
+
+    mock_rescues = MagicMock()
+    mock_rescues.select.return_value = mock_rescues
+    mock_rescues.update.return_value = mock_rescues
+    mock_rescues.eq.return_value = mock_rescues
+
+    def router(t):
+        if t == "users": return mock_users
+        if t == "rescues": return mock_rescues
+        mock = MagicMock()
+        mock.insert.return_value = mock
+        mock.execute.return_value = MagicMock(data=[])
+        return mock
+
+    monkeypatch.setattr(supabase_config.supabase, "table", router)
+
+    # 1. Vol-2 tries to hijack a rescue already assigned to Vol-1 -> 403 Forbidden
+    mock_rescues.execute.return_value = MagicMock(data=[{
+        "id": "r-assigned", "status": "DISPATCHED", "assigned_to": "vol-1", "reporter_id": "cit-1"
+    }])
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "vol-2", "email": "vol2@aniresq.org", "name": "Vol Two", "role": "VOLUNTEER"
+    }
+    try:
+        res = client.post("/api/rescues/r-assigned/assign", json={"volunteerId": "vol-2", "volunteerName": "Vol Two"})
+        assert res.status_code == 403
+        assert "Forbidden" in res.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+    # 2. Rescue is UNASSIGNED (assigned_to: None) -> Vol-2 CAN self-assign
+    mock_rescues.execute.side_effect = [
+        MagicMock(data=[{"id": "r-unassigned", "status": "PENDING", "assigned_to": None, "reporter_id": "cit-1"}]), # select existing
+        MagicMock(data=[{"id": "r-unassigned", "status": "DISPATCHED", "assigned_to": "vol-2", "reporter_id": "cit-1"}]), # update
+    ]
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "vol-2", "email": "vol2@aniresq.org", "name": "Vol Two", "role": "VOLUNTEER"
+    }
+    try:
+        res = client.post("/api/rescues/r-unassigned/assign", json={"volunteerId": "vol-2", "volunteerName": "Vol Two"})
+        assert res.status_code == 200
+        assert res.json()["assignedTo"] == "vol-2"
+    finally:
+        app.dependency_overrides.clear()
+
+    # 3. Current assignee Vol-1 CAN hand off to Vol-2
+    mock_rescues.execute.side_effect = [
+        MagicMock(data=[{"id": "r-handoff", "status": "DISPATCHED", "assigned_to": "vol-1", "reporter_id": "cit-1"}]), # select existing
+        MagicMock(data=[{"id": "r-handoff", "status": "DISPATCHED", "assigned_to": "vol-2", "reporter_id": "cit-1"}]), # update
+    ]
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "vol-1", "email": "vol1@aniresq.org", "name": "Vol One", "role": "VOLUNTEER"
+    }
+    try:
+        res = client.post("/api/rescues/r-handoff/assign", json={"volunteerId": "vol-2", "volunteerName": "Vol Two"})
+        assert res.status_code == 200
+        assert res.json()["assignedTo"] == "vol-2"
     finally:
         app.dependency_overrides.clear()
 

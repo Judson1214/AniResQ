@@ -105,4 +105,80 @@ BEGIN
 END $$;
 RESET ROLE;
 
+-- 8. Verify service_role lacks UPDATE, DELETE, TRUNCATE table privileges on audit_logs
+DO $$
+BEGIN
+  IF has_table_privilege('service_role', 'public.audit_logs', 'UPDATE') THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: service_role has UPDATE privilege on audit_logs';
+  END IF;
+  IF has_table_privilege('service_role', 'public.audit_logs', 'DELETE') THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: service_role has DELETE privilege on audit_logs';
+  END IF;
+  IF has_table_privilege('service_role', 'public.audit_logs', 'TRUNCATE') THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: service_role has TRUNCATE privilege on audit_logs';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.audit_logs', 'INSERT') THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: service_role is missing INSERT privilege on audit_logs';
+  END IF;
+  IF NOT has_table_privilege('service_role', 'public.audit_logs', 'SELECT') THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: service_role is missing SELECT privilege on audit_logs';
+  END IF;
+  RAISE NOTICE 'PASS: service_role table privileges strictly limited to SELECT and INSERT on audit_logs';
+END $$;
+
+-- 9. Verify anon and authenticated cannot execute admin_update_user_role or admin_decline_role_request
+SET LOCAL ROLE anon;
+DO $$
+BEGIN
+  PERFORM public.admin_update_user_role('00000000-0000-0000-0000-000000000001'::uuid, 'VOLUNTEER'::public.user_role, 'anon');
+  RAISE EXCEPTION 'SECURITY VIOLATION: anon was able to execute admin_update_user_role';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: anon is denied EXECUTE on admin_update_user_role';
+END $$;
+
+DO $$
+BEGIN
+  PERFORM public.admin_decline_role_request('00000000-0000-0000-0000-000000000001'::uuid, 'anon');
+  RAISE EXCEPTION 'SECURITY VIOLATION: anon was able to execute admin_decline_role_request';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: anon is denied EXECUTE on admin_decline_role_request';
+END $$;
+RESET ROLE;
+
+-- 10. Verify transactional integrity of admin_update_user_role via service_role
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_test_user_id UUID := '00000000-0000-0000-0000-111111111111';
+  v_res JSONB;
+  v_audit_count INTEGER;
+BEGIN
+  -- Seed test user in users table
+  INSERT INTO public.users (id, display_name, email, role, requested_role)
+  VALUES (v_test_user_id, 'Test User', 'testuser@example.com', 'CITIZEN', 'VOLUNTEER')
+  ON CONFLICT (id) DO NOTHING;
+
+  -- Execute transactional role change RPC
+  v_res := public.admin_update_user_role(v_test_user_id, 'VOLUNTEER'::public.user_role, 'admin-uuid');
+
+  -- Verify user role updated and requested_role cleared
+  IF (v_res->>'role') != 'VOLUNTEER' OR (v_res->>'requested_role') IS NOT NULL THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: admin_update_user_role did not return expected user state';
+  END IF;
+
+  -- Verify audit log entry was created in the same transaction
+  SELECT COUNT(*) INTO v_audit_count
+  FROM public.audit_logs
+  WHERE entity_id = v_test_user_id::text AND action = 'ROLE_CHANGE';
+
+  IF v_audit_count < 1 THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: admin_update_user_role failed to persist audit log entry';
+  END IF;
+
+  RAISE NOTICE 'PASS: admin_update_user_role executed and persisted audit trail atomically';
+END $$;
+RESET ROLE;
+
 ROLLBACK;
