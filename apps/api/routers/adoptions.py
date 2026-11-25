@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from supabase_config import supabase
 from auth import get_current_user, require_roles
 from .notifications import create_system_notification
+from .audit import log_audit_event
 
 router = APIRouter(prefix="/api/adoptions", tags=["adoptions"])
 logger = logging.getLogger("adoptions")
@@ -249,6 +250,15 @@ def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = 
                 related_entity_id=id,
                 related_entity_type="ADOPTION",
             )
+
+        log_audit_event(
+            action="ADOPTION_STATUS_UPDATE",
+            entity_type="ADOPTION_APPLICATION",
+            entity_id=id,
+            performed_by=user["uid"],
+            old_value={"status": app_record.get("status")},
+            new_value={"status": target_status, "screeningNotes": payload.screeningNotes},
+        )
                 
         return map_adoption(res.data[0])
     except HTTPException:

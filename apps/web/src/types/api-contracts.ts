@@ -17,3 +17,4 @@ export type ApiAdoptionCreate = components['schemas']['AdoptionCreate'];
 export type ApiAdoptionResponse = components['schemas']['AdoptionResponse'];
 export type ApiLostFoundResponse = components['schemas']['LostFoundResponse'];
 export type ApiNotificationResponse = components['schemas']['NotificationResponse'];
+export type ApiAuditLogResponse = components['schemas']['AuditLogResponse'];

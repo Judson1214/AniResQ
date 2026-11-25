@@ -116,6 +116,10 @@ const AdminDashboard = () => {
           <p className="text-sm text-slate-400 mt-1">Real-time overview of fleet, rescue operations, and personnel clearance.</p>
         </div>
         <div className="flex gap-3">
+          <Link to="/admin/audit-logs" className="px-4 py-2.5 bg-slate-800 text-slate-200 border border-slate-700 rounded-xl text-sm font-bold hover:bg-slate-700 transition-colors flex items-center gap-2">
+            <ShieldCheck size={16} className="text-purple-400" />
+            Audit Logs
+          </Link>
           <Link to="/rescue" className="px-5 py-2.5 bg-emerald-500 text-emerald-950 rounded-xl text-sm font-black hover:bg-emerald-400 transition-colors shadow-[0_0_20px_rgba(16,185,129,0.3)] block flex items-center">
             Dispatch Unit
           </Link>
@@ -190,9 +194,12 @@ const AdminDashboard = () => {
                   <div className="p-8 text-center text-slate-500 text-sm">No recent activity</div>
                 )}
               </div>
-              <div className="p-6 border-t border-slate-800">
-                <Link to="/rescue" className="flex items-center justify-center w-full py-3 bg-[#131B2C] text-slate-300 text-sm font-bold rounded-xl border border-slate-700 hover:bg-[#1A2438] transition-colors">
-                  View All Activity
+              <div className="p-6 border-t border-slate-800 flex gap-3">
+                <Link to="/admin/audit-logs" className="flex-1 flex items-center justify-center py-2.5 bg-[#131B2C] text-purple-400 text-xs font-bold rounded-xl border border-slate-700 hover:bg-[#1A2438] transition-colors gap-1.5">
+                  <ShieldCheck size={14} /> Security Audit
+                </Link>
+                <Link to="/rescue" className="flex-1 flex items-center justify-center py-2.5 bg-[#131B2C] text-slate-300 text-xs font-bold rounded-xl border border-slate-700 hover:bg-[#1A2438] transition-colors">
+                  Rescue Fleet
                 </Link>
               </div>
           </CardContent>

@@ -6,6 +6,7 @@ from supabase_config import supabase
 from auth import get_current_user
 from validators import validate_avatar_url
 from .notifications import create_system_notification
+from .audit import log_audit_event
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 logger = logging.getLogger("users")
@@ -361,18 +362,14 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             raise HTTPException(status_code=404, detail="User not found")
 
         # Audit role change in database audit_logs (performed_by records real admin) and structured logs
-        audit_entry = {
-            "action": "ROLE_CHANGE",
-            "entity_type": "USER",
-            "entity_id": uid,
-            "performed_by": current_user["uid"],
-            "old_value": {"role": prev_role},
-            "new_value": {"role": target_role},
-        }
-        try:
-            supabase.table("audit_logs").insert(audit_entry).execute()
-        except Exception as audit_err:
-            logger.warning(f"Could not persist audit record to database: {audit_err}")
+        log_audit_event(
+            action="ROLE_CHANGE",
+            entity_type="USER",
+            entity_id=uid,
+            performed_by=current_user["uid"],
+            old_value={"role": prev_role},
+            new_value={"role": target_role},
+        )
 
         # Send notification to user regarding clearance decision
         if prev_requested and target_role == prev_requested:
@@ -441,18 +438,14 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
             raise HTTPException(status_code=404, detail="User not found")
 
         # Audit role request decline
-        audit_entry = {
-            "action": "ROLE_REQUEST_DECLINED",
-            "entity_type": "USER",
-            "entity_id": uid,
-            "performed_by": current_user["uid"],
-            "old_value": {"requested_role": requested_role, "role": current_role},
-            "new_value": {"requested_role": None, "role": current_role},
-        }
-        try:
-            supabase.table("audit_logs").insert(audit_entry).execute()
-        except Exception as audit_err:
-            logger.warning(f"Could not persist audit record to database: {audit_err}")
+        log_audit_event(
+            action="ROLE_REQUEST_DECLINED",
+            entity_type="USER",
+            entity_id=uid,
+            performed_by=current_user["uid"],
+            old_value={"requested_role": requested_role, "role": current_role},
+            new_value={"requested_role": None, "role": current_role},
+        )
 
         # Send notification to user that request was declined and current role is preserved
         create_system_notification(

@@ -4,6 +4,7 @@ import type {
   ApiUserResponse,
   ApiRescueResponse,
   ApiAnimalResponse,
+  ApiAuditLogResponse,
 } from '@/types/api-contracts';
 
 describe('OpenAPI Contract Verification', () => {
@@ -13,7 +14,8 @@ describe('OpenAPI Contract Verification', () => {
       | '/api/rescues/'
       | '/api/rescues/public'
       | '/api/animals/{id}/claim'
-      | '/api/users/{uid}/role-request/decline';
+      | '/api/users/{uid}/role-request/decline'
+      | '/api/audit-logs';
 
     type CheckedEndpoints = ExpectedEndpoints extends keyof ApiPaths ? true : false;
     const isCovered: CheckedEndpoints = true;
@@ -54,5 +56,13 @@ describe('OpenAPI Contract Verification', () => {
       vaccinations: ['Rabies'],
     };
     expect(mockAnimal.name).toBe('Bella');
+
+    const mockAuditLog: Partial<ApiAuditLogResponse> = {
+      id: 'log-123',
+      action: 'ROLE_CHANGE',
+      entityType: 'USER',
+      performedBy: 'admin-1',
+    };
+    expect(mockAuditLog.action).toBe('ROLE_CHANGE');
   });
 });

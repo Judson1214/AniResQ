@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from routers import rescues, users, animals, adoptions, lostfound, notifications
+from routers import rescues, users, animals, adoptions, lostfound, notifications, audit
 from rate_limiter import RateLimitMiddleware
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
@@ -47,6 +47,7 @@ app.include_router(animals.router)
 app.include_router(adoptions.router)
 app.include_router(lostfound.router)
 app.include_router(notifications.router)
+app.include_router(audit.router)
 
 @app.get("/")
 async def root():

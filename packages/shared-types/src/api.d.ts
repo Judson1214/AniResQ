@@ -438,6 +438,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Audit Logs
+         * @description Admin-only endpoint to retrieve immutable audit logs.
+         */
+        get: operations["list_audit_logs_api_audit_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/": {
         parameters: {
             query?: never;
@@ -711,6 +731,29 @@ export interface components {
             volunteerId: string;
             /** Volunteername */
             volunteerName: string;
+        };
+        /** AuditLogResponse */
+        AuditLogResponse: {
+            /** Id */
+            id: string;
+            /** Action */
+            action: string;
+            /** Entitytype */
+            entityType: string;
+            /** Entityid */
+            entityId: string;
+            /** Performedby */
+            performedBy: string;
+            /** Oldvalue */
+            oldValue?: {
+                [key: string]: unknown;
+            } | null;
+            /** Newvalue */
+            newValue?: {
+                [key: string]: unknown;
+            } | null;
+            /** Createdat */
+            createdAt: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2214,6 +2257,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    list_audit_logs_api_audit_logs_get: {
+        parameters: {
+            query?: {
+                action?: string | null;
+                entity_type?: string | null;
+                performed_by?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditLogResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

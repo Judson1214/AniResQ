@@ -8,6 +8,7 @@ from supabase_config import supabase
 from auth import get_current_user
 from validators import validate_photo_urls
 from .notifications import create_system_notification, create_bulk_system_notifications
+from .audit import log_audit_event
 
 router = APIRouter(prefix="/api/rescues", tags=["rescues"])
 logger = logging.getLogger("rescues")
@@ -417,6 +418,15 @@ def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user
             supabase.table("rescue_timeline").insert(timeline_entry).execute()
         except Exception as te_err:
             logger.warning(f"Failed to insert timeline entry: {te_err}")
+
+        log_audit_event(
+            action="RESCUE_STATUS_UPDATE",
+            entity_type="RESCUE",
+            entity_id=rescue_id,
+            performed_by=user["uid"],
+            old_value={"status": current_rescue.get("status")},
+            new_value={"status": target_status, "message": update.message},
+        )
             
         return {"id": rescue_id, "status": target_status}
     except HTTPException:
@@ -485,6 +495,15 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
                 related_entity_id=rescue_id,
                 related_entity_type="RESCUE",
             )
+
+        log_audit_event(
+            action="RESCUE_ASSIGNED",
+            entity_type="RESCUE",
+            entity_id=rescue_id,
+            performed_by=user["uid"],
+            old_value={"status": "PENDING"},
+            new_value={"assigned_to": req.volunteerId, "status": new_status, "volunteerName": volunteer_name},
+        )
 
         return {"id": rescue_id, "status": new_status, "assignedTo": req.volunteerId}
     except HTTPException:
