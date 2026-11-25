@@ -8,6 +8,7 @@ from supabase_config import supabase
 from auth import get_current_user, get_optional_user, require_roles
 from validators import validate_photo_urls
 from .notifications import create_system_notification
+from .audit import log_audit_event
 
 router = APIRouter(prefix="/api/animals", tags=["animals"])
 logger = logging.getLogger("animals")
@@ -377,6 +378,15 @@ def claim_animal(id: str, user: dict = Depends(require_roles(["ADMIN", "SHELTER"
                 related_entity_type="ANIMAL",
             )
 
+        log_audit_event(
+            action="ANIMAL_CLAIMED",
+            entity_type="ANIMAL",
+            entity_id=id,
+            performed_by=user["uid"],
+            old_value={"shelter_id": None, "surrendered_by": surrendered_by},
+            new_value={"shelter_id": user["uid"], "surrendered_by": surrendered_by},
+        )
+
         return map_animal(res.data[0], viewer=user)
     except HTTPException:
         raise
@@ -387,7 +397,7 @@ def claim_animal(id: str, user: dict = Depends(require_roles(["ADMIN", "SHELTER"
 @router.delete("/{id}")
 def delete_animal(id: str, user: dict = Depends(require_roles(STAFF_ROLES))):
     try:
-        existing = supabase.table("animals").select("id, shelter_id").eq("id", id).execute()
+        existing = supabase.table("animals").select("*").eq("id", id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Animal not found")
             
@@ -400,6 +410,21 @@ def delete_animal(id: str, user: dict = Depends(require_roles(STAFF_ROLES))):
             )
             
         supabase.table("animals").delete().eq("id", id).execute()
+        log_audit_event(
+            action="ANIMAL_DELETED",
+            entity_type="ANIMAL",
+            entity_id=id,
+            performed_by=user["uid"],
+            old_value={
+                "name": existing_animal.get("name"),
+                "species": existing_animal.get("species"),
+                "breed": existing_animal.get("breed"),
+                "shelter_id": existing_animal.get("shelter_id"),
+                "adoption_status": existing_animal.get("adoption_status"),
+                "surrendered_by": existing_animal.get("surrendered_by"),
+            },
+            new_value=None,
+        )
         return {"id": id, "deleted": True}
     except HTTPException:
         raise

@@ -54,4 +54,55 @@ EXCEPTION
 END $$;
 RESET ROLE;
 
+-- 5. Verify anonymous role cannot insert into audit_logs
+SET LOCAL ROLE anon;
+DO $$
+BEGIN
+  INSERT INTO public.audit_logs (id, action, entity_type, entity_id, performed_by)
+  VALUES ('00000000-0000-0000-0000-888888888888', 'FORGED_AUDIT', 'USER', 'user-1', 'anon');
+  RAISE EXCEPTION 'SECURITY VIOLATION: anon was able to insert into audit_logs table';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: anon is denied direct INSERT on audit_logs';
+END $$;
+RESET ROLE;
+
+-- 6 & 7. Verify audit_logs is append-only: UPDATE and DELETE are blocked by trigger
+SET LOCAL ROLE service_role;
+DO $$
+DECLARE
+  v_test_id UUID := '00000000-0000-0000-0000-777777777777';
+BEGIN
+  -- Insert a valid audit log entry as service_role
+  INSERT INTO public.audit_logs (id, action, entity_type, entity_id, performed_by)
+  VALUES (v_test_id, 'TEST_AUDIT', 'TEST', 'test-1', 'service_role');
+
+  -- Attempt UPDATE: Must be blocked by trigger
+  BEGIN
+    UPDATE public.audit_logs SET action = 'TAMPERED' WHERE id = v_test_id;
+    RAISE EXCEPTION 'SECURITY VIOLATION: UPDATE succeeded on audit_logs';
+  EXCEPTION
+    WHEN OTHERS THEN
+      IF SQLERRM LIKE '%audit_logs table is append-only%' THEN
+        RAISE NOTICE 'PASS: UPDATE on audit_logs blocked by append-only trigger';
+      ELSE
+        RAISE EXCEPTION 'Unexpected error on UPDATE: %', SQLERRM;
+      END IF;
+  END;
+
+  -- Attempt DELETE: Must be blocked by trigger
+  BEGIN
+    DELETE FROM public.audit_logs WHERE id = v_test_id;
+    RAISE EXCEPTION 'SECURITY VIOLATION: DELETE succeeded on audit_logs';
+  EXCEPTION
+    WHEN OTHERS THEN
+      IF SQLERRM LIKE '%audit_logs table is append-only%' THEN
+        RAISE NOTICE 'PASS: DELETE on audit_logs blocked by append-only trigger';
+      ELSE
+        RAISE EXCEPTION 'Unexpected error on DELETE: %', SQLERRM;
+      END IF;
+  END;
+END $$;
+RESET ROLE;
+
 ROLLBACK;

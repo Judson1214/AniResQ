@@ -369,6 +369,7 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             performed_by=current_user["uid"],
             old_value={"role": prev_role},
             new_value={"role": target_role},
+            fail_closed=True,
         )
 
         # Send notification to user regarding clearance decision
@@ -445,6 +446,7 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
             performed_by=current_user["uid"],
             old_value={"requested_role": requested_role, "role": current_role},
             new_value={"requested_role": None, "role": current_role},
+            fail_closed=True,
         )
 
         # Send notification to user that request was declined and current role is preserved

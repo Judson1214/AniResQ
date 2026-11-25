@@ -25,8 +25,12 @@ def log_audit_event(
     performed_by: str,
     old_value: Optional[Dict[str, Any]] = None,
     new_value: Optional[Dict[str, Any]] = None,
+    fail_closed: bool = False,
 ) -> None:
-    """Helper to record audit events in the database using service_role."""
+    """Helper to record audit events in the database using service_role.
+    When fail_closed=True (e.g. for security role clearance modifications), raises HTTPException(500)
+    if the audit entry cannot be persisted, guaranteeing no untracked privilege mutations.
+    """
     audit_entry = {
         "action": action,
         "entity_type": entity_type,
@@ -39,7 +43,14 @@ def log_audit_event(
         supabase.table("audit_logs").insert(audit_entry).execute()
         logger.info(f"AUDIT [{action}]: {entity_type} {entity_id} by {performed_by}")
     except Exception as err:
-        logger.warning(f"Could not persist audit record to database: {err}")
+        logger.error(
+            f"SECURITY CRITICAL: Could not persist audit record to database for {action} on {entity_type} {entity_id}: {err}"
+        )
+        if fail_closed:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Security audit logging failed for {action}. Action was aborted to ensure an append-only audit trail."
+            )
 
 def map_audit_log(row: dict) -> dict:
     return {
@@ -62,7 +73,7 @@ def list_audit_logs(
     offset: int = Query(default=0, ge=0),
     user: dict = Depends(require_roles(["ADMIN"])),
 ):
-    """Admin-only endpoint to retrieve immutable audit logs."""
+    """Admin-only endpoint to retrieve append-only audit logs."""
     try:
         query = supabase.table("audit_logs").select("*")
         if action:

@@ -441,6 +441,33 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
         user_role = user.get("role", "CITIZEN")
         if user_role not in STAFF_ROLES:
             raise HTTPException(status_code=403, detail="Forbidden: Only staff and responders can assign volunteers")
+
+        # Fetch current rescue state to validate workflow constraints and previous assignment
+        existing_rescue = supabase.table("rescues").select("id, status, assigned_to, reporter_id").eq("id", rescue_id).execute()
+        if not existing_rescue.data:
+            raise HTTPException(status_code=404, detail="Rescue request not found")
+
+        current_rescue = existing_rescue.data[0]
+        current_status = current_rescue.get("status")
+
+        # Guard: Closed cases cannot be dispatched or reassigned
+        if current_status in ["RESOLVED", "CANCELLED"]:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot assign volunteer to a closed rescue (current status: {current_status})"
+            )
+
+        # Scoped clearance: Only coordinators (ADMIN, NGO, SHELTER) or the volunteer themselves can assign/reassign
+        DISPATCH_COORDINATOR_ROLES = {"ADMIN", "NGO", "SHELTER"}
+        is_coordinator = user_role in DISPATCH_COORDINATOR_ROLES
+        is_self_assign = user_role == "VOLUNTEER" and req.volunteerId == user["uid"]
+        is_current_assignee = user_role == "VOLUNTEER" and current_rescue.get("assigned_to") == user["uid"]
+
+        if not (is_coordinator or is_self_assign or is_current_assignee):
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: Only administrators, NGOs, shelters, or the assigned volunteer can assign or reassign responders"
+            )
             
         # Validate that volunteerId exists and is an authorized responder/volunteer
         vol_check = supabase.table("users").select("id, role, display_name").eq("id", req.volunteerId).execute()
@@ -496,12 +523,13 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
                 related_entity_type="RESCUE",
             )
 
+        # Audit with accurate pre-update state
         log_audit_event(
             action="RESCUE_ASSIGNED",
             entity_type="RESCUE",
             entity_id=rescue_id,
             performed_by=user["uid"],
-            old_value={"status": "PENDING"},
+            old_value={"assigned_to": current_rescue.get("assigned_to"), "status": current_status},
             new_value={"assigned_to": req.volunteerId, "status": new_status, "volunteerName": volunteer_name},
         )
 
@@ -515,7 +543,7 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
 @router.delete("/{rescue_id}")
 def delete_rescue(rescue_id: str, user: dict = Depends(get_current_user)):
     try:
-        existing = supabase.table("rescues").select("id, reporter_id").eq("id", rescue_id).execute()
+        existing = supabase.table("rescues").select("*").eq("id", rescue_id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Rescue request not found")
             
@@ -527,6 +555,22 @@ def delete_rescue(rescue_id: str, user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=403, detail="Forbidden: Only the reporter or an administrator can delete this rescue request")
             
         supabase.table("rescues").delete().eq("id", rescue_id).execute()
+        log_audit_event(
+            action="RESCUE_DELETED",
+            entity_type="RESCUE",
+            entity_id=rescue_id,
+            performed_by=user["uid"],
+            old_value={
+                "title": rescue.get("title"),
+                "species": rescue.get("species"),
+                "status": rescue.get("status"),
+                "severity": rescue.get("severity"),
+                "reporter_id": rescue.get("reporter_id"),
+                "assigned_to": rescue.get("assigned_to"),
+                "address": rescue.get("address"),
+            },
+            new_value=None,
+        )
         return {"id": rescue_id, "deleted": True}
     except HTTPException:
         raise

@@ -1045,9 +1045,11 @@ def test_notifications_sent_on_system_events(monkeypatch):
         mock_table.eq.return_value = mock_table
         # For volunteer check and rescue update
         mock_table.execute.side_effect = [
+            MagicMock(data=[{"id": "r-1", "status": "PENDING", "assigned_to": None, "reporter_id": "citizen-1"}]), # existing_rescue check
             MagicMock(data=[{"id": "vol-1", "role": "VOLUNTEER", "display_name": "Volunteer Dave"}]), # vol_check
             MagicMock(data=[{"id": "r-1", "reporter_id": "citizen-1", "assigned_to": "vol-1"}]), # update rescue
             MagicMock(data=[]), # timeline insert
+            MagicMock(data=[{"id": "audit-1"}]), # audit log insert
         ]
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
 

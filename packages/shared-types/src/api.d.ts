@@ -447,7 +447,7 @@ export interface paths {
         };
         /**
          * List Audit Logs
-         * @description Admin-only endpoint to retrieve immutable audit logs.
+         * @description Admin-only endpoint to retrieve append-only audit logs.
          */
         get: operations["list_audit_logs_api_audit_logs_get"];
         put?: never;
