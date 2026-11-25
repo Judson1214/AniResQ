@@ -187,18 +187,24 @@ END $$;
 RESET ROLE;
 
 -- 10. Verify transactional integrity of admin_update_user_role via service_role
+-- Seed user in auth.users as table owner so handle_new_user creates public.users
+INSERT INTO auth.users (id, email)
+VALUES ('00000000-0000-0000-0000-111111111111', 'testuser@example.com')
+ON CONFLICT (id) DO NOTHING;
+
+SELECT set_config('request.jwt.claims', '{"role":"service_role"}', true);
 SET LOCAL ROLE service_role;
+
+UPDATE public.users
+SET requested_role = 'VOLUNTEER'
+WHERE id = '00000000-0000-0000-0000-111111111111';
+
 DO $$
 DECLARE
   v_test_user_id UUID := '00000000-0000-0000-0000-111111111111';
   v_res JSONB;
   v_audit_count INTEGER;
 BEGIN
-  -- Seed test user in users table
-  INSERT INTO public.users (id, display_name, email, role, requested_role)
-  VALUES (v_test_user_id, 'Test User', 'testuser@example.com', 'CITIZEN', 'VOLUNTEER')
-  ON CONFLICT (id) DO NOTHING;
-
   -- Execute transactional role change RPC
   v_res := public.admin_update_user_role(v_test_user_id, 'VOLUNTEER'::public.user_role, 'admin-uuid');
 

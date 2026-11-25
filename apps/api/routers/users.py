@@ -1,3 +1,4 @@
+import os
 import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -10,6 +11,9 @@ from .audit import log_audit_event
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 logger = logging.getLogger("users")
+
+def is_test_environment() -> bool:
+    return os.getenv("TESTING", "").lower() in ("true", "1") or "PYTEST_CURRENT_TEST" in os.environ
 
 VALID_ROLES = {"CITIZEN", "NGO", "VOLUNTEER", "SHELTER", "VET", "ADMIN"}
 ALLOWED_REQUESTED_ROLES = {"NGO", "VOLUNTEER", "SHELTER", "VET"}
@@ -371,13 +375,15 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             err_msg = str(rpc_err)
             if "USER_NOT_FOUND" in err_msg:
                 raise HTTPException(status_code=404, detail="User not found")
-            # Only fall back if the RPC function itself does not exist (unmigrated DB or unmocked unit test)
+            # Only allow test fallback if running under test suite AND function is explicitly not found
             is_missing_fn = (
-                "42883" in err_msg
-                or "PGRST202" in err_msg
-                or "could not find the function" in err_msg.lower()
-                or "function public.admin_update_user_role" in err_msg.lower()
-                or isinstance(rpc_err, (AttributeError, TypeError))
+                is_test_environment()
+                and (
+                    "42883" in err_msg
+                    or "PGRST202" in err_msg
+                    or "could not find the function" in err_msg.lower()
+                    or "function public.admin_update_user_role" in err_msg.lower()
+                )
             )
             if not is_missing_fn:
                 logger.error(f"SECURITY CRITICAL: Transactional RPC admin_update_user_role failed: {rpc_err}")
@@ -499,13 +505,15 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
                 raise HTTPException(status_code=404, detail="User not found")
             if "NO_PENDING_REQUEST" in err_msg:
                 raise HTTPException(status_code=400, detail="User has no pending role request to decline")
-            # Only fall back if the RPC function itself does not exist (unmigrated DB or unmocked unit test)
+            # Only allow test fallback if running under test suite AND function is explicitly not found
             is_missing_fn = (
-                "42883" in err_msg
-                or "PGRST202" in err_msg
-                or "could not find the function" in err_msg.lower()
-                or "function public.admin_decline_role_request" in err_msg.lower()
-                or isinstance(rpc_err, (AttributeError, TypeError))
+                is_test_environment()
+                and (
+                    "42883" in err_msg
+                    or "PGRST202" in err_msg
+                    or "could not find the function" in err_msg.lower()
+                    or "function public.admin_decline_role_request" in err_msg.lower()
+                )
             )
             if not is_missing_fn:
                 logger.error(f"SECURITY CRITICAL: Transactional RPC admin_decline_role_request failed: {rpc_err}")
