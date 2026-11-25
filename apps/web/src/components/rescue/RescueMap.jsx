@@ -74,17 +74,19 @@ const RescueMap = ({
     UserRole.VET,
   ].includes(user.role);
   useEffect(() => {
-    if (singleRescue && singleRescue.location) {
-      setMapCenter([singleRescue.location.latitude, singleRescue.location.longitude]);
+    if (singleRescue?.location?.latitude != null && singleRescue?.location?.longitude != null) {
+      const lat = singleRescue.location.latitude;
+      const lng = singleRescue.location.longitude;
+      setMapCenter((prev) => (prev[0] === lat && prev[1] === lng ? prev : [lat, lng]));
       setMapZoom(13);
-    } else if (rescues.length > 0) {
-      const firstLoc = rescues[0].location;
-      if (firstLoc) {
-        setMapCenter([firstLoc.latitude, firstLoc.longitude]);
+    } else if (rescues && rescues.length > 0) {
+      const firstLoc = rescues[0]?.location;
+      if (firstLoc?.latitude != null && firstLoc?.longitude != null) {
+        setMapCenter((prev) => (prev[0] === firstLoc.latitude && prev[1] === firstLoc.longitude ? prev : [firstLoc.latitude, firstLoc.longitude]));
         setMapZoom(10);
       }
     }
-  }, [singleRescue, rescues]);
+  }, [singleRescue?.location?.latitude, singleRescue?.location?.longitude, rescues]);
   const itemsToRender = singleRescue ? [singleRescue] : rescues;
 
   // Mock hospital data for demonstration of highlighted markers

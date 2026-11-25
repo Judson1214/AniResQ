@@ -33,6 +33,7 @@ class RescueRequestCreate(BaseModel):
 class RescueRequestStatusUpdate(BaseModel):
     status: str
     message: Optional[str] = None
+    verificationPhotos: Optional[List[str]] = None
     # updatedBy and updatedByName are deprecated/ignored for security; derived from token
 
 class AssignVolunteerRequest(BaseModel):
@@ -400,13 +401,24 @@ def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user
                     detail="Forbidden: Only assigned responders or administrators can change rescue status to this state"
                 )
         
-        res = supabase.table("rescues").update({"status": target_status}).eq("id", rescue_id).execute()
+        update_data = {"status": target_status}
+        valid_verification_photos = []
+        if update.verificationPhotos:
+            valid_verification_photos = validate_photo_urls(update.verificationPhotos)
+            current_images = current_rescue.get("images") or []
+            # Merge verification photos while preserving order and avoiding duplicates
+            merged_images = list(dict.fromkeys(current_images + valid_verification_photos))
+            update_data["images"] = merged_images
+
+        res = supabase.table("rescues").update(update_data).eq("id", rescue_id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Rescue request not found")
             
         # Record timeline entry using verified identity from JWT token
         try:
             status_msg = update.message or f"Status updated to {target_status}"
+            if valid_verification_photos:
+                status_msg += f" (Verification proof attached: {len(valid_verification_photos)} photo(s))"
             timeline_entry = {
                 "rescue_id": rescue_id,
                 "status": target_status,
@@ -425,7 +437,7 @@ def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user
             entity_id=rescue_id,
             performed_by=user["uid"],
             old_value={"status": current_rescue.get("status")},
-            new_value={"status": target_status, "message": update.message},
+            new_value={"status": target_status, "message": update.message, "photos": valid_verification_photos},
         )
             
         return {"id": rescue_id, "status": target_status}

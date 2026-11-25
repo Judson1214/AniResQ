@@ -35,13 +35,17 @@ const getRescueRequestById = async (id) => {
   return response.data;
 };
 
-const updateRescueStatus = async (id, status, message, updatedBy, updatedByName) => {
-  await api.patch(`/rescues/${id}/status`, {
+const updateRescueStatus = async (id, status, message, updatedBy, updatedByName, verificationPhotos) => {
+  const payload = {
     status,
     message,
     updatedBy,
     updatedByName,
-  });
+  };
+  if (verificationPhotos && verificationPhotos.length > 0) {
+    payload.verificationPhotos = verificationPhotos;
+  }
+  await api.patch(`/rescues/${id}/status`, payload);
 };
 
 const assignVolunteer = async (id, volunteerId, volunteerName) => {

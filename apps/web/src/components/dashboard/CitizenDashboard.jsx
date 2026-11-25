@@ -24,6 +24,8 @@ const CitizenDashboard = () => {
     enabled: !!user?.uid,
   });
 
+  const resolvedRescues = (myRescues || []).filter((r) => r.status === "RESOLVED");
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto py-4">
       
@@ -144,30 +146,77 @@ const CitizenDashboard = () => {
 
       {/* Achievements Section */}
       <div className="mt-12 mb-8">
-        <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
-          <Trophy className="text-yellow-500" /> My Achievements
-        </h2>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+            <Trophy className="text-yellow-500" /> My Achievements & Saved Lives
+          </h2>
+          {(resolvedRescues.length > 0 || (achievements && achievements.length > 0)) && (
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">
+              {resolvedRescues.length + (achievements?.length || 0)} Accomplished
+            </span>
+          )}
+        </div>
         
-        {loadingAchievements ? (
+        {loadingAchievements || loadingRescues ? (
           <div className="flex justify-center p-12">
             <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
           </div>
-        ) : achievements && achievements.length > 0 ? (
+        ) : (resolvedRescues.length > 0 || (achievements && achievements.length > 0)) ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {achievements.map((post) => (
-              <Card key={post.id} className="border-yellow-500/30 bg-yellow-500/10 shadow-lg rounded-2xl overflow-hidden relative group">
+            {/* Resolved Rescue Achievements */}
+            {resolvedRescues.map((rescue) => (
+              <Card key={`rescue-${rescue.id}`} className="border-emerald-500/30 bg-emerald-500/10 shadow-lg rounded-2xl overflow-hidden relative group">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-cyan-500"></div>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Star className="w-5 h-5 text-emerald-400 fill-emerald-400" />
+                        <span className="font-bold text-emerald-400 text-xs tracking-wider uppercase">
+                          Lifesaver Citizen Hero
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-bold text-white mb-1 line-clamp-1">{rescue.title}</h3>
+                      <p className="text-xs text-slate-300">
+                        You reported this emergency for an injured or stray {rescue.species}. Responders successfully rescued the animal!
+                      </p>
+                    </div>
+                  </div>
+                  {rescue.photoUrls?.[0] && (
+                    <div className="mt-4 h-32 rounded-xl overflow-hidden opacity-90 group-hover:opacity-100 transition-opacity bg-black">
+                      <img src={rescue.photoUrls[0]} alt={rescue.title} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="mt-4 pt-3 border-t border-emerald-500/20 flex items-center justify-between">
+                    <span className="text-[11px] text-emerald-400/80 font-mono">
+                      Verified Case
+                    </span>
+                    <Link
+                      to={`/rescue/${rescue.id}`}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 group-hover:gap-1.5 transition-all"
+                    >
+                      View Incident Report <ArrowRight size={14} />
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {/* Resolved Lost & Found Achievements */}
+            {achievements && achievements.map((post) => (
+              <Card key={`post-${post.id}`} className="border-yellow-500/30 bg-yellow-500/10 shadow-lg rounded-2xl overflow-hidden relative group">
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-400 to-amber-600"></div>
                 <CardContent className="p-6">
                   <div className="flex items-start justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
                         <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                        <span className="font-bold text-yellow-400 text-sm tracking-wider uppercase">
+                        <span className="font-bold text-yellow-400 text-xs tracking-wider uppercase">
                           {post.type === LostFoundType.LOST ? "Pet Reunited" : "Hero Finder"}
                         </span>
                       </div>
                       <h3 className="text-lg font-bold text-white mb-1 line-clamp-1">{post.title}</h3>
-                      <p className="text-sm text-slate-300">
+                      <p className="text-xs text-slate-300">
                         {post.type === LostFoundType.LOST 
                           ? "You successfully found and reunited this pet!" 
                           : "You successfully helped return this pet to its owner!"}
@@ -179,6 +228,17 @@ const CitizenDashboard = () => {
                       <img src={post.photoUrls[0]} alt={post.title} className="w-full h-full object-cover" />
                     </div>
                   )}
+                  <div className="mt-4 pt-3 border-t border-yellow-500/20 flex items-center justify-between">
+                    <span className="text-[11px] text-yellow-400/80 font-mono">
+                      Reunited
+                    </span>
+                    <Link
+                      to={`/lost-found/${post.id}`}
+                      className="text-xs text-yellow-400 hover:text-yellow-300 font-bold flex items-center gap-1"
+                    >
+                      View Details <ArrowRight size={14} />
+                    </Link>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -190,7 +250,7 @@ const CitizenDashboard = () => {
             </div>
             <h3 className="text-lg font-bold text-slate-300">No Achievements Yet</h3>
             <p className="mt-2 text-sm max-w-md mx-auto">
-              When you report a lost pet and mark it as found, or report a found pet and return it, your achievements will appear here!
+              When you report an emergency SOS and it gets resolved by responders, or when you reunite a lost pet, your achievements will be recorded here!
             </p>
           </div>
         )}

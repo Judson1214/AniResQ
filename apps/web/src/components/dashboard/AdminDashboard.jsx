@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, ArrowDownRight, Activity, MapPin, Truck, Loader2, ShieldCheck, UserCheck, X } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Activity, MapPin, Truck, Loader2, ShieldCheck, UserCheck, X, Trophy, Star, ArrowRight } from "lucide-react";
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { UserRole } from "@aniresq/shared-types";
@@ -7,10 +7,10 @@ import { UserRole } from "@aniresq/shared-types";
 const ALLOWED_REQUESTED_ROLES = ["VOLUNTEER", "NGO", "SHELTER", "VET"];
 import { cn, formatDateTime } from "@/lib/utils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import api from "@/lib/api";
 import { useMemo } from "react";
 import { RescueMap } from "@/components/rescue/RescueMap";
 import { getUsers, updateUserRole, declineRoleRequest } from "@/services/user.service";
+import { getRescueRequests } from "@/services/rescue.service";
 import { useToast } from "@/components/ui/use-toast";
 
 const AdminDashboard = () => {
@@ -20,10 +20,7 @@ const AdminDashboard = () => {
 
   const { data: rescues, isLoading: isRescuesLoading } = useQuery({
     queryKey: ["rescues-admin"],
-    queryFn: async () => {
-      const res = await api.get("/rescues");
-      return res.data;
-    }
+    queryFn: () => getRescueRequests(),
   });
 
   const { data: users, isLoading: isUsersLoading } = useQuery({
@@ -92,6 +89,11 @@ const AdminDashboard = () => {
       .slice(0, 5);
 
     return { active, pending, deployed: deployedIds.size, recent };
+  }, [rescues]);
+
+  const resolvedRescues = useMemo(() => {
+    if (!rescues) return [];
+    return rescues.filter(r => r.status === "RESOLVED");
   }, [rescues]);
 
   if (user && user.role !== UserRole.ADMIN) {
@@ -275,6 +277,68 @@ const AdminDashboard = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Rescue Achievements Section */}
+      <div className="mt-8 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <Trophy className="text-yellow-500" size={22} /> Rescue Achievements & Lives Saved
+          </h2>
+          {resolvedRescues.length > 0 && (
+            <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              {resolvedRescues.length} Rescues Accomplished
+            </span>
+          )}
+        </div>
+
+        {resolvedRescues.length > 0 ? (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {resolvedRescues.map((rescue) => (
+              <Card key={`admin-rescue-${rescue.id}`} className="border-emerald-500/30 bg-emerald-500/10 shadow-lg rounded-2xl overflow-hidden relative group">
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-emerald-400 via-teal-500 to-cyan-500"></div>
+                <CardContent className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 mb-2">
+                        <Star className="w-5 h-5 text-emerald-400 fill-emerald-400" />
+                        <span className="font-bold text-emerald-400 text-xs tracking-wider uppercase">
+                          Lifesaver Mission Accomplished
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-bold text-white mb-1 line-clamp-1">{rescue.title}</h3>
+                      <p className="text-xs text-slate-300">
+                        Emergency SOS resolved with verified care and photo evidence for this {rescue.species}.
+                      </p>
+                    </div>
+                  </div>
+                  {rescue.photoUrls?.[0] && (
+                    <div className="mt-4 h-32 rounded-xl overflow-hidden opacity-90 group-hover:opacity-100 transition-opacity bg-black">
+                      <img src={rescue.photoUrls[0]} alt={rescue.title} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="mt-4 pt-3 border-t border-emerald-500/20 flex items-center justify-between">
+                    <span className="text-[11px] text-emerald-400/80 font-mono">
+                      Case #{rescue.id.slice(0, 8).toUpperCase()}
+                    </span>
+                    <Link
+                      to={`/rescue/${rescue.id}`}
+                      className="text-xs text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 group-hover:gap-1.5 transition-all"
+                    >
+                      Incident Report <ArrowRight size={14} />
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-[#0A0F1C] border border-slate-800 rounded-3xl p-6 text-center text-slate-400">
+            <Trophy className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-slate-300">No Resolved Rescues Yet</p>
+            <p className="text-xs text-slate-500 mt-1">Resolved rescue missions will appear here as verified accomplishments.</p>
+          </div>
+        )}
+      </div>
 
     </div>
   );
