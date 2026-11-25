@@ -82,7 +82,19 @@ class RescueAssignResponse(BaseModel):
 def map_rescue_to_camel(data: dict) -> dict:
     lat = data.get("latitude")
     lon = data.get("longitude")
-    loc = {"latitude": lat, "longitude": lon} if (lat is not None and lon is not None) else data.get("location", {"latitude": 0.0, "longitude": 0.0})
+    if lat is not None and lon is not None:
+        loc = {"latitude": lat, "longitude": lon}
+    elif data.get("location"):
+        loc = data["location"]
+    else:
+        logger.warning(f"Rescue {data.get('id')} has missing GPS coordinates in database; falling back to (0.0, 0.0)")
+        loc = {"latitude": 0.0, "longitude": 0.0}
+
+    created_at = data.get("created_at") or data.get("createdAt")
+    if not created_at:
+        logger.warning(f"Rescue {data.get('id')} has missing created_at timestamp in database")
+        created_at = ""
+
     return {
         "id": data["id"],
         "title": data.get("title") or "",
@@ -95,8 +107,8 @@ def map_rescue_to_camel(data: dict) -> dict:
         "location": loc,
         "address": data.get("address") or "",
         "photoUrls": data.get("images") or data.get("photoUrls") or [],
-        "createdAt": data.get("created_at") or data.get("createdAt") or "",
-        "updatedAt": data.get("updated_at") or data.get("updatedAt") or data.get("created_at") or "",
+        "createdAt": created_at,
+        "updatedAt": data.get("updated_at") or data.get("updatedAt") or created_at,
     }
 
 @router.get("/", response_model=List[RescueResponse])

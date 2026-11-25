@@ -97,10 +97,10 @@ pnpm run generate:openapi
 # Ensuring pull requests fail if API schema modifications drift from committed types.
 
 # 3. Hybrid TypeScript/JavaScript frontend
-# apps/web is configured with tsconfig.json in hybrid mode:
-# - strict: true, noUnusedLocals: true, and path aliases for .ts/.tsx files
-# - allowJs: true with checkJs: false for seamless incremental migration from JS/JSX
-# - Enforced via `tsc --noEmit` in CI web-ci pipeline
+# apps/web is configured with tsconfig.json for incremental TypeScript adoption:
+# - Strict compile-time validation (strict: true, noUnusedLocals: true) on typed contract boundaries, test suites, and new .ts/.tsx modules
+# - allowJs: true with checkJs: false keeps existing legacy JS/JSX components functional during migration
+# - Enforced via `tsc --noEmit` in CI to ensure shared contracts and TypeScript definitions never break
 ```
 
 ---
