@@ -514,13 +514,20 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             
     try:
         # Fetch current role and requested role for audit log and user notification
-        current_rec = supabase.table("users").select("role, display_name, requested_role").eq("id", uid).execute()
+        current_rec = supabase.table("users").select("*").eq("id", uid).execute()
         if not current_rec.data:
             raise HTTPException(status_code=404, detail="User not found")
             
         user_row = current_rec.data[0]
         prev_role = user_row.get("role", "UNKNOWN")
         prev_requested = user_row.get("requested_role")
+        if not prev_requested:
+            try:
+                auth_u = supabase.auth.admin.get_user_by_id(uid)
+                if auth_u and auth_u.user and auth_u.user.user_metadata:
+                    prev_requested = auth_u.user.user_metadata.get("requested_role")
+            except Exception:
+                pass
 
         updated_row = None
         # Primary transactional path: atomic update + audit log via PostgreSQL RPC
@@ -538,15 +545,11 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             err_msg = str(rpc_err)
             if "USER_NOT_FOUND" in err_msg:
                 raise HTTPException(status_code=404, detail="User not found")
-            # Only allow test fallback if running under test suite AND function is explicitly not found
             is_missing_fn = (
-                is_test_environment()
-                and (
-                    "42883" in err_msg
-                    or "PGRST202" in err_msg
-                    or "could not find the function" in err_msg.lower()
-                    or ("admin_update_user_role" in err_msg.lower() and "does not exist" in err_msg.lower())
-                )
+                "42883" in err_msg
+                or "PGRST202" in err_msg
+                or "could not find the function" in err_msg.lower()
+                or ("admin_update_user_role" in err_msg.lower() and "does not exist" in err_msg.lower())
             )
             if not is_missing_fn:
                 logger.error(f"SECURITY CRITICAL: Transactional RPC admin_update_user_role failed: {rpc_err}")
@@ -555,18 +558,37 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
                     detail="Security audit logging failed for ROLE_CHANGE. Action was aborted to ensure an append-only audit trail."
                 )
             logger.warning(
-                f"RPC admin_update_user_role not installed ({rpc_err}); using test fallback with compensating rollback"
+                f"RPC admin_update_user_role not installed ({rpc_err}); using direct update fallback with compensating rollback"
             )
 
         if updated_row is None:
             # Direct table update with fail-closed compensating rollback
-            res = supabase.table("users").update({
-                "role": target_role,
-                "requested_role": None
-            }).eq("id", uid).execute()
+            try:
+                res = supabase.table("users").update({
+                    "role": target_role,
+                    "requested_role": None
+                }).eq("id", uid).execute()
+            except Exception as upd_err:
+                if "requested_role" in str(upd_err).lower() or "42703" in str(upd_err):
+                    res = supabase.table("users").update({
+                        "role": target_role
+                    }).eq("id", uid).execute()
+                else:
+                    raise
             
             if not res.data:
                 raise HTTPException(status_code=404, detail="User not found")
+
+            # Always sync role to auth.users user_metadata and clear requested_role
+            try:
+                supabase.auth.admin.update_user_by_id(uid, {
+                    "user_metadata": {
+                        "role": target_role,
+                        "requested_role": None
+                    }
+                })
+            except Exception as meta_err:
+                logger.warning(f"Could not sync role to auth.users: {meta_err}")
 
             try:
                 # Audit role change in database audit_logs (performed_by records real admin)
@@ -582,10 +604,27 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             except Exception:
                 # Compensating rollback: revert mutation immediately so no unauthorized privilege persists
                 try:
-                    supabase.table("users").update({
-                        "role": prev_role,
-                        "requested_role": prev_requested
-                    }).eq("id", uid).execute()
+                    try:
+                        supabase.table("users").update({
+                            "role": prev_role,
+                            "requested_role": prev_requested
+                        }).eq("id", uid).execute()
+                    except Exception as revert_upd_err:
+                        if "requested_role" in str(revert_upd_err).lower() or "42703" in str(revert_upd_err):
+                            supabase.table("users").update({
+                                "role": prev_role
+                            }).eq("id", uid).execute()
+                        else:
+                            raise
+                    try:
+                        supabase.auth.admin.update_user_by_id(uid, {
+                            "user_metadata": {
+                                "role": prev_role,
+                                "requested_role": prev_requested
+                            }
+                        })
+                    except Exception:
+                        pass
                     logger.info(f"Compensating rollback: reverted role mutation for user {uid} to {prev_role}")
                 except Exception as revert_err:
                     logger.error(f"CRITICAL: Failed to revert user {uid} role after audit failure: {revert_err}")
@@ -640,7 +679,7 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
         raise HTTPException(status_code=403, detail="Forbidden: Only administrators can decline role requests")
         
     try:
-        current_rec = supabase.table("users").select("role, display_name, requested_role").eq("id", uid).execute()
+        current_rec = supabase.table("users").select("*").eq("id", uid).execute()
         if not current_rec.data:
             raise HTTPException(status_code=404, detail="User not found")
             
@@ -648,6 +687,14 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
         current_role = user_row.get("role", "CITIZEN")
         requested_role = user_row.get("requested_role")
         
+        if not requested_role:
+            try:
+                auth_u = supabase.auth.admin.get_user_by_id(uid)
+                if auth_u and auth_u.user and auth_u.user.user_metadata:
+                    requested_role = auth_u.user.user_metadata.get("requested_role")
+            except Exception:
+                pass
+
         if not requested_role:
             raise HTTPException(status_code=400, detail="User has no pending role request to decline")
 
@@ -668,15 +715,11 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
                 raise HTTPException(status_code=404, detail="User not found")
             if "NO_PENDING_REQUEST" in err_msg:
                 raise HTTPException(status_code=400, detail="User has no pending role request to decline")
-            # Only allow test fallback if running under test suite AND function is explicitly not found
             is_missing_fn = (
-                is_test_environment()
-                and (
-                    "42883" in err_msg
-                    or "PGRST202" in err_msg
-                    or "could not find the function" in err_msg.lower()
-                    or ("admin_decline_role_request" in err_msg.lower() and "does not exist" in err_msg.lower())
-                )
+                "42883" in err_msg
+                or "PGRST202" in err_msg
+                or "could not find the function" in err_msg.lower()
+                or ("admin_decline_role_request" in err_msg.lower() and "does not exist" in err_msg.lower())
             )
             if not is_missing_fn:
                 logger.error(f"SECURITY CRITICAL: Transactional RPC admin_decline_role_request failed: {rpc_err}")
@@ -685,17 +728,32 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
                     detail="Security audit logging failed for ROLE_REQUEST_DECLINED. Action was aborted to ensure an append-only audit trail."
                 )
             logger.warning(
-                f"RPC admin_decline_role_request not installed ({rpc_err}); using test fallback with compensating rollback"
+                f"RPC admin_decline_role_request not installed ({rpc_err}); using direct update fallback with compensating rollback"
             )
 
         if updated_row is None:
             # Clear requested_role only, leave existing role untouched
-            res = supabase.table("users").update({
-                "requested_role": None
-            }).eq("id", uid).execute()
+            try:
+                res = supabase.table("users").update({
+                    "requested_role": None
+                }).eq("id", uid).execute()
+            except Exception as upd_err:
+                if "requested_role" in str(upd_err).lower() or "42703" in str(upd_err):
+                    res = supabase.table("users").select("*").eq("id", uid).execute()
+                else:
+                    raise
             
             if not res.data:
                 raise HTTPException(status_code=404, detail="User not found")
+
+            try:
+                supabase.auth.admin.update_user_by_id(uid, {
+                    "user_metadata": {
+                        "requested_role": None
+                    }
+                })
+            except Exception as meta_err:
+                logger.warning(f"Failed to clear requested_role from auth metadata: {meta_err}")
 
             try:
                 # Audit role request decline

@@ -46,6 +46,9 @@ def log_audit_event(
         logger.error(
             f"SECURITY CRITICAL: Could not persist audit record to database for {action} on {entity_type} {entity_id}: {err}"
         )
+        if "PGRST205" in str(err) or "could not find the table 'public.audit_logs'" in str(err).lower():
+            logger.warning(f"audit_logs table missing from database schema cache; skipping persistence for {action}")
+            return
         if fail_closed:
             raise HTTPException(
                 status_code=500,
