@@ -339,4 +339,27 @@ EXCEPTION
 END $$;
 RESET ROLE;
 
+-- 14. Verify anon is denied direct SELECT on public.lost_and_found and lost_and_found_replies
+SET LOCAL ROLE anon;
+DO $$
+BEGIN
+  PERFORM * FROM public.lost_and_found LIMIT 1;
+  RAISE EXCEPTION 'SECURITY VIOLATION: anon was able to directly SELECT from public.lost_and_found';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: anon is denied direct SELECT on public.lost_and_found';
+END $$;
+RESET ROLE;
+
+SET LOCAL ROLE anon;
+DO $$
+BEGIN
+  PERFORM * FROM public.lost_and_found_replies LIMIT 1;
+  RAISE EXCEPTION 'SECURITY VIOLATION: anon was able to directly SELECT from public.lost_and_found_replies';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: anon is denied direct SELECT on public.lost_and_found_replies';
+END $$;
+RESET ROLE;
+
 ROLLBACK;

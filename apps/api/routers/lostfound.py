@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from supabase_config import supabase
-from auth import get_current_user
+from auth import get_current_user, get_optional_user
 from validators import validate_photo_urls
 
 router = APIRouter(prefix="/api/lostfound", tags=["lostfound"])
@@ -58,7 +58,7 @@ class LostFoundResponse(BaseModel):
     createdAt: str
     updatedAt: Optional[str] = None
 
-def map_post_to_camel(data: dict) -> dict:
+def map_post_to_camel(data: dict, can_view_contact: bool = False) -> dict:
     return {
         "id": data["id"],
         "type": data["type"],
@@ -67,8 +67,8 @@ def map_post_to_camel(data: dict) -> dict:
         "species": data["species"],
         "breed": data.get("breed"),
         "color": data.get("color"),
-        "contactPhone": data.get("contact_phone") or "",
-        "contactEmail": data.get("contact_email") or "",
+        "contactPhone": (data.get("contact_phone") or "") if can_view_contact else "",
+        "contactEmail": (data.get("contact_email") or "") if can_view_contact else "",
         "location": {"latitude": data["latitude"], "longitude": data["longitude"]},
         "lastSeenAddress": data.get("last_seen_address") or "",
         "lastSeenDate": data.get("last_seen_date") or "",
@@ -87,8 +87,10 @@ def get_lost_found(
     reporterId: Optional[str] = None,
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
     try:
+        can_view_contact = current_user is not None
         query = supabase.table("lost_and_found").select("*")
         if type:
             query = query.eq("type", type.upper())
@@ -98,18 +100,19 @@ def get_lost_found(
             query = query.eq("reporter_id", reporterId)
         
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
-        return [map_post_to_camel(d) for d in res.data]
+        return [map_post_to_camel(d, can_view_contact=can_view_contact) for d in res.data]
     except Exception as e:
         logger.error(f"Error fetching lost/found posts: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve lost and found posts")
 
 @router.get("/{id}", response_model=LostFoundResponse)
-def get_lost_found_by_id(id: str):
+def get_lost_found_by_id(id: str, current_user: Optional[dict] = Depends(get_optional_user)):
     try:
         res = supabase.table("lost_and_found").select("*").eq("id", id).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Lost/found report not found")
-        return map_post_to_camel(res.data[0])
+        can_view_contact = current_user is not None
+        return map_post_to_camel(res.data[0], can_view_contact=can_view_contact)
     except HTTPException:
         raise
     except Exception as e:
@@ -148,7 +151,7 @@ def create_lost_found(report: LostFoundCreate, user: dict = Depends(get_current_
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to insert lost/found post")
             
-        return map_post_to_camel(res.data[0])
+        return map_post_to_camel(res.data[0], can_view_contact=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -177,7 +180,7 @@ def update_lost_found_status(id: str, status_update: LostFoundStatusUpdate, user
         if not res.data:
             raise HTTPException(status_code=404, detail="Lost/found post not found")
         
-        return map_post_to_camel(res.data[0])
+        return map_post_to_camel(res.data[0], can_view_contact=True)
     except HTTPException:
         raise
     except Exception as e:

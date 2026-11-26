@@ -1667,6 +1667,11 @@
         ],
         "summary": "Get Lost Found",
         "operationId": "get_lost_found_api_lostfound__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "type",
@@ -1819,6 +1824,11 @@
         ],
         "summary": "Get Lost Found By Id",
         "operationId": "get_lost_found_by_id_api_lostfound__id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "id",

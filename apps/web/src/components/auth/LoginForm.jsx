@@ -80,30 +80,32 @@ const LoginForm = () => {
         </Button>
       </form>
 
-      <div className="mt-6 flex flex-col sm:flex-row gap-3">
-        <button 
-          onClick={() => {
-            setValue('email', 'admin@aniresq.com');
-            setValue('password', 'Password123!');
-            toast({ title: 'Credentials Filled', description: 'Click Authenticate to login as Admin.' });
-          }}
-          className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg border border-slate-700 transition-colors"
-          type="button"
-        >
-          Auto-fill Admin
-        </button>
-        <button 
-          onClick={() => {
-            setValue('email', 'public@aniresq.com');
-            setValue('password', 'Password123!');
-            toast({ title: 'Credentials Filled', description: 'Click Authenticate to login as Public.' });
-          }}
-          className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg border border-slate-700 transition-colors"
-          type="button"
-        >
-          Auto-fill Public
-        </button>
-      </div>
+      {import.meta.env.DEV && (
+        <div className="mt-6 flex flex-col sm:flex-row gap-3">
+          <button 
+            onClick={() => {
+              setValue('email', 'admin@aniresq.com');
+              setValue('password', 'Password123!');
+              toast({ title: 'Credentials Filled', description: 'Click Authenticate to login as Admin.' });
+            }}
+            className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg border border-slate-700 transition-colors"
+            type="button"
+          >
+            Auto-fill Admin (Dev Only)
+          </button>
+          <button 
+            onClick={() => {
+              setValue('email', 'public@aniresq.com');
+              setValue('password', 'Password123!');
+              toast({ title: 'Credentials Filled', description: 'Click Authenticate to login as Public.' });
+            }}
+            className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg border border-slate-700 transition-colors"
+            type="button"
+          >
+            Auto-fill Public (Dev Only)
+          </button>
+        </div>
+      )}
 
       <div className="mt-8 text-sm text-center text-slate-500">
         New Operator?{" "}

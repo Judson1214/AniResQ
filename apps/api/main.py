@@ -57,8 +57,16 @@ async def root():
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     logger.warning(f"Validation error for {request.method} {request.url.path}: {len(exc.errors())} error(s)")
-    # Sanitize: Do not echo raw request body or private internals
+    # Sanitize: Do not echo raw request body or private internals (strip input and ctx)
+    sanitized_errors = [
+        {
+            "loc": list(err.get("loc", [])),
+            "msg": str(err.get("msg", "")),
+            "type": str(err.get("type", "")),
+        }
+        for err in exc.errors()
+    ]
     return JSONResponse(
         status_code=422,
-        content={"detail": exc.errors()},
+        content={"detail": sanitized_errors},
     )

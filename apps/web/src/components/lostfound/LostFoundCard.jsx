@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -123,11 +124,19 @@ const LostFoundCard = ({ post, onUpdate }) => {
             <div className="flex items-center gap-1.5">
               <Phone size={13} className="text-emerald-400" />
               <span className="text-slate-400">Direct Contact:</span>
-              <a href={`tel:${post.contactPhone}`} className="font-semibold text-white hover:text-emerald-400 transition-colors">
-                {post.contactPhone}
-              </a>
+              {post.contactPhone ? (
+                <a href={`tel:${post.contactPhone}`} className="font-semibold text-white hover:text-emerald-400 transition-colors">
+                  {post.contactPhone}
+                </a>
+              ) : (
+                <Link to="/login" className="text-emerald-400 hover:underline font-medium">
+                  Sign in to view
+                </Link>
+              )}
             </div>
-            <span className="text-[10px] text-slate-500 uppercase font-mono">Public Board</span>
+            <span className="text-[10px] text-slate-500 uppercase font-mono">
+              {post.contactPhone ? "Verified Contact" : "Protected"}
+            </span>
           </div>
         )}
 

@@ -1695,6 +1695,103 @@ def test_nullable_db_columns_safe_in_lostfound_and_animals(monkeypatch):
     assert anim_items[0]["photos"] == []
 
 
+def test_lost_found_contact_details_redacted_for_unauthenticated_callers(monkeypatch):
+    """Test H3: Unauthenticated visitors cannot harvest contactPhone and contactEmail
+    from lost & found board; authenticated users can access contact details."""
+    from auth import get_optional_user
+
+    mock_post = {
+        "id": "lf-secret-1",
+        "type": "LOST",
+        "title": "Lost Golden Retriever",
+        "description": "Friendly dog wearing red collar",
+        "species": "DOG",
+        "breed": "Golden Retriever",
+        "color": "Golden",
+        "contact_phone": "+91 98765 43210",
+        "contact_email": "reporter@test.com",
+        "latitude": 13.0827,
+        "longitude": 80.2707,
+        "last_seen_address": "Marina Beach",
+        "last_seen_date": "2026-11-25",
+        "reporter_id": "reporter-1",
+        "images": ["https://storage.example.com/lostfound/reporter-1/dog.jpg"],
+        "status": "ACTIVE",
+        "created_at": "2026-11-25T12:00:00Z",
+        "updated_at": None,
+    }
+
+    mock_table = MagicMock()
+    mock_table.select.return_value = mock_table
+    mock_table.eq.return_value = mock_table
+    mock_table.order.return_value = mock_table
+    mock_table.range.return_value = mock_table
+    mock_table.execute.return_value = MagicMock(data=[mock_post])
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_table)
+
+    # 1. Unauthenticated GET /api/lostfound/ -> phone and email MUST be redacted
+    res_unauth = client.get("/api/lostfound/")
+    assert res_unauth.status_code == 200
+    posts = res_unauth.json()
+    assert len(posts) == 1
+    assert posts[0]["contactPhone"] == "", "Unauthenticated visitor must not see phone number!"
+    assert posts[0]["contactEmail"] == "", "Unauthenticated visitor must not see email!"
+    assert posts[0]["title"] == "Lost Golden Retriever"
+
+    # 2. Unauthenticated GET /api/lostfound/{id} -> phone and email MUST be redacted
+    res_unauth_single = client.get("/api/lostfound/lf-secret-1")
+    assert res_unauth_single.status_code == 200
+    single_post = res_unauth_single.json()
+    assert single_post["contactPhone"] == ""
+    assert single_post["contactEmail"] == ""
+
+    # 3. Authenticated caller -> phone and email are accessible
+    app.dependency_overrides[get_optional_user] = lambda: {
+        "uid": "citizen-1", "email": "citizen@test.com", "name": "Citizen", "role": "CITIZEN"
+    }
+    try:
+        res_auth = client.get("/api/lostfound/")
+        assert res_auth.status_code == 200
+        auth_posts = res_auth.json()
+        assert auth_posts[0]["contactPhone"] == "+91 98765 43210"
+        assert auth_posts[0]["contactEmail"] == "reporter@test.com"
+
+        res_auth_single = client.get("/api/lostfound/lf-secret-1")
+        assert res_auth_single.status_code == 200
+        auth_single = res_auth_single.json()
+        assert auth_single["contactPhone"] == "+91 98765 43210"
+        assert auth_single["contactEmail"] == "reporter@test.com"
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_validation_error_handler_strips_raw_input_and_ctx():
+    """Test L1: 422 validation error handler strips raw 'input' and 'ctx' from response body."""
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "test-u1", "email": "test@test.com", "name": "Tester", "role": "CITIZEN"
+    }
+    try:
+        # Send an invalid payload to surrender endpoint with invalid location
+        res = client.post("/api/animals/surrender", json={
+            "species": "DOG",
+            "location": {"latitude": "not-a-number", "longitude": 80.0},
+        })
+        assert res.status_code == 422
+        data = res.json()
+        assert "detail" in data
+        assert isinstance(data["detail"], list)
+        assert len(data["detail"]) > 0
+
+        for err in data["detail"]:
+            assert "loc" in err
+            assert "msg" in err
+            assert "type" in err
+            assert "input" not in err, "Raw input must be stripped from validation errors!"
+            assert "ctx" not in err, "Pydantic internal ctx must be stripped from validation errors!"
+    finally:
+        app.dependency_overrides.clear()
+
+
 
 
 
