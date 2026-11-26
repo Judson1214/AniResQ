@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Info, CreditCard } from "lucide-react";
+import { Loader2, Info } from "lucide-react";
 import { UserRole } from "@aniresq/shared-types";
 
 const RegisterForm = () => {
@@ -40,15 +40,12 @@ const RegisterForm = () => {
         data.password,
         data.displayName,
         data.role,
-        data.phone,
-        data.idCardType,
-        data.idCardNumber,
-        data.idCardUrl
+        data.phone
       );
       if (data.role && data.role !== UserRole.CITIZEN) {
         toast({
-          title: "Account Created & Clearance Requested",
-          description: `Registered as Citizen. Verification request for ${data.role} access with ID proof sent to platform administrators.`
+          title: "Account Created",
+          description: `Welcome to AniResQ! You can upload verification documents from your Profile page to request ${data.role} privileges.`
         });
       } else {
         toast({
@@ -140,58 +137,13 @@ const RegisterForm = () => {
           {errors.role && <p className="text-sm text-rose-500">{errors.role.message}</p>}
           <p className="text-xs text-emerald-400 mt-1 font-medium">{getRoleDescription(selectedRole)}</p>
           {selectedRole !== UserRole.CITIZEN && (
-            <div className="flex items-center gap-1.5 text-xs text-amber-400/90 mt-1 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
-              <Info size={14} className="shrink-0" />
-              <span>Accounts start as Citizen. Privileged roles require administrator verification before access is granted.</span>
-            </div>
-          )}
-
-          {selectedRole !== UserRole.CITIZEN && (
-            <div className="space-y-4 pt-3 border-t border-slate-800 animate-in fade-in">
-              <div className="flex items-center gap-2 text-xs font-bold text-emerald-400">
-                <CreditCard size={15} />
-                <span>Identification & Credential Verification</span>
-              </div>
-              
-              <div className="space-y-1.5">
-                <Label htmlFor="idCardType" className="text-xs text-slate-300">
-                  Identification Document Type
-                </Label>
-                <select
-                  id="idCardType"
-                  {...register("idCardType")}
-                  className="w-full bg-slate-950/50 border border-slate-700 text-white rounded-xl h-10 px-3 text-sm focus:border-emerald-500 focus:outline-none"
-                >
-                  <option value="Government Photo ID">Government Photo ID (Aadhaar / DL / Passport)</option>
-                  <option value="NGO Registration Certificate">NGO Registration / Society Registration</option>
-                  <option value="Animal Shelter License">Shelter / Animal Welfare License</option>
-                  <option value="Veterinary Medical Council ID">Veterinary Medical Council License</option>
-                  <option value="Institutional Volunteer Badge">Institutional Volunteer Badge</option>
-                </select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="idCardNumber" className="text-xs text-slate-300">
-                  ID / License / Registration Number *
-                </Label>
-                <Input
-                  id="idCardNumber"
-                  placeholder="e.g. DL-1420110012345 or NGO/2023/8921"
-                  className="bg-slate-950/50 border-slate-700 text-white placeholder:text-slate-600 focus:border-emerald-500 h-10 rounded-xl text-sm"
-                  {...register("idCardNumber")}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="idCardUrl" className="text-xs text-slate-300">
-                  ID Card / Document Verification Link (Optional)
-                </Label>
-                <Input
-                  id="idCardUrl"
-                  placeholder="Private document path or cloud document URL"
-                  className="bg-slate-950/50 border-slate-700 text-white placeholder:text-slate-600 focus:border-emerald-500 h-10 rounded-xl text-sm"
-                  {...register("idCardUrl")}
-                />
+            <div className="flex items-start gap-2.5 text-xs text-amber-300 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20 mt-2">
+              <Info size={16} className="shrink-0 mt-0.5 text-amber-400" />
+              <div className="space-y-1">
+                <span className="font-semibold text-amber-200">Clearance Verification Notice:</span>
+                <p className="text-amber-300/80 leading-relaxed">
+                  Accounts start with standard Citizen access. After signing in, you can securely upload your official credentials and ID proof directly from your Profile settings to request {selectedRole} verification.
+                </p>
               </div>
             </div>
           )}

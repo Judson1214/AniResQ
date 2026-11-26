@@ -6,10 +6,7 @@ const signUp = async (
   password,
   displayName,
   role = "CITIZEN",
-  phone = "",
-  idCardType = "",
-  idCardNumber = "",
-  idCardUrl = ""
+  phone = ""
 ) => {
   // Prevent users from requesting ADMIN role via signup metadata
   const requestedRole = (role && role.toUpperCase() !== "ADMIN" && ["VOLUNTEER", "NGO", "SHELTER", "VET"].includes(role.toUpperCase()))
@@ -41,25 +38,6 @@ const signUp = async (
     phone: phone || "",
   };
 
-  // If user requested an elevated role and session created, notify backend to trigger admin push notification
-  if (requestedRole && user?.id) {
-    try {
-      await api.post("/users", {
-        uid: user.id,
-        email: user.email,
-        displayName,
-        role: "CITIZEN",
-        phoneNumber: phone || "",
-        requestedRole,
-        idCardType: idCardType || "",
-        idCardNumber: idCardNumber || "",
-        idCardUrl: idCardUrl || "",
-      });
-    } catch (syncErr) {
-      console.warn("Background clearance sync deferred:", syncErr);
-    }
-  }
-  
   return { ...newUser, id: user.id, avatarUrl: "", isVerified: false, createdAt: new Date() };
 };
 
