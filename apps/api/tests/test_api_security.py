@@ -194,6 +194,9 @@ def test_user_role_assignment_admin_only(monkeypatch):
         mock_query.eq.return_value = mock_query
         mock_query.execute = mock_execute
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
+        mock_rpc = MagicMock()
+        mock_rpc.execute.return_value = MagicMock(data={"id": "target-user", "role": "VOLUNTEER", "display_name": "Target"})
+        monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
 
         res_ok = client.patch("/api/users/target-user/role", json={"role": "VOLUNTEER"})
         assert res_ok.status_code == 200
@@ -485,6 +488,9 @@ def test_role_change_audited(monkeypatch):
             return mock_users_query
 
         monkeypatch.setattr(supabase_config.supabase, "table", table_router)
+        mock_rpc = MagicMock()
+        mock_rpc.execute.side_effect = Exception("PGRST202 could not find the function public.admin_update_user_role")
+        monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
 
         res = client.patch("/api/users/target-user/role", json={"role": "VOLUNTEER"})
         assert res.status_code == 200
@@ -1052,6 +1058,9 @@ def test_notifications_sent_on_system_events(monkeypatch):
             MagicMock(data=[{"id": "audit-1"}]), # audit log insert
         ]
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+        mock_rpc = MagicMock()
+        mock_rpc.execute.side_effect = Exception("PGRST202 could not find the function public.admin_decline_role_request")
+        monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
 
         res = client.post("/api/rescues/r-1/assign", json={"volunteerId": "vol-1", "volunteerName": "Volunteer Dave"})
         assert res.status_code == 200
@@ -1081,6 +1090,9 @@ def test_notifications_sent_on_system_events(monkeypatch):
             MagicMock(data=[{"id": "a-1"}]), # update animal status
         ]
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+        mock_rpc = MagicMock()
+        mock_rpc.execute.side_effect = Exception("PGRST202 could not find the function public.admin_decline_role_request")
+        monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
 
         res = client.patch("/api/adoptions/app-10/status", json={"status": "APPROVED", "screeningNotes": "Great home"})
         assert res.status_code == 200
@@ -1132,6 +1144,9 @@ def test_decline_role_request_preserves_existing_role(monkeypatch):
             MagicMock(data=[]),
         ]
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+        mock_rpc = MagicMock()
+        mock_rpc.execute.side_effect = Exception("PGRST202 could not find the function public.admin_decline_role_request")
+        monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
 
         res = client.post("/api/users/vol-123/role-request/decline")
         assert res.status_code == 200
@@ -1229,6 +1244,9 @@ def test_adoption_status_notification_readable_labels(monkeypatch):
             MagicMock(data=[{"id": "app-under-review", "animal_id": "animal-A", "status": "UNDER_REVIEW", "applicant_id": "citizen-user"}]),
         ]
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+        mock_rpc = MagicMock()
+        mock_rpc.execute.side_effect = Exception("PGRST202 could not find the function public.admin_decline_role_request")
+        monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
 
         res = client.patch("/api/adoptions/app-under-review/status", json={"status": "UNDER_REVIEW"})
         assert res.status_code == 200
@@ -1281,6 +1299,9 @@ def test_high_severity_rescue_broadcasts_alert_to_volunteers(monkeypatch):
             MagicMock(data=[{"id": "vol-1"}, {"id": "vol-2"}]),
         ]
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_table))
+        mock_rpc = MagicMock()
+        mock_rpc.execute.side_effect = Exception("PGRST202 could not find the function public.admin_decline_role_request")
+        monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
 
         res = client.post("/api/rescues/", json={
             "title": "Dog hit by car",

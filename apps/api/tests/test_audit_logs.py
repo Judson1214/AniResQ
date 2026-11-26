@@ -200,6 +200,9 @@ def test_audit_fail_closed_aborts_role_mutation(monkeypatch):
         return mock_users
 
     monkeypatch.setattr(supabase_config.supabase, "table", router_failing_audit)
+    mock_rpc = MagicMock()
+    mock_rpc.execute.side_effect = Exception("PGRST202 could not find the function public.admin_update_user_role")
+    monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
 
     app.dependency_overrides[get_current_user] = lambda: {
         "uid": "admin-1", "email": "admin@aniresq.org", "name": "Admin", "role": "ADMIN"
