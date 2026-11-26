@@ -362,4 +362,29 @@ EXCEPTION
 END $$;
 RESET ROLE;
 
+-- 15. Verify authenticated role is also denied direct SELECT on lost_and_found to prevent PostgREST contact scraping
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-111111111111","role":"authenticated"}', true);
+DO $$
+BEGIN
+  PERFORM * FROM public.lost_and_found LIMIT 1;
+  RAISE EXCEPTION 'SECURITY VIOLATION: authenticated was able to directly SELECT from public.lost_and_found';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: authenticated is denied direct SELECT on public.lost_and_found';
+END $$;
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-111111111111","role":"authenticated"}', true);
+DO $$
+BEGIN
+  PERFORM * FROM public.lost_and_found_replies LIMIT 1;
+  RAISE EXCEPTION 'SECURITY VIOLATION: authenticated was able to directly SELECT from public.lost_and_found_replies';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: authenticated is denied direct SELECT on public.lost_and_found_replies';
+END $$;
+RESET ROLE;
+
 ROLLBACK;
