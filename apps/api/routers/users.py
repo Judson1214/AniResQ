@@ -585,7 +585,7 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             
     try:
         # Fetch current role and requested role for audit log and user notification
-        current_rec = supabase.table("users").select("*").eq("id", uid).execute()
+        current_rec = supabase.table("users").select("id, role, requested_role").eq("id", uid).execute()
         if not current_rec.data:
             raise HTTPException(status_code=404, detail="User not found")
             
@@ -750,7 +750,7 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
         raise HTTPException(status_code=403, detail="Forbidden: Only administrators can decline role requests")
         
     try:
-        current_rec = supabase.table("users").select("*").eq("id", uid).execute()
+        current_rec = supabase.table("users").select("id, role, requested_role").eq("id", uid).execute()
         if not current_rec.data:
             raise HTTPException(status_code=404, detail="User not found")
             

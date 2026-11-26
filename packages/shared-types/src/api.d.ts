@@ -994,6 +994,8 @@ export interface components {
             status: string;
             /** Message */
             message?: string | null;
+            /** Verificationphotos */
+            verificationPhotos?: string[] | null;
         };
         /** RescueResponse */
         RescueResponse: {
