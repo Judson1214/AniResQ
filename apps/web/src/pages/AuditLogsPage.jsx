@@ -26,6 +26,8 @@ import {
 const ACTION_COLORS = {
   ROLE_CHANGE: "bg-purple-500/10 text-purple-400 border-purple-500/30",
   ROLE_REQUEST_DECLINED: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  CLEARANCE_REQUESTED: "bg-blue-500/10 text-blue-400 border-blue-500/30",
+  CLEARANCE_WITHDRAWN: "bg-slate-500/10 text-slate-400 border-slate-500/30",
   RESCUE_STATUS_UPDATE: "bg-blue-500/10 text-blue-400 border-blue-500/30",
   RESCUE_ASSIGNED: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
   ADOPTION_STATUS_UPDATE: "bg-teal-500/10 text-teal-400 border-teal-500/30",
@@ -128,6 +130,8 @@ export default function AuditLogsPage() {
             >
               <option value="ALL">All Actions</option>
               <option value="ROLE_CHANGE">Role Changes</option>
+              <option value="CLEARANCE_REQUESTED">Clearance Requests</option>
+              <option value="CLEARANCE_WITHDRAWN">Withdrawn Clearance Requests</option>
               <option value="ROLE_REQUEST_DECLINED">Declined Role Requests</option>
               <option value="RESCUE_ASSIGNED">Rescue Dispatches</option>
               <option value="RESCUE_STATUS_UPDATE">Rescue Status Updates</option>

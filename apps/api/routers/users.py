@@ -637,7 +637,9 @@ def withdraw_role_clearance_request(current_user: dict = Depends(get_current_use
 
     # Clean up uploaded verification document from private storage bucket
     doc_url = user_row.get("id_card_url")
+    storage_cleaned = None
     if doc_url:
+        storage_cleaned = False
         clean_path = str(doc_url).strip()
         if "/id-verification/" in clean_path:
             clean_path = clean_path.split("/id-verification/", 1)[1]
@@ -647,8 +649,10 @@ def withdraw_role_clearance_request(current_user: dict = Depends(get_current_use
         if clean_path:
             try:
                 supabase.storage.from_("id-verification").remove([clean_path])
+                storage_cleaned = True
                 logger.info(f"Removed ID document '{clean_path}' for user {uid} upon clearance withdrawal")
             except Exception as storage_err:
+                storage_cleaned = False
                 logger.warning(f"Could not remove ID document {clean_path} from storage on clearance withdrawal: {storage_err}")
 
     # Remove stale ROLE_REQUEST notifications from admin feeds
@@ -669,7 +673,7 @@ def withdraw_role_clearance_request(current_user: dict = Depends(get_current_use
             old_value={"requested_role": user_row.get("requested_role")},
             new_value={
                 "requested_role": None,
-                "storage_cleaned": bool(doc_url),
+                "storage_cleaned": storage_cleaned,
                 "notifications_cleaned": notif_cleaned
             },
             fail_closed=False

@@ -1020,11 +1020,13 @@ def test_withdraw_role_clearance_request(monkeypatch):
             for n in deleted_notifications
         )
 
-        # Verify clearance withdrawal was recorded in audit logs
-        assert any(
-            e.get("action") == "CLEARANCE_WITHDRAWN" and e.get("entity_id") == "user-pending"
-            for e in logged_audit_events
+        # Verify clearance withdrawal was recorded in audit logs with storage_cleaned: True
+        withdraw_audit = next(
+            e for e in logged_audit_events
+            if e.get("action") == "CLEARANCE_WITHDRAWN" and e.get("entity_id") == "user-pending"
         )
+        assert withdraw_audit["new_value"]["storage_cleaned"] is True
+        assert withdraw_audit["new_value"]["notifications_cleaned"] is True
 
         # 3. User can now submit a fresh clearance request without 409
         res_reapply = client.post("/api/users/request-clearance", json={
@@ -1058,6 +1060,102 @@ def test_withdraw_role_clearance_request(monkeypatch):
         res_rate_limited = client.delete("/api/users/request-clearance")
         assert res_rate_limited.status_code == 429
 
+    finally:
+        app.dependency_overrides.clear()
+        limiter.reset()
+
+
+def test_withdraw_clearance_storage_failure_logs_storage_cleaned_false(monkeypatch):
+    """Test that when bucket file deletion raises an error during withdrawal,
+    the endpoint still succeeds (200) for the user, but audit log explicitly records storage_cleaned: False."""
+    mock_db = {
+        "user-fail": {
+            "id": "user-fail",
+            "display_name": "Failing Storage User",
+            "email": "fail@aniresq.org",
+            "role": "CITIZEN",
+            "requested_role": "VOLUNTEER",
+            "id_card_type": "Government Photo ID",
+            "id_card_number": "FAIL-12345",
+            "id_card_url": "user-fail/id.png",
+        }
+    }
+    logged_events = []
+
+    class MockTable:
+        def __init__(self, table_name="users"):
+            self.table_name = table_name
+            self.current_id = None
+            self.action = None
+            self.payload = None
+
+        @property
+        def not_(self):
+            return self
+
+        def select(self, *args, **kwargs):
+            self.action = "select"
+            return self
+
+        def eq(self, col, val):
+            if col == "id":
+                self.current_id = val
+            return self
+
+        def is_(self, col, val):
+            return self
+
+        def update(self, payload):
+            self.action = "update"
+            self.payload = payload
+            return self
+
+        def insert(self, payload):
+            self.action = "insert"
+            self.payload = payload
+            return self
+
+        def delete(self, *args, **kwargs):
+            self.action = "delete"
+            return self
+
+        def execute(self):
+            if self.table_name == "audit_logs" and self.action == "insert":
+                logged_events.append(dict(self.payload) if isinstance(self.payload, dict) else {})
+                return MagicMock(data=[{"id": "mock-audit-id"}])
+            elif self.table_name == "notifications":
+                return MagicMock(data=[])
+
+            row = mock_db.get(self.current_id)
+            if self.action == "select":
+                return MagicMock(data=[dict(row)] if row else [])
+            elif self.action == "update":
+                if row:
+                    row.update(self.payload)
+                    return MagicMock(data=[dict(row)])
+                return MagicMock(data=[])
+            return MagicMock(data=[])
+
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: MockTable(t))
+
+    mock_storage = MagicMock()
+    mock_storage.remove.side_effect = Exception("Storage connection timeout")
+    monkeypatch.setattr(supabase_config.supabase.storage, "from_", lambda b: mock_storage)
+
+    limiter.reset()
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-fail", "email": "fail@aniresq.org", "name": "Fail User", "role": "CITIZEN"
+    }
+    try:
+        res = client.delete("/api/users/request-clearance")
+        assert res.status_code == 200
+        assert res.json()["requestedRole"] is None
+
+        # Audit log must record storage_cleaned: False
+        assert len(logged_events) > 0
+        audit = logged_events[0]
+        assert audit["action"] == "CLEARANCE_WITHDRAWN"
+        assert audit["new_value"]["storage_cleaned"] is False
     finally:
         app.dependency_overrides.clear()
         limiter.reset()
