@@ -636,17 +636,6 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             if not res.data:
                 raise HTTPException(status_code=404, detail="User not found")
 
-            # Always sync role to auth.users user_metadata and clear requested_role
-            try:
-                supabase.auth.admin.update_user_by_id(uid, {
-                    "user_metadata": {
-                        "role": target_role,
-                        "requested_role": None
-                    }
-                })
-            except Exception as meta_err:
-                logger.warning(f"Could not sync role to auth.users: {meta_err}")
-
             try:
                 # Audit role change in database audit_logs (performed_by records real admin)
                 log_audit_event(
@@ -794,15 +783,6 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
             
             if not res.data:
                 raise HTTPException(status_code=404, detail="User not found")
-
-            try:
-                supabase.auth.admin.update_user_by_id(uid, {
-                    "user_metadata": {
-                        "requested_role": None
-                    }
-                })
-            except Exception as meta_err:
-                logger.warning(f"Failed to clear requested_role from auth metadata: {meta_err}")
 
             try:
                 # Audit role request decline

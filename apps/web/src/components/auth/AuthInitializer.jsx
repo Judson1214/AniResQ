@@ -19,7 +19,7 @@ export const AuthInitializer = () => {
               uid: sessionUser.id,
               email: sessionUser.email,
               displayName: sessionUser.user_metadata?.display_name || "Unknown User",
-              role: sessionUser.user_metadata?.role || "CITIZEN"
+              role: "CITIZEN"
             };
             setUser({ ...newProfile, id: sessionUser.id, avatarUrl: "", isVerified: false });
           }

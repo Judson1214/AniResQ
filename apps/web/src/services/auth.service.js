@@ -21,9 +21,6 @@ const signUp = async (
     phone: phone || "",
     requested_role: requestedRole,
   };
-  if (idCardType) metadata.id_card_type = idCardType;
-  if (idCardNumber) metadata.id_card_number = idCardNumber;
-  if (idCardUrl) metadata.id_card_url = idCardUrl;
 
   const { data, error } = await supabase.auth.signUp({
     email,
