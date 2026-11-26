@@ -288,4 +288,16 @@ BEGIN
 END $$;
 RESET ROLE;
 
+-- 12. Verify get_storage_prefix returns valid prefix with or without app.settings.supabase_url
+DO $$
+DECLARE
+  v_prefix TEXT;
+BEGIN
+  v_prefix := public.get_storage_prefix();
+  IF v_prefix IS NULL OR v_prefix = '' OR NOT (v_prefix LIKE '%/storage/v1/object/public/uploads/') THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: get_storage_prefix failed to return valid storage prefix: %', v_prefix;
+  END IF;
+  RAISE NOTICE 'PASS: get_storage_prefix returns valid storage prefix (%)', v_prefix;
+END $$;
+
 ROLLBACK;
