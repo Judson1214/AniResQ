@@ -570,6 +570,20 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
         id_card_type=req.idCardType,
         id_card_number=clean_id_number
     )
+
+    # Log audit event for clearance request submission
+    try:
+        log_audit_event(
+            action="CLEARANCE_REQUESTED",
+            entity_type="USER",
+            entity_id=uid,
+            performed_by=uid,
+            old_value={"requested_role": None},
+            new_value={"requested_role": target_role, "id_card_type": req.idCardType},
+            fail_closed=False
+        )
+    except Exception as audit_err:
+        logger.warning(f"Failed to record audit log for clearance request: {audit_err}")
     
     row_data = {**(res.data[0] if (res.data and isinstance(res.data[0], dict)) else {}), **update_data}
     return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
@@ -638,10 +652,30 @@ def withdraw_role_clearance_request(current_user: dict = Depends(get_current_use
                 logger.warning(f"Could not remove ID document {clean_path} from storage on clearance withdrawal: {storage_err}")
 
     # Remove stale ROLE_REQUEST notifications from admin feeds
+    notif_cleaned = True
     try:
         supabase.table("notifications").delete().eq("related_entity_id", uid).eq("type", "ROLE_REQUEST").execute()
     except Exception as notif_err:
+        notif_cleaned = False
         logger.warning(f"Failed to clear ROLE_REQUEST notifications for user {uid}: {notif_err}")
+
+    # Log audit event for clearance withdrawal
+    try:
+        log_audit_event(
+            action="CLEARANCE_WITHDRAWN",
+            entity_type="USER",
+            entity_id=uid,
+            performed_by=uid,
+            old_value={"requested_role": user_row.get("requested_role")},
+            new_value={
+                "requested_role": None,
+                "storage_cleaned": bool(doc_url),
+                "notifications_cleaned": notif_cleaned
+            },
+            fail_closed=False
+        )
+    except Exception as audit_err:
+        logger.warning(f"Failed to record audit log for clearance withdrawal: {audit_err}")
 
     row_data = {**(res.data[0] if (res.data and isinstance(res.data[0], dict)) else {}), **update_data}
     return map_user(row_data, can_view_contact=True, can_view_sensitive=True)

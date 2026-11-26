@@ -892,6 +892,7 @@ def test_withdraw_role_clearance_request(monkeypatch):
 
     deleted_notifications = []
     removed_storage_paths = []
+    logged_audit_events = []
 
     class MockUserTable:
         def __init__(self, table_name="users"):
@@ -899,6 +900,7 @@ def test_withdraw_role_clearance_request(monkeypatch):
             self.current_id = None
             self.action = None
             self.update_payload = None
+            self.insert_payload = None
             self.is_col = None
             self.is_val = None
             self.is_negated = False
@@ -929,6 +931,11 @@ def test_withdraw_role_clearance_request(monkeypatch):
             self.update_payload = payload
             return self
 
+        def insert(self, payload):
+            self.action = "insert"
+            self.insert_payload = payload
+            return self
+
         def delete(self, *args, **kwargs):
             self.action = "delete"
             return self
@@ -938,6 +945,11 @@ def test_withdraw_role_clearance_request(monkeypatch):
                 if self.action == "delete":
                     deleted_notifications.append(dict(self.filters))
                     return MagicMock(data=[])
+                return MagicMock(data=[])
+            elif self.table_name == "audit_logs":
+                if self.action == "insert":
+                    logged_audit_events.append(dict(self.insert_payload) if isinstance(self.insert_payload, dict) else {})
+                    return MagicMock(data=[{"id": "mock-audit-id"}])
                 return MagicMock(data=[])
 
             row = mock_db.get(self.current_id)
@@ -1006,6 +1018,12 @@ def test_withdraw_role_clearance_request(monkeypatch):
         assert any(
             n.get("related_entity_id") == "user-pending" and n.get("type") == "ROLE_REQUEST"
             for n in deleted_notifications
+        )
+
+        # Verify clearance withdrawal was recorded in audit logs
+        assert any(
+            e.get("action") == "CLEARANCE_WITHDRAWN" and e.get("entity_id") == "user-pending"
+            for e in logged_audit_events
         )
 
         # 3. User can now submit a fresh clearance request without 409
