@@ -40,16 +40,19 @@ export default function OperatorRegistryPage() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
 
-  const { data: users = [], isLoading, isFetching, refetch } = useQuery({
+  const { data: rawUsers = [], isLoading, isFetching, refetch } = useQuery({
     queryKey: ["operator-registry-users", selectedRole, onlyPending, searchQuery, page],
     queryFn: () => getUsers({
       role: selectedRole === "ALL" ? undefined : selectedRole,
       has_requested_role: onlyPending ? true : undefined,
       search: searchQuery.trim() || undefined,
-      limit: PAGE_SIZE,
+      limit: PAGE_SIZE + 1,
       offset: page * PAGE_SIZE,
     }),
   });
+
+  const hasNextPage = rawUsers.length > PAGE_SIZE;
+  const users = useMemo(() => (hasNextPage ? rawUsers.slice(0, PAGE_SIZE) : rawUsers), [rawUsers, hasNextPage]);
 
   const roleMutation = useMutation({
     mutationFn: ({ uid, role }) => updateUserRole(uid, role),
@@ -454,7 +457,7 @@ export default function OperatorRegistryPage() {
                 <button
                   type="button"
                   onClick={() => setPage((p) => p + 1)}
-                  disabled={users.length < PAGE_SIZE || isLoading}
+                  disabled={!hasNextPage || isLoading}
                   className="px-3.5 py-1.5 rounded-xl bg-[#131B2C] hover:bg-slate-700 text-slate-200 border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
                 >
                   Next

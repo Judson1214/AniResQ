@@ -238,7 +238,23 @@ def list_users(
         raise HTTPException(status_code=403, detail="Forbidden: Only administrators and shelter/NGO coordinators can list users")
         
     try:
-        query = supabase.table("users").select("*")
+        is_admin = current_user.get("role") == "ADMIN"
+
+        # Explicit column projection: non-admins (NGO, SHELTER) NEVER load ID document fields
+        if is_admin:
+            selected_columns = (
+                "id, display_name, email, phone, role, requested_role, "
+                "id_card_type, id_card_number, id_card_url, avatar_url, created_at, "
+                "address, bio, latitude, longitude, service_radius_km, alerts_enabled"
+            )
+        else:
+            selected_columns = (
+                "id, display_name, email, phone, role, requested_role, "
+                "avatar_url, created_at, address, bio, latitude, longitude, "
+                "service_radius_km, alerts_enabled"
+            )
+
+        query = supabase.table("users").select(selected_columns)
         if role:
             query = query.eq("role", role.upper())
         if search:
@@ -247,32 +263,7 @@ def list_users(
             query = query.not_.is_("requested_role", "null")
             
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
-        is_admin = current_user.get("role") == "ADMIN"
-        
         users_data = res.data or []
-        if is_admin:
-            try:
-                auth_users = supabase.auth.admin.list_users()
-                auth_metadata_map = {au.id: au.user_metadata for au in auth_users if au.user_metadata}
-                for d in users_data:
-                    meta = auth_metadata_map.get(d.get("id") or d.get("uid"), {})
-                    if meta:
-                        if not d.get("requested_role") and meta.get("requested_role"):
-                            d["requested_role"] = meta.get("requested_role")
-                        if meta.get("id_card_type"):
-                            d["id_card_type"] = meta.get("id_card_type")
-                        if meta.get("id_card_number"):
-                            d["id_card_number"] = meta.get("id_card_number")
-                        if meta.get("id_card_url"):
-                            d["id_card_url"] = meta.get("id_card_url")
-            except Exception as meta_err:
-                logger.warning(f"Failed to load auth metadata: {meta_err}")
-
-        if has_requested_role:
-            users_data = [
-                d for d in users_data
-                if (d.get("requested_role") or d.get("requestedRole"))
-            ]
         
         return [
             map_user(d, can_view_contact=is_admin, can_view_sensitive=is_admin)
@@ -594,13 +585,6 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
         user_row = current_rec.data[0]
         prev_role = user_row.get("role", "UNKNOWN")
         prev_requested = user_row.get("requested_role")
-        if not prev_requested:
-            try:
-                auth_u = supabase.auth.admin.get_user_by_id(uid)
-                if auth_u and auth_u.user and auth_u.user.user_metadata:
-                    prev_requested = auth_u.user.user_metadata.get("requested_role")
-            except Exception:
-                pass
 
         updated_row = None
         # Primary transactional path: atomic update + audit log via PostgreSQL RPC
@@ -759,14 +743,6 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
         user_row = current_rec.data[0]
         current_role = user_row.get("role", "CITIZEN")
         requested_role = user_row.get("requested_role")
-        
-        if not requested_role:
-            try:
-                auth_u = supabase.auth.admin.get_user_by_id(uid)
-                if auth_u and auth_u.user and auth_u.user.user_metadata:
-                    requested_role = auth_u.user.user_metadata.get("requested_role")
-            except Exception:
-                pass
 
         if not requested_role:
             raise HTTPException(status_code=400, detail="User has no pending role request to decline")
