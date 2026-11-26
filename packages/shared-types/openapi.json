@@ -3947,19 +3947,6 @@
             ],
             "title": "Idcardurl",
             "description": "Relative storage path in id-verification bucket"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 500
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes",
-            "description": "Optional notes for verification administrators"
           }
         },
         "type": "object",
@@ -4182,50 +4169,6 @@
               }
             ],
             "title": "Phonenumber"
-          },
-          "requestedRole": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requestedrole"
-          },
-          "idCardType": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Idcardtype"
-          },
-          "idCardNumber": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Idcardnumber"
-          },
-          "idCardUrl": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Idcardurl"
           }
         },
         "type": "object",
@@ -4302,50 +4245,6 @@
               }
             ],
             "title": "Avatarurl"
-          },
-          "requestedRole": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requestedrole"
-          },
-          "idCardType": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Idcardtype"
-          },
-          "idCardNumber": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Idcardnumber"
-          },
-          "idCardUrl": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Idcardurl"
           },
           "latitude": {
             "anyOf": [

@@ -188,6 +188,7 @@ def test_audit_fail_closed_aborts_role_mutation(monkeypatch):
     mock_users.select.return_value = mock_users
     mock_users.update.return_value = mock_users
     mock_users.eq.return_value = mock_users
+    mock_users.is_.return_value = mock_users
     mock_users.execute.return_value = MagicMock(data=[{"id": "target-user", "role": "CITIZEN", "display_name": "Target"}])
 
     mock_audit = MagicMock()
@@ -227,6 +228,7 @@ def test_rpc_audit_failure_fails_closed_without_fallback(monkeypatch):
     mock_users.select.return_value = mock_users
     mock_users.update.return_value = mock_users
     mock_users.eq.return_value = mock_users
+    mock_users.is_.return_value = mock_users
     mock_users.execute.return_value = MagicMock(data=[{"id": "target-user", "role": "CITIZEN", "display_name": "Target"}])
 
     mock_rpc = MagicMock()
@@ -458,6 +460,7 @@ def test_production_guard_aborts_on_missing_rpc_function(monkeypatch):
     mock_users.select.return_value = mock_users
     mock_users.update.return_value = mock_users
     mock_users.eq.return_value = mock_users
+    mock_users.is_.return_value = mock_users
     mock_users.execute.return_value = MagicMock(data=[{"id": "target-user", "role": "CITIZEN", "display_name": "Target"}])
 
     mock_rpc = MagicMock()
@@ -493,6 +496,7 @@ def test_id_card_pii_not_leaked_in_bio_or_notifications(monkeypatch):
     mock_users.select.return_value = mock_users
     mock_users.update.return_value = mock_users
     mock_users.eq.return_value = mock_users
+    mock_users.is_.return_value = mock_users
     # Live row has clean bio
     mock_users.execute.return_value = MagicMock(data=[{
         "id": "op-1",
@@ -546,6 +550,7 @@ def test_id_card_url_path_validation_and_signing_safety(monkeypatch):
     mock_users.select.return_value = mock_users
     mock_users.update.return_value = mock_users
     mock_users.eq.return_value = mock_users
+    mock_users.is_.return_value = mock_users
     mock_users.execute.return_value = MagicMock(data=[{"id": "op-1", "role": "CITIZEN", "display_name": "Op"}])
     monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_users)
 
@@ -656,6 +661,8 @@ def test_request_clearance_guards_and_validation(monkeypatch):
             self.current_id = None
             self.action = None
             self.update_payload = None
+            self.is_col = None
+            self.is_val = None
 
         def select(self, *args, **kwargs):
             self.action = "select"
@@ -663,6 +670,11 @@ def test_request_clearance_guards_and_validation(monkeypatch):
 
         def eq(self, col, val):
             self.current_id = val
+            return self
+
+        def is_(self, col, val):
+            self.is_col = col
+            self.is_val = val
             return self
 
         def update(self, payload):
@@ -676,6 +688,9 @@ def test_request_clearance_guards_and_validation(monkeypatch):
                 return MagicMock(data=[dict(row)] if row else [])
             elif self.action == "update":
                 if row:
+                    if self.is_col == "requested_role" and self.is_val == "null":
+                        if row.get("requested_role") is not None:
+                            return MagicMock(data=[])
                     row.update(self.update_payload)
                     return MagicMock(data=[dict(row)])
                 return MagicMock(data=[])
@@ -789,6 +804,7 @@ def test_request_clearance_guards_and_validation(monkeypatch):
         app.dependency_overrides.clear()
 
     # 10. Successful clearance submission -> 200
+    limiter.reset()
     app.dependency_overrides[get_current_user] = lambda: {
         "uid": "user-cit", "email": "cit@aniresq.org", "name": "Citizen", "role": "CITIZEN"
     }
@@ -804,6 +820,16 @@ def test_request_clearance_guards_and_validation(monkeypatch):
         assert data["requestedRole"] == "VOLUNTEER"
         assert data["idCardNumber"] == "DL-1420110012345"
         assert data["idCardType"] == "Government Photo ID"
+
+        # 10b. Concurrent / repeat attempt where requested_role is already set returns 409
+        res_conflict = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "DL-1420110012345",
+            "idCardType": "Government Photo ID",
+            "idCardUrl": "user-cit/doc.png"
+        })
+        assert res_conflict.status_code == 409
+        assert "already pending administrator review" in res_conflict.json()["detail"]
     finally:
         app.dependency_overrides.clear()
 

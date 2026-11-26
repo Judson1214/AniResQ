@@ -94,7 +94,6 @@ const updateUserProfile = async (uid, updateData) => {
   if (updateData.avatarUrl !== undefined) payload.avatarUrl = updateData.avatarUrl;
   if (updateData.address !== undefined) payload.address = updateData.address;
   if (updateData.bio !== undefined) payload.bio = updateData.bio;
-  if (updateData.requestedRole !== undefined) payload.requestedRole = updateData.requestedRole;
   if (updateData.latitude !== undefined) payload.latitude = updateData.latitude;
   if (updateData.longitude !== undefined) payload.longitude = updateData.longitude;
   if (updateData.serviceRadiusKm !== undefined) payload.serviceRadiusKm = updateData.serviceRadiusKm;

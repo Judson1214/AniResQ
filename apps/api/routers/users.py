@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from supabase_config import supabase
 from auth import get_current_user
 from validators import validate_avatar_url
+from rate_limiter import limiter
 from .notifications import create_system_notification
 from .audit import log_audit_event
 
@@ -51,10 +52,6 @@ class UserProfileCreate(BaseModel):
     displayName: str
     role: Optional[str] = "CITIZEN"
     phoneNumber: Optional[str] = None
-    requestedRole: Optional[str] = None
-    idCardType: Optional[str] = None
-    idCardNumber: Optional[str] = None
-    idCardUrl: Optional[str] = None
 
 class UserProfileUpdate(BaseModel):
     displayName: Optional[str] = None
@@ -63,10 +60,6 @@ class UserProfileUpdate(BaseModel):
     address: Optional[str] = None
     bio: Optional[str] = None
     avatarUrl: Optional[str] = None
-    requestedRole: Optional[str] = None
-    idCardType: Optional[str] = None
-    idCardNumber: Optional[str] = None
-    idCardUrl: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     serviceRadiusKm: Optional[int] = None
@@ -383,11 +376,6 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
             
         if target_role not in VALID_ROLES:
             target_role = "CITIZEN"
-        
-        # Disallow requesting ADMIN role through signup metadata or profile creation
-        req_role = profile.requestedRole.upper() if profile.requestedRole else None
-        if req_role == "ADMIN" or req_role not in ALLOWED_REQUESTED_ROLES:
-            req_role = None
 
         # Security: Derive verified email strictly from authenticated JWT token
         verified_email = current_user.get("email")
@@ -403,30 +391,12 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
             "role": target_role,
             "phone": profile.phoneNumber or "",
         }
-        if profile.idCardType:
-            data["id_card_type"] = profile.idCardType
-        if profile.idCardNumber:
-            data["id_card_number"] = profile.idCardNumber
-        if profile.idCardUrl:
-            data["id_card_url"] = validate_id_card_path(profile.idCardUrl, target_uid)
-
-        if req_role:
-            data["requested_role"] = req_role
-            notify_admins_of_role_request(
-                user_id=target_uid,
-                user_name=profile.displayName,
-                user_email=verified_email,
-                req_role=req_role,
-                id_card_type=profile.idCardType,
-                id_card_number=profile.idCardNumber
-            )
         
         res = supabase.table("users").upsert(data).execute()
         if not res.data:
             raise HTTPException(status_code=500, detail="Failed to create user profile")
             
-        row_data = {**data, **(res.data[0] if res.data else {})}
-        return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
+        return map_user(res.data[0], can_view_contact=True, can_view_sensitive=True)
     except HTTPException:
         raise
     except Exception as e:
@@ -454,32 +424,6 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
         update_data["bio"] = clean_bio
     if profile.avatarUrl is not None: 
         update_data["avatar_url"] = validate_avatar_url(profile.avatarUrl)
-    if profile.idCardType is not None:
-        update_data["id_card_type"] = profile.idCardType
-    if profile.idCardNumber is not None:
-        update_data["id_card_number"] = profile.idCardNumber
-    if profile.idCardUrl is not None:
-        update_data["id_card_url"] = validate_id_card_path(profile.idCardUrl, uid) if profile.idCardUrl.strip() else None
-    if profile.requestedRole is not None:
-        raw_req = profile.requestedRole.strip().upper() if profile.requestedRole.strip() else None
-        if raw_req == "ADMIN" or (raw_req and raw_req not in ALLOWED_REQUESTED_ROLES):
-            raise HTTPException(status_code=400, detail="Cannot request ADMIN or invalid role")
-        update_data["requested_role"] = raw_req
-        if raw_req:
-            try:
-                user_info = supabase.table("users").select("display_name, email").eq("id", uid).execute()
-                u_name = user_info.data[0].get("display_name", "Operator") if user_info.data else "Operator"
-                u_email = user_info.data[0].get("email", "") if user_info.data else ""
-                notify_admins_of_role_request(
-                    user_id=uid,
-                    user_name=u_name,
-                    user_email=u_email,
-                    req_role=raw_req,
-                    id_card_type=profile.idCardType,
-                    id_card_number=profile.idCardNumber
-                )
-            except Exception as e:
-                logger.warning(f"Failed to dispatch admin notification: {e}")
     if profile.latitude is not None:
         if not (-90.0 <= profile.latitude <= 90.0):
             raise HTTPException(status_code=422, detail="Latitude must be between -90 and 90")
@@ -542,11 +486,6 @@ class RoleClearanceRequest(BaseModel):
         max_length=255,
         description="Relative storage path in id-verification bucket"
     )
-    notes: Optional[str] = Field(
-        default=None,
-        max_length=500,
-        description="Optional notes for verification administrators"
-    )
 
 @router.post("/request-clearance", response_model=UserResponse)
 def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict = Depends(get_current_user)):
@@ -557,6 +496,15 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
     
     uid = current_user["uid"]
     
+    # User-keyed rate limiting: 10 clearance requests per minute per user ID
+    user_key = f"user:{uid}"
+    allowed, retry_after = limiter.is_allowed(user_key, path="/api/users/request-clearance", method="POST")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many clearance requests. Please retry in {retry_after} seconds."
+        )
+
     # Guard 1: Existing ADMIN users cannot request lower clearance
     if current_user.get("role") == "ADMIN":
         raise HTTPException(status_code=400, detail="Administrators already hold maximum clearance")
@@ -593,9 +541,23 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
     if req.idCardUrl is not None:
         update_data["id_card_url"] = validate_id_card_path(req.idCardUrl, uid) if req.idCardUrl.strip() else None
     
-    res = supabase.table("users").update(update_data).eq("id", uid).execute()
+    # Atomic conditional update: update ONLY if requested_role is NULL to prevent concurrent duplicate requests
+    res = (
+        supabase.table("users")
+        .update(update_data)
+        .eq("id", uid)
+        .is_("requested_role", "null")
+        .execute()
+    )
     if not res.data:
-        raise HTTPException(status_code=404, detail="User not found")
+        # Either user not found or requested_role was concurrently set by a simultaneous request
+        existing_chk = supabase.table("users").select("id, requested_role").eq("id", uid).execute()
+        if not existing_chk.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=409,
+            detail="A clearance request is already pending administrator review"
+        )
         
     u_name = current_user.get("name") or current_user.get("displayName") or user_row.get("display_name") or "Operator"
     u_email = current_user.get("email") or user_row.get("email") or ""
@@ -609,7 +571,7 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
         id_card_number=clean_id_number
     )
     
-    row_data = {**(res.data[0] if res.data else {}), **update_data}
+    row_data = {**(res.data[0] if (res.data and isinstance(res.data[0], dict)) else {}), **update_data}
     return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
 
 @router.patch("/{uid}/role", response_model=UserResponse)

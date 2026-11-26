@@ -432,6 +432,7 @@ def test_vet_cannot_view_other_user_contact_info(monkeypatch):
         app.dependency_overrides.clear()
 
 def test_cannot_request_admin_role_via_profile(monkeypatch):
+    """Test that POST /api/users strictly ignores requestedRole and ID credentials at creation."""
     app.dependency_overrides[get_current_user] = lambda: {
         "uid": "user-test", "email": "user@test.com", "name": "Test User", "role": "CITIZEN"
     }
@@ -444,25 +445,18 @@ def test_cannot_request_admin_role_via_profile(monkeypatch):
         mock_query.upsert.side_effect = lambda d: captured.update(d) or mock_query
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
 
-        # Trying to request ADMIN should be rejected / sanitized to None
+        # requestedRole and ID credentials sent to POST /api/users must be strictly ignored
         res = client.post("/api/users", json={
             "uid": "user-test",
             "displayName": "Test",
-            "requestedRole": "ADMIN"
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "DL-12345"
         })
         assert res.status_code == 200
-        assert res.json()["requestedRole"] is None
         assert "requested_role" not in captured
-
-        # Valid requested role VOLUNTEER is preserved
-        res_vol = client.post("/api/users", json={
-            "uid": "user-test",
-            "displayName": "Test",
-            "requestedRole": "VOLUNTEER"
-        })
-        assert res_vol.status_code == 200
-        assert res_vol.json()["requestedRole"] == "VOLUNTEER"
-        assert captured.get("requested_role") == "VOLUNTEER"
+        assert "id_card_number" not in captured
+        assert "id_card_type" not in captured
+        assert "id_card_url" not in captured
     finally:
         app.dependency_overrides.clear()
 
@@ -661,25 +655,34 @@ def test_shelter_ngo_cannot_view_unrelated_user_contact_details(monkeypatch):
         app.dependency_overrides.clear()
 
 def test_cannot_request_admin_role_via_patch_profile(monkeypatch):
+    """Test that PATCH /api/users/{uid} strictly ignores requestedRole and ID credentials.
+    Clearance upgrades MUST go through POST /api/users/request-clearance."""
     app.dependency_overrides[get_current_user] = lambda: {
         "uid": "user-test", "email": "user@test.com", "name": "Test User", "role": "CITIZEN"
     }
     try:
+        captured_update = {}
         mock_query = MagicMock()
         mock_query.select.return_value = mock_query
         mock_query.eq.return_value = mock_query
-        mock_query.update.return_value = mock_query
-        mock_query.execute.return_value = MagicMock(data=[{"id": "user-test", "display_name": "Test"}])
+        mock_query.update.side_effect = lambda d: captured_update.update(d) or mock_query
+        mock_query.execute.return_value = MagicMock(data=[{"id": "user-test", "display_name": "Test", "role": "CITIZEN"}])
         monkeypatch.setattr(supabase_config.supabase, "table", MagicMock(return_value=mock_query))
 
-        # Attempting to PATCH requestedRole to ADMIN fails with 400
-        res = client.patch("/api/users/user-test", json={"requestedRole": "ADMIN"})
-        assert res.status_code == 400
-        assert "Cannot request ADMIN" in res.json()["detail"]
-
-        # Valid requested role VOLUNTEER is accepted
-        res_ok = client.patch("/api/users/user-test", json={"requestedRole": "VOLUNTEER"})
-        assert res_ok.status_code == 200
+        # Attempting to PATCH requestedRole or ID card fields via PATCH /api/users/{uid} is strictly ignored
+        res = client.patch("/api/users/user-test", json={
+            "displayName": "Updated Name",
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "DL-12345",
+            "idCardType": "Government Photo ID",
+            "idCardUrl": "user-test/id.png"
+        })
+        assert res.status_code == 200
+        assert captured_update.get("display_name") == "Updated Name"
+        assert "requested_role" not in captured_update
+        assert "id_card_number" not in captured_update
+        assert "id_card_type" not in captured_update
+        assert "id_card_url" not in captured_update
     finally:
         app.dependency_overrides.clear()
 
