@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   CheckCircle2, 
   Upload, 
@@ -11,61 +11,78 @@ import { uploadMultipleFiles } from "@/services/storage.service";
 
 export const RescueVerificationModal = ({ isOpen, onClose, onConfirm, isSubmitting }) => {
   const [notes, setNotes] = useState("");
-  const [photoFiles, setPhotoFiles] = useState([]);
-  const [photoUrls, setPhotoUrls] = useState([]);
-  const [manualUrl, setManualUrl] = useState("");
+  const [photoItems, setPhotoItems] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
+
+  // Revoke object URLs on unmount or modal close to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      photoItems.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+    };
+  }, [photoItems]);
 
   if (!isOpen) return null;
 
   const handleFileChange = (e) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      setPhotoFiles((prev) => [...prev, ...files]);
-    }
-  };
+    if (!e.target.files) return;
+    setError("");
+    const selected = Array.from(e.target.files);
+    const validItems = [];
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+    const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-  const handleAddManualUrl = () => {
-    if (!manualUrl.trim()) return;
-    try {
-      const parsed = new URL(manualUrl.trim());
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        setError("Photo URL must start with http:// or https://");
+    for (const file of selected) {
+      if (!ALLOWED_TYPES.includes(file.type)) {
+        setError(`"${file.name}" is not an accepted format. Only JPEG, PNG, and WebP are allowed.`);
         return;
       }
-      setPhotoUrls((prev) => [...prev, manualUrl.trim()]);
-      setManualUrl("");
-      setError("");
-    } catch {
-      setError("Please enter a valid URL (e.g. https://images.unsplash.com/...)");
+      if (file.size > MAX_SIZE) {
+        setError(`"${file.name}" exceeds the 5MB file size limit.`);
+        return;
+      }
+      validItems.push({
+        file,
+        previewUrl: URL.createObjectURL(file),
+      });
     }
+
+    setPhotoItems((prev) => [...prev, ...validItems]);
   };
 
-  const removeFile = (index) => {
-    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const removeUrl = (index) => {
-    setPhotoUrls((prev) => prev.filter((_, i) => i !== index));
+  const removePhotoItem = (index) => {
+    setPhotoItems((prev) => {
+      const target = prev[index];
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
+    if (!notes.trim() || notes.trim().length < 10) {
+      setError("Please provide resolution notes (at least 10 characters) describing the rescue actions and animal status.");
+      return;
+    }
+
     try {
       setIsUploading(true);
-      let uploadedUrls = [...photoUrls];
+      let uploadedUrls = [];
 
-      if (photoFiles.length > 0) {
+      if (photoItems.length > 0) {
         const tempId = crypto.randomUUID();
-        const urls = await uploadMultipleFiles(`rescue-verification/${tempId}`, photoFiles);
-        uploadedUrls = [...uploadedUrls, ...urls];
+        const filesToUpload = photoItems.map((item) => item.file);
+        uploadedUrls = await uploadMultipleFiles(`rescue-verification/${tempId}`, filesToUpload);
       }
 
       await onConfirm({
-        notes: notes.trim() || "Emergency rescue completed and animal safely secured.",
+        notes: notes.trim(),
         verificationPhotos: uploadedUrls,
       });
       onClose();
@@ -114,13 +131,14 @@ export const RescueVerificationModal = ({ isOpen, onClose, onConfirm, isSubmitti
           {/* Care summary notes */}
           <div>
             <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-              Resolution Notes / Care Actions
+              Resolution Notes / Care Actions <span className="text-rose-400">*</span>
             </label>
             <textarea
               rows={3}
+              required
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="E.g., Animal safely retrieved, first aid applied, transported to partner veterinary clinic."
+              placeholder="Describe the condition of the animal, immediate medical care administered, or transfer to veterinary facility (min 10 characters)..."
               className="w-full bg-slate-800/80 border border-slate-700 rounded-xl p-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
             />
           </div>
@@ -136,67 +154,31 @@ export const RescueVerificationModal = ({ isOpen, onClose, onConfirm, isSubmitti
               <input
                 type="file"
                 multiple
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={handleFileChange}
                 disabled={busy}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
               <div className="flex flex-col items-center gap-2 text-slate-400">
                 <Upload size={24} className="text-emerald-400" />
-                <span className="text-xs">Click or drag & drop photos here</span>
-                <span className="text-[10px] text-slate-500">JPG, PNG, WebP up to 10MB</span>
+                <span className="text-xs">Click or drag & drop proof photos here</span>
+                <span className="text-[10px] text-slate-500">JPG, PNG, WebP up to 5MB each</span>
               </div>
             </div>
 
-            {/* Optional URL input fallback */}
-            <div className="mt-3 flex gap-2">
-              <input
-                type="url"
-                value={manualUrl}
-                onChange={(e) => setManualUrl(e.target.value)}
-                placeholder="Or paste verification image URL"
-                className="flex-1 bg-slate-800/80 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleAddManualUrl}
-                className="border-slate-700 text-xs rounded-xl"
-              >
-                Add URL
-              </Button>
-            </div>
-
             {/* Preview Selected Photos */}
-            {(photoFiles.length > 0 || photoUrls.length > 0) && (
+            {photoItems.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
-                {photoFiles.map((file, i) => (
-                  <div key={`file-${i}`} className="relative group w-14 h-14 rounded-xl overflow-hidden border border-slate-700 bg-black">
+                {photoItems.map((item, i) => (
+                  <div key={`item-${i}`} className="relative group w-14 h-14 rounded-xl overflow-hidden border border-slate-700 bg-black">
                     <img 
-                      src={URL.createObjectURL(file)} 
-                      alt="Proof" 
+                      src={item.previewUrl} 
+                      alt="Proof preview" 
                       className="w-full h-full object-cover" 
                     />
                     <button
                       type="button"
-                      onClick={() => removeFile(i)}
-                      className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 text-rose-400 transition-opacity"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                ))}
-                {photoUrls.map((url, i) => (
-                  <div key={`url-${i}`} className="relative group w-14 h-14 rounded-xl overflow-hidden border border-slate-700 bg-black">
-                    <img 
-                      src={url} 
-                      alt="Proof" 
-                      className="w-full h-full object-cover" 
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeUrl(i)}
+                      onClick={() => removePhotoItem(i)}
                       className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 text-rose-400 transition-opacity"
                     >
                       <X size={16} />

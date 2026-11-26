@@ -22,6 +22,12 @@ export const RescueIncidentReport = ({ rescue, timeline = [], onClose }) => {
   const caseId = `SOS-${rescue.id ? rescue.id.slice(0, 8).toUpperCase() : "UNKNOWN"}`;
   const generatedAt = new Date().toISOString();
 
+  const maskId = (id) => {
+    if (!id || typeof id !== "string") return "Anonymous";
+    if (id.length <= 10) return id;
+    return `${id.slice(0, 4)}...${id.slice(-4)}`;
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-sm overflow-y-auto print:p-0 print:bg-white print:static">
       <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden my-4 sm:my-8 print:border-none print:shadow-none print:m-0 print:max-w-none print:bg-white print:text-black">
@@ -63,11 +69,11 @@ export const RescueIncidentReport = ({ rescue, timeline = [], onClose }) => {
               <div className="flex items-center gap-2">
                 <span className="font-black text-2xl tracking-wider text-emerald-400 print:text-emerald-700">AniResQ</span>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 font-bold uppercase tracking-wider border border-emerald-500/20 print:border-black print:text-black">
-                  Official Record
+                  Incident Summary
                 </span>
               </div>
-              <h1 className="text-2xl font-black mt-1 text-white print:text-black">EMERGENCY INCIDENT CASE REPORT</h1>
-              <p className="text-xs text-slate-400 print:text-gray-600">Rapid Response Animal Rescue & Triage Network</p>
+              <h1 className="text-2xl font-black mt-1 text-white print:text-black">EMERGENCY INCIDENT SUMMARY</h1>
+              <p className="text-xs text-slate-400 print:text-gray-600">Animal Rescue & Response Record</p>
             </div>
             <div className="text-left sm:text-right font-mono text-xs text-slate-300 print:text-black space-y-1">
               <div><span className="text-slate-500 print:text-gray-500">CASE NUMBER:</span> <span className="font-bold">{caseId}</span></div>
@@ -122,7 +128,7 @@ export const RescueIncidentReport = ({ rescue, timeline = [], onClose }) => {
                 <User size={14} className="text-emerald-400 print:text-emerald-700" /> Reporting Citizen
               </div>
               <div className="text-sm font-semibold text-white print:text-black">{rescue.reporterName || "Citizen Reporter"}</div>
-              <div className="text-xs text-slate-400 print:text-gray-500 font-mono mt-0.5">ID: {rescue.reporterId || "Anonymous"}</div>
+              <div className="text-xs text-slate-400 print:text-gray-500 font-mono mt-0.5">ID: {maskId(rescue.reporterId)}</div>
             </div>
             
             <div className="p-4 rounded-xl bg-slate-800/30 print:bg-gray-50 border border-slate-700/50 print:border-gray-200">
@@ -130,10 +136,10 @@ export const RescueIncidentReport = ({ rescue, timeline = [], onClose }) => {
                 <ShieldCheck size={14} className="text-blue-400 print:text-blue-700" /> Assigned Unit / Responder
               </div>
               <div className="text-sm font-semibold text-white print:text-black">
-                {rescue.assignedTo ? (rescue.assignedName || "Authorized Rescue Specialist") : "Unassigned / Auto-Dispatch"}
+                {rescue.assignedTo ? (rescue.assignedName || "Assigned Responder") : "Unassigned / Open Pool"}
               </div>
               <div className="text-xs text-slate-400 print:text-gray-500 font-mono mt-0.5">
-                {rescue.assignedTo ? `UID: ${rescue.assignedTo}` : "Status: Open Pool"}
+                {rescue.assignedTo ? `UID: ${maskId(rescue.assignedTo)}` : "Status: Open Pool"}
               </div>
             </div>
           </div>
@@ -195,7 +201,7 @@ export const RescueIncidentReport = ({ rescue, timeline = [], onClose }) => {
             )}
           </div>
 
-          {/* Official Verification Seal & Signature Block */}
+          {/* Incident Verification & Record Summary Block */}
           <div className="pt-8 border-t border-slate-700/80 print:border-gray-300 flex flex-col sm:flex-row items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full border-2 border-dashed border-emerald-500/50 flex items-center justify-center text-emerald-400 print:text-emerald-700 print:border-black">
@@ -203,21 +209,21 @@ export const RescueIncidentReport = ({ rescue, timeline = [], onClose }) => {
               </div>
               <div>
                 <div className="text-xs font-bold text-emerald-400 print:text-emerald-800 uppercase tracking-widest">
-                  AniResQ Emergency Certification
+                  Incident Verification Summary
                 </div>
                 <div className="text-xs text-slate-400 print:text-gray-600 mt-0.5">
-                  Cryptographically registered incident record.
+                  Generated from AniResQ system record {caseId}
                 </div>
                 <div className="text-[10px] font-mono text-slate-500 print:text-gray-500">
-                  DIGITAL SEAL HASH: {rescue.id?.replace(/-/g, "").slice(0, 24).toUpperCase()}
+                  SYSTEM RECORD ID: {rescue.id}
                 </div>
               </div>
             </div>
 
             <div className="text-center sm:text-right">
               <div className="w-48 border-b border-slate-600 print:border-black mb-1 mx-auto sm:ml-auto" />
-              <p className="text-xs font-bold text-slate-300 print:text-black">Authorized Response Officer</p>
-              <p className="text-[10px] text-slate-500 print:text-gray-500">AniResQ Command Center Central Registry</p>
+              <p className="text-xs font-bold text-slate-300 print:text-black">Recorded by Responder / Dispatcher</p>
+              <p className="text-[10px] text-slate-500 print:text-gray-500">AniResQ Community Rescue Network</p>
             </div>
           </div>
 

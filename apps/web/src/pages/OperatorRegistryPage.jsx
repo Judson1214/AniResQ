@@ -36,10 +36,19 @@ export default function OperatorRegistryPage() {
   const [onlyPending, setOnlyPending] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [targetRole, setTargetRole] = useState("");
+  const [adminConfirmText, setAdminConfirmText] = useState("");
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
 
   const { data: users = [], isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["operator-registry-users"],
-    queryFn: () => getUsers({ limit: 100 }),
+    queryKey: ["operator-registry-users", selectedRole, onlyPending, searchQuery, page],
+    queryFn: () => getUsers({
+      role: selectedRole === "ALL" ? undefined : selectedRole,
+      has_requested_role: onlyPending ? true : undefined,
+      search: searchQuery.trim() || undefined,
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+    }),
   });
 
   const roleMutation = useMutation({
@@ -191,12 +200,18 @@ export default function OperatorRegistryPage() {
               type="text"
               placeholder="Search by name, email, phone, or ID..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(0);
+              }}
               className="w-full bg-[#131B2C] border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-purple-500 transition-colors"
             />
             {searchQuery && (
               <button
-                onClick={() => setSearchQuery("")}
+                onClick={() => {
+                  setSearchQuery("");
+                  setPage(0);
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
               >
                 <X size={14} />
@@ -210,7 +225,10 @@ export default function OperatorRegistryPage() {
               <input
                 type="checkbox"
                 checked={onlyPending}
-                onChange={(e) => setOnlyPending(e.target.checked)}
+                onChange={(e) => {
+                  setOnlyPending(e.target.checked);
+                  setPage(0);
+                }}
                 className="rounded border-slate-700 bg-slate-800 text-purple-600 focus:ring-purple-500"
               />
               Show Pending Clearance Only ({metrics.pending})
@@ -225,7 +243,10 @@ export default function OperatorRegistryPage() {
             return (
               <button
                 key={r}
-                onClick={() => setSelectedRole(r)}
+                onClick={() => {
+                  setSelectedRole(r);
+                  setPage(0);
+                }}
                 className={`px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors shrink-0 ${
                   isSelected
                     ? "bg-purple-600 text-white shadow-lg shadow-purple-600/30"
@@ -400,6 +421,7 @@ export default function OperatorRegistryPage() {
                               onClick={() => {
                                 setEditingUser(u);
                                 setTargetRole(u.role || "CITIZEN");
+                                setAdminConfirmText("");
                               }}
                               className="px-3 py-1.5 rounded-lg bg-[#131B2C] hover:bg-purple-600/20 text-slate-300 hover:text-purple-300 border border-slate-700 hover:border-purple-500/30 text-xs font-bold transition-all inline-flex items-center gap-1.5"
                             >
@@ -414,6 +436,31 @@ export default function OperatorRegistryPage() {
                 </table>
               </div>
             )}
+
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-[#0A0F1C]/80 text-xs text-slate-400">
+              <span>
+                Showing Page {page + 1} ({filteredUsers.length} operators displayed)
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0 || isLoading}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#131B2C] hover:bg-slate-700 text-slate-200 border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => p + 1)}
+                  disabled={users.length < PAGE_SIZE || isLoading}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#131B2C] hover:bg-slate-700 text-slate-200 border border-slate-800 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -538,25 +585,47 @@ export default function OperatorRegistryPage() {
                 </div>
 
                 {targetRole === "ADMIN" && editingUser.role !== "ADMIN" && (
-                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start gap-2">
-                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                    <span>
-                      Warning: Granting <strong>ADMIN</strong> clearance provides unrestricted access to all operations,
-                      audit logs, and user clearance changes.
-                    </span>
+                  <div className="space-y-3">
+                    <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-300 text-xs flex items-start gap-2">
+                      <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                      <span>
+                        Warning: Granting <strong>ADMIN</strong> clearance provides unrestricted access to all operations,
+                        audit logs, and user clearance changes.
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
+                      <label className="block text-xs font-bold text-rose-300 uppercase tracking-wider">
+                        Type &quot;GRANT ADMIN&quot; to authorize full clearance:
+                      </label>
+                      <input
+                        type="text"
+                        value={adminConfirmText}
+                        onChange={(e) => setAdminConfirmText(e.target.value)}
+                        placeholder="GRANT ADMIN"
+                        className="w-full bg-[#131B2C] border border-rose-500/40 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-rose-400 font-mono"
+                      />
+                    </div>
                   </div>
                 )}
 
                 <div className="pt-4 flex gap-3">
                   <button
-                    onClick={() => setEditingUser(null)}
+                    onClick={() => {
+                      setEditingUser(null);
+                      setAdminConfirmText("");
+                    }}
                     className="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={() => roleMutation.mutate({ uid: editingUser.id, role: targetRole })}
-                    disabled={roleMutation.isPending || targetRole === editingUser.role}
+                    disabled={
+                      roleMutation.isPending || 
+                      targetRole === editingUser.role ||
+                      (targetRole === "ADMIN" && editingUser.role !== "ADMIN" && adminConfirmText.trim() !== "GRANT ADMIN")
+                    }
                     className="flex-1 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition-colors disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-purple-600/30"
                   >
                     {roleMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : "Save Changes"}

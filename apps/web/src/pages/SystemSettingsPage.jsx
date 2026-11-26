@@ -16,7 +16,8 @@ import {
   ArrowRight,
   Loader2,
   CheckCircle2,
-  RotateCcw
+  RotateCcw,
+  AlertCircle
 } from "lucide-react";
 
 export default function SystemSettingsPage() {
@@ -109,13 +110,16 @@ export default function SystemSettingsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
                 <Settings size={22} />
               </div>
               <h1 className="text-3xl font-black text-white tracking-tight">System Settings</h1>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                Preview Mode
+              </span>
             </div>
             <p className="text-slate-400 text-sm mt-1">
-              Configure dispatch boundaries, automated notification heuristics, and review platform security integrity.
+              Preview interface for dispatch boundaries and heuristic rules. Configuration changes here do not alter live rescue dispatch routing.
             </p>
           </div>
 
@@ -141,6 +145,18 @@ export default function SystemSettingsPage() {
               </button>
             </div>
           )}
+        </div>
+
+        {/* Preview Disclaimer Banner */}
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
+          <div className="space-y-1">
+            <h3 className="text-sm font-bold text-amber-200">Preview & Staging Configuration</h3>
+            <p className="text-xs text-amber-300/80 leading-relaxed">
+              Dispatch boundaries and heuristic toggles below are currently in <strong>preview mode</strong>. 
+              The backend rescue dispatch system currently runs on fixed defaults. Runtime configuration changes here are not yet evaluated by automated dispatch.
+            </p>
+          </div>
         </div>
 
         {/* Telemetry Overview Cards */}

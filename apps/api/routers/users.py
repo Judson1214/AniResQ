@@ -243,6 +243,8 @@ def list_users(
             query = query.eq("role", role.upper())
         if search:
             query = query.ilike("display_name", f"%{search}%")
+        if has_requested_role:
+            query = query.not_.is_("requested_role", "null")
             
         res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
         is_admin = current_user.get("role") == "ADMIN"

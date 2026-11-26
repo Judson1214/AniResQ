@@ -35,6 +35,14 @@ function RescueDetailPage() {
     enabled: !!id
   });
 
+  const canViewReport = Boolean(
+    user && (
+      ["ADMIN", "NGO", "SHELTER"].includes(user.role) ||
+      user.uid === rescue?.reporterId ||
+      user.uid === rescue?.assignedTo
+    )
+  );
+
   const handleAcceptRescue = async () => {
     if (!user || !id) return;
     try {
@@ -99,12 +107,14 @@ function RescueDetailPage() {
             <RescueStatusBadge status={rescue.status} />
           </div>
 
-          <Button
-            onClick={() => setShowReport(true)}
-            className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl flex items-center gap-2 self-start sm:self-auto text-sm font-semibold h-10 px-4"
-          >
-            <FileText size={16} /> Generate SOS Incident Report
-          </Button>
+          {canViewReport && (
+            <Button
+              onClick={() => setShowReport(true)}
+              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl flex items-center gap-2 self-start sm:self-auto text-sm font-semibold h-10 px-4"
+            >
+              <FileText size={16} /> Generate SOS Incident Report
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -217,13 +227,15 @@ function RescueDetailPage() {
                       <CheckCircle2 size={28} className="text-emerald-400 mx-auto mb-2" />
                       <div className="text-sm font-bold text-white">Mission Accomplished</div>
                       <p className="text-xs text-slate-400 mt-1">This animal has been safely rescued and verified.</p>
-                      <Button
-                        size="sm"
-                        onClick={() => setShowReport(true)}
-                        className="mt-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl"
-                      >
-                        View Official Report
-                      </Button>
+                      {canViewReport && (
+                        <Button
+                          size="sm"
+                          onClick={() => setShowReport(true)}
+                          className="mt-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl"
+                        >
+                          View Incident Summary
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>
