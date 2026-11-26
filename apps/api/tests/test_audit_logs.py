@@ -576,10 +576,18 @@ def test_id_card_url_path_validation_and_signing_safety(monkeypatch):
             "idCardUrl": "op-1/../../../etc/passwd"
         })
         assert res_trav.status_code == 422
+
+        # D. Trailing newline rejected (re.fullmatch enforcement)
+        res_newline = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "12345",
+            "idCardUrl": "op-1/valid.png\n"
+        })
+        assert res_newline.status_code == 422
     finally:
         app.dependency_overrides.clear()
 
-    # D. Test map_user returns None if storage signing fails
+    # E. Test map_user returns None if storage signing fails
     mock_storage = MagicMock()
     mock_storage.create_signed_url.side_effect = Exception("Storage error")
     monkeypatch.setattr(supabase_config.supabase.storage, "from_", lambda b: mock_storage)
@@ -592,6 +600,17 @@ def test_id_card_url_path_validation_and_signing_safety(monkeypatch):
     }
     mapped = map_user(user_data, can_view_contact=True, can_view_sensitive=True)
     assert mapped["idCardUrl"] is None, "idCardUrl must be None when signing fails, not raw string!"
+
+    # F. Test map_user converts relative signedURL to absolute URL
+    mock_storage_rel = MagicMock()
+    mock_storage_rel.create_signed_url.return_value = {
+        "signedURL": "/storage/v1/object/sign/id-verification/00000000-0000-0000-0000-000000000001/doc.png?token=xyz"
+    }
+    monkeypatch.setattr(supabase_config.supabase.storage, "from_", lambda b: mock_storage_rel)
+    monkeypatch.setenv("SUPABASE_URL", "https://test-project.supabase.co")
+
+    mapped_rel = map_user(user_data, can_view_contact=True, can_view_sensitive=True)
+    assert mapped_rel["idCardUrl"] == "https://test-project.supabase.co/storage/v1/object/sign/id-verification/00000000-0000-0000-0000-000000000001/doc.png?token=xyz"
 
 
 

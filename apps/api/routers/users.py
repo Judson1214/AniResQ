@@ -18,9 +18,15 @@ def is_test_environment() -> bool:
 
 def validate_id_card_path(path: Optional[str], uid: str) -> Optional[str]:
     """Validates that id_card_url is a scoped private storage path matching ^<uid>/[A-Za-z0-9._-]+$
-    Rejects raw URLs, javascript schemes, traversal paths, or mismatched user directories."""
+    Rejects raw URLs, javascript schemes, trailing newlines, traversal paths, or mismatched user directories."""
     if not path:
         return None
+    # Reject strings containing newlines/carriage returns before any stripping
+    if "\n" in path or "\r" in path:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid ID document storage path. Must match format '{uid}/<filename>' and contain only safe alphanumeric characters without newlines."
+        )
     clean_path = path.strip()
     if not clean_path:
         return None
@@ -28,11 +34,11 @@ def validate_id_card_path(path: Optional[str], uid: str) -> Optional[str]:
     if clean_path.startswith("id-verification/"):
         clean_path = clean_path.split("id-verification/", 1)[1].strip()
 
-    pattern = rf"^{re.escape(uid)}/[A-Za-z0-9._-]+$"
-    if not re.match(pattern, clean_path):
+    pattern = rf"{re.escape(uid)}/[A-Za-z0-9._-]+"
+    if not re.fullmatch(pattern, clean_path):
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid ID document storage path. Must match format '{uid}/<filename>' and contain only safe alphanumeric characters."
+            detail=f"Invalid ID document storage path. Must match format '{uid}/<filename>' and contain only safe alphanumeric characters without newlines."
         )
     return clean_path
 
@@ -174,15 +180,20 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
             clean_path = clean_path.split("id-verification/", 1)[1]
         clean_path = clean_path.split("?")[0].strip()
 
-        # Enforce storage path format: <uid>/[A-Za-z0-9._-]+
-        if re.match(r"^[0-9a-fA-F-]{36}/[A-Za-z0-9._-]+$", clean_path):
+        # Enforce storage path format: <uid>/[A-Za-z0-9._-]+ using re.fullmatch
+        if re.fullmatch(r"[0-9a-fA-F-]{36}/[A-Za-z0-9._-]+", clean_path):
             try:
                 signed_res = supabase.storage.from_("id-verification").create_signed_url(clean_path, 3600)
                 signed_val = (
                     signed_res.get("signedURL") or signed_res.get("signedUrl")
                 ) if isinstance(signed_res, dict) else getattr(signed_res, "signed_url", None)
-                if signed_val and (signed_val.startswith("https://") or signed_val.startswith("http://")):
-                    signed_id_url = signed_val
+                if signed_val:
+                    if signed_val.startswith("/"):
+                        storage_base = os.getenv("SUPABASE_URL", "").rstrip("/")
+                        if storage_base:
+                            signed_val = f"{storage_base}{signed_val}"
+                    if signed_val.startswith("https://") or signed_val.startswith("http://"):
+                        signed_id_url = signed_val
             except Exception as sign_err:
                 logger.warning(f"Could not generate signed URL for ID card ({clean_path}): {sign_err}")
                 signed_id_url = None
@@ -364,16 +375,18 @@ def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
 @router.post("", response_model=UserResponse)
 def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends(get_current_user)):
     # Authenticated user can only create/sync their own profile
-    if current_user["uid"] != profile.uid and current_user.get("role") != "ADMIN":
+    is_admin = current_user.get("role") == "ADMIN"
+    target_uid = profile.uid if is_admin else current_user["uid"]
+    if not is_admin and profile.uid != current_user["uid"]:
         raise HTTPException(status_code=403, detail="Cannot create profile for another user")
         
     try:
         # Prevent unauthorized role changes or demoting existing staff members
-        existing = supabase.table("users").select("role, email").eq("id", profile.uid).execute()
-        if existing.data and current_user.get("role") != "ADMIN":
+        existing = supabase.table("users").select("role, email").eq("id", target_uid).execute()
+        if existing.data and not is_admin:
             target_role = existing.data[0].get("role", "CITIZEN")
         else:
-            target_role = profile.role.upper() if current_user.get("role") == "ADMIN" and profile.role else "CITIZEN"
+            target_role = profile.role.upper() if is_admin and profile.role else "CITIZEN"
             
         if target_role not in VALID_ROLES:
             target_role = "CITIZEN"
@@ -391,7 +404,7 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
             verified_email = profile.email or ""
             
         data = {
-            "id": profile.uid,
+            "id": target_uid,
             "email": verified_email,
             "display_name": profile.displayName,
             "role": target_role,
@@ -402,12 +415,12 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         if profile.idCardNumber:
             data["id_card_number"] = profile.idCardNumber
         if profile.idCardUrl:
-            data["id_card_url"] = validate_id_card_path(profile.idCardUrl, profile.uid)
+            data["id_card_url"] = validate_id_card_path(profile.idCardUrl, target_uid)
 
         if req_role:
             data["requested_role"] = req_role
             notify_admins_of_role_request(
-                user_id=profile.uid,
+                user_id=target_uid,
                 user_name=profile.displayName,
                 user_email=verified_email,
                 req_role=req_role,
