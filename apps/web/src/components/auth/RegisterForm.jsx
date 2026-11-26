@@ -188,7 +188,7 @@ const RegisterForm = () => {
                 </Label>
                 <Input
                   id="idCardUrl"
-                  placeholder="https://... or certificate cloud drive URL"
+                  placeholder="Private document path or cloud document URL"
                   className="bg-slate-950/50 border-slate-700 text-white placeholder:text-slate-600 focus:border-emerald-500 h-10 rounded-xl text-sm"
                   {...register("idCardUrl")}
                 />

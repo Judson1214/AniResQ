@@ -226,4 +226,66 @@ BEGIN
 END $$;
 RESET ROLE;
 
+-- 11. Verify private bucket id-verification cannot be read by anonymous role
+-- Seed a test object in id-verification bucket
+INSERT INTO storage.objects (id, bucket_id, name, owner)
+VALUES ('00000000-0000-0000-0000-000000000099', 'id-verification', '00000000-0000-0000-0000-111111111111/id_card.png', '00000000-0000-0000-0000-111111111111'::uuid)
+ON CONFLICT (id) DO NOTHING;
+
+-- Anonymous MUST NOT be able to read objects from id-verification
+SET LOCAL ROLE anon;
+DO $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_count
+  FROM storage.objects
+  WHERE bucket_id = 'id-verification';
+
+  IF v_count > 0 THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: anon was able to read objects from id-verification bucket (count=%)', v_count;
+  END IF;
+
+  RAISE NOTICE 'PASS: anon cannot read objects from id-verification bucket';
+END $$;
+RESET ROLE;
+
+-- Authenticated non-owner non-admin MUST NOT be able to read another user's id-verification object
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-222222222222","role":"authenticated"}', true);
+DO $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_count
+  FROM storage.objects
+  WHERE bucket_id = 'id-verification';
+
+  IF v_count > 0 THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: authenticated non-owner was able to read id-verification objects (count=%)', v_count;
+  END IF;
+
+  RAISE NOTICE 'PASS: authenticated non-owner cannot read another user''s id-verification objects';
+END $$;
+RESET ROLE;
+
+-- Authenticated OWNER CAN read their own id-verification object
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-111111111111","role":"authenticated"}', true);
+DO $$
+DECLARE
+  v_count INTEGER;
+BEGIN
+  SELECT COUNT(*) INTO v_count
+  FROM storage.objects
+  WHERE bucket_id = 'id-verification';
+
+  IF v_count < 1 THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: owner was unable to read their own id-verification object';
+  END IF;
+
+  RAISE NOTICE 'PASS: owner can read their own id-verification object';
+END $$;
+RESET ROLE;
+
 ROLLBACK;

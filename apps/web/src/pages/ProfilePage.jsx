@@ -23,6 +23,7 @@ import {
   Info
 } from "lucide-react";
 import { updateUserProfile } from "@/services/auth.service";
+import { uploadIdDocument } from "@/services/storage.service";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuthStore } from "@/store/authStore";
 
@@ -43,6 +44,30 @@ const ProfilePage = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmittingRole, setIsSubmittingRole] = useState(false);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+
+  const handleIdFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsUploadingDoc(true);
+      const relativePath = await uploadIdDocument(file);
+      setIdCardUrl(relativePath);
+      toast({
+        title: "ID Document Uploaded",
+        description: "Document securely uploaded to private storage.",
+      });
+    } catch (err) {
+      console.error("ID document upload failed:", err);
+      toast({
+        title: "Upload Failed",
+        description: err.message || "Failed to upload ID document",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploadingDoc(false);
+    }
+  };
   const [selectedRole, setSelectedRole] = useState("VOLUNTEER");
   const [idCardType, setIdCardType] = useState("Government Photo ID");
   const [idCardNumber, setIdCardNumber] = useState("");
@@ -530,15 +555,35 @@ const ProfilePage = () => {
 
                   <div>
                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                      ID Card / Certificate Document Link (Optional)
+                      ID Document / Certificate Proof
                     </label>
-                    <input
-                      type="text"
-                      value={idCardUrl}
-                      onChange={(e) => setIdCardUrl(e.target.value)}
-                      placeholder="https://... or certificate cloud drive URL"
-                      className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500"
-                    />
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-3 py-2 text-xs font-medium inline-flex items-center gap-1.5 transition">
+                          {isUploadingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5 text-emerald-400" />}
+                          {isUploadingDoc ? "Uploading..." : "Upload File (Private)"}
+                          <input
+                            type="file"
+                            accept="image/*,application/pdf"
+                            onChange={handleIdFileUpload}
+                            disabled={isUploadingDoc}
+                            className="hidden"
+                          />
+                        </label>
+                        {idCardUrl && (
+                          <span className="text-[11px] text-emerald-400 truncate max-w-xs font-mono">
+                            {idCardUrl.startsWith("http") ? idCardUrl.substring(0, 30) + "..." : idCardUrl}
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={idCardUrl}
+                        onChange={(e) => setIdCardUrl(e.target.value)}
+                        placeholder="Or enter private object path / verified document URL"
+                        className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
                   </div>
                 </div>
 

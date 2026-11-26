@@ -117,8 +117,32 @@ const deleteFile = async (url) => {
   }
 };
 
+const uploadIdDocument = async (file, onProgress) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  const userId = session?.user?.id;
+  if (!userId) throw new Error("Must be logged in to upload identification documents");
+
+  const ext = file.name.split('.').pop() || 'jpg';
+  const scopedPath = `${userId}/id_document_${Date.now()}.${ext}`;
+
+  // Upload to private 'id-verification' bucket in Supabase (public = false)
+  const { error } = await supabase.storage
+    .from('id-verification')
+    .upload(scopedPath, file, {
+      cacheControl: '3600',
+      upsert: true
+    });
+
+  if (error) throw error;
+  if (onProgress) onProgress(100);
+
+  // Return the private storage object path (NOT a public URL)
+  return scopedPath;
+};
+
 export {
   deleteFile,
   uploadFile,
-  uploadMultipleFiles
+  uploadMultipleFiles,
+  uploadIdDocument
 };

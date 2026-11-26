@@ -143,6 +143,28 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
         # Never leak ID credentials in bio to any user/client
         bio_text = bio_text.split("]", 1)[1].strip() if "]" in bio_text else ""
 
+    # Generate short-lived signed URL for private ID verification documents (admins/owner only)
+    signed_id_url = None
+    if can_view_sensitive and id_card_url:
+        signed_id_url = id_card_url
+        clean_path = id_card_url.strip()
+        if "/id-verification/" in clean_path:
+            clean_path = clean_path.split("/id-verification/", 1)[1]
+        elif clean_path.startswith("id-verification/"):
+            clean_path = clean_path.split("id-verification/", 1)[1]
+        clean_path = clean_path.split("?")[0].strip()
+
+        if clean_path and not clean_path.startswith("http://") and not clean_path.startswith("https://"):
+            try:
+                signed_res = supabase.storage.from_("id-verification").create_signed_url(clean_path, 3600)
+                signed_val = (
+                    signed_res.get("signedURL") or signed_res.get("signedUrl")
+                ) if isinstance(signed_res, dict) else getattr(signed_res, "signed_url", None)
+                if signed_val:
+                    signed_id_url = signed_val
+            except Exception as sign_err:
+                logger.warning(f"Could not generate signed URL for ID card ({clean_path}): {sign_err}")
+
     return {
         "id": user_id,
         "uid": user_id,
@@ -151,13 +173,13 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
         "requestedRole": (data.get("requested_role") if "requested_role" in data else data.get("requestedRole")) if can_view_sensitive else None,
         "idCardType": id_card_type if can_view_sensitive else None,
         "idCardNumber": id_card_number if can_view_sensitive else None,
-        "idCardUrl": id_card_url if can_view_sensitive else None,
+        "idCardUrl": signed_id_url if can_view_sensitive else None,
         "avatarUrl": data.get("avatar_url") or data.get("avatarUrl") or "",
         "createdAt": data.get("created_at") or data.get("createdAt"),
         "email": (data.get("email") or "") if can_view_contact else "",
         "phoneNumber": (data.get("phone") or data.get("phoneNumber") or "") if can_view_contact else "",
         "address": (data.get("address") or "") if can_view_contact else "",
-        "bio": data.get("bio") or "",
+        "bio": bio_text,
         "latitude": lat,
         "longitude": lon,
         "serviceRadiusKm": service_radius,
