@@ -5,7 +5,6 @@ const signUp = async (
   email,
   password,
   displayName,
-  _role = "CITIZEN",
   phone = ""
 ) => {
   // All signups create a standard CITIZEN account with NO pending role request in metadata.

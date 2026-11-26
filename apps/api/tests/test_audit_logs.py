@@ -613,4 +613,218 @@ def test_id_card_url_path_validation_and_signing_safety(monkeypatch):
     assert mapped_rel["idCardUrl"] == "https://test-project.supabase.co/storage/v1/object/sign/id-verification/00000000-0000-0000-0000-000000000001/doc.png?token=xyz"
 
 
+def test_request_clearance_guards_and_validation(monkeypatch):
+    """Test comprehensive security and validation guards for POST /api/users/request-clearance:
+    - Admin rejection (calling as ADMIN or requesting ADMIN role)
+    - Invalid role rejection
+    - Bad storage path rejection (422)
+    - idCardType whitelist & idCardNumber length bounds (422)
+    - Redundant request rejection: user already holds target role (409)
+    - Duplicate request rejection: clearance request already pending review (409)
+    - Successful submission with notification dispatch (200)
+    - Rate limiter blocks excessive requests (429)
+    """
+    mock_db = {
+        "user-cit": {
+            "id": "user-cit",
+            "display_name": "Citizen User",
+            "email": "cit@aniresq.org",
+            "role": "CITIZEN",
+            "requested_role": None,
+            "bio": "Standard citizen bio"
+        },
+        "user-vol": {
+            "id": "user-vol",
+            "display_name": "Volunteer User",
+            "email": "vol@aniresq.org",
+            "role": "VOLUNTEER",
+            "requested_role": None,
+            "bio": ""
+        },
+        "user-pending": {
+            "id": "user-pending",
+            "display_name": "Pending User",
+            "email": "pending@aniresq.org",
+            "role": "CITIZEN",
+            "requested_role": "SHELTER",
+            "bio": ""
+        }
+    }
 
+    class MockUserTable:
+        def __init__(self):
+            self.current_id = None
+            self.action = None
+            self.update_payload = None
+
+        def select(self, *args, **kwargs):
+            self.action = "select"
+            return self
+
+        def eq(self, col, val):
+            self.current_id = val
+            return self
+
+        def update(self, payload):
+            self.action = "update"
+            self.update_payload = payload
+            return self
+
+        def execute(self):
+            row = mock_db.get(self.current_id)
+            if self.action == "select":
+                return MagicMock(data=[dict(row)] if row else [])
+            elif self.action == "update":
+                if row:
+                    row.update(self.update_payload)
+                    return MagicMock(data=[dict(row)])
+                return MagicMock(data=[])
+            return MagicMock(data=[])
+
+    mock_table = MockUserTable()
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_table)
+
+    limiter.reset()
+
+    # 1. Admin caller rejection -> 400
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "admin-1", "email": "admin@aniresq.org", "name": "Admin", "role": "ADMIN"
+    }
+    try:
+        res = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "DL-99887766",
+            "idCardType": "Government Photo ID"
+        })
+        assert res.status_code == 400
+        assert "Administrators already hold maximum clearance" in res.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+    # 2. Citizen requesting ADMIN role -> 400
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-cit", "email": "cit@aniresq.org", "name": "Citizen", "role": "CITIZEN"
+    }
+    try:
+        res = client.post("/api/users/request-clearance", json={
+            "requestedRole": "ADMIN",
+            "idCardNumber": "DL-99887766",
+            "idCardType": "Government Photo ID"
+        })
+        assert res.status_code == 400
+        assert "Cannot request ADMIN or invalid role" in res.json()["detail"]
+
+        # 3. Citizen requesting invalid non-existent role -> 400
+        res_invalid = client.post("/api/users/request-clearance", json={
+            "requestedRole": "SUPER_ADMIN_ROOT",
+            "idCardNumber": "DL-99887766",
+            "idCardType": "Government Photo ID"
+        })
+        assert res_invalid.status_code == 400
+
+        # 4. Unknown idCardType -> 422
+        res_bad_type = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "DL-99887766",
+            "idCardType": "Fake Unapproved ID Card"
+        })
+        assert res_bad_type.status_code == 422
+
+        # 5. idCardNumber exceeding 64 chars -> 422
+        res_long_id = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "A" * 65,
+            "idCardType": "Government Photo ID"
+        })
+        assert res_long_id.status_code == 422
+
+        # 6. Blank idCardNumber -> 422
+        res_blank_id = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "   ",
+            "idCardType": "Government Photo ID"
+        })
+        assert res_blank_id.status_code == 422
+
+        # 7. Bad document path format -> 422
+        res_bad_path = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "DL-99887766",
+            "idCardType": "Government Photo ID",
+            "idCardUrl": "user-cit/../../escaped.png"
+        })
+        assert res_bad_path.status_code == 422
+
+    finally:
+        app.dependency_overrides.clear()
+
+    # 8. Redundant request: caller already holds the target role -> 409
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-vol", "email": "vol@aniresq.org", "name": "Volunteer", "role": "VOLUNTEER"
+    }
+    try:
+        res_already_held = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "DL-11223344",
+            "idCardType": "Government Photo ID"
+        })
+        assert res_already_held.status_code == 409
+        assert "User already holds" in res_already_held.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+    # 9. Duplicate request: caller already has a pending clearance request -> 409
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-pending", "email": "pending@aniresq.org", "name": "Pending", "role": "CITIZEN"
+    }
+    try:
+        res_dup = client.post("/api/users/request-clearance", json={
+            "requestedRole": "NGO",
+            "idCardNumber": "NGO-778899",
+            "idCardType": "NGO Registration Certificate"
+        })
+        assert res_dup.status_code == 409
+        assert "already pending administrator review" in res_dup.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+    # 10. Successful clearance submission -> 200
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-cit", "email": "cit@aniresq.org", "name": "Citizen", "role": "CITIZEN"
+    }
+    try:
+        res_ok = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "DL-1420110012345",
+            "idCardType": "Government Photo ID",
+            "idCardUrl": "user-cit/doc.png"
+        })
+        assert res_ok.status_code == 200
+        data = res_ok.json()
+        assert data["requestedRole"] == "VOLUNTEER"
+        assert data["idCardNumber"] == "DL-1420110012345"
+        assert data["idCardType"] == "Government Photo ID"
+    finally:
+        app.dependency_overrides.clear()
+
+    # 11. Rate limiter test: 11th request in window blocked -> 429
+    limiter.reset()
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-cit", "email": "cit@aniresq.org", "name": "Citizen", "role": "CITIZEN"
+    }
+    try:
+        for _ in range(10):
+            client.post("/api/users/request-clearance", json={
+                "requestedRole": "ADMIN",
+                "idCardNumber": "DL-12345",
+                "idCardType": "Government Photo ID"
+            })
+        res_rate_limited = client.post("/api/users/request-clearance", json={
+            "requestedRole": "ADMIN",
+            "idCardNumber": "DL-12345",
+            "idCardType": "Government Photo ID"
+        })
+        assert res_rate_limited.status_code == 429
+    finally:
+        app.dependency_overrides.clear()
+        limiter.reset()

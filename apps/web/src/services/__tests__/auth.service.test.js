@@ -90,7 +90,7 @@ describe('Auth Service', () => {
       error: null
     });
 
-    await signUp('test@example.com', 'Password123!', 'Test User', 'VOLUNTEER');
+    await signUp('test@example.com', 'Password123!', 'Test User');
 
     expect(supabase.auth.signUp).toHaveBeenCalledWith({
       email: 'test@example.com',

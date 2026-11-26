@@ -3913,42 +3913,53 @@
             "title": "Requestedrole"
           },
           "idCardType": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "type": "string",
+            "enum": [
+              "Government Photo ID",
+              "Aadhaar Card",
+              "Passport",
+              "Driver License",
+              "Voter ID",
+              "NGO Registration Certificate",
+              "Animal Shelter License",
+              "Veterinary Medical Council ID"
             ],
             "title": "Idcardtype",
+            "description": "Verified identification document type",
             "default": "Government Photo ID"
           },
           "idCardNumber": {
             "type": "string",
-            "title": "Idcardnumber"
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Idcardnumber",
+            "description": "Official ID or registration certificate number"
           },
           "idCardUrl": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 255
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Idcardurl"
+            "title": "Idcardurl",
+            "description": "Relative storage path in id-verification bucket"
           },
           "notes": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 500
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Notes"
+            "title": "Notes",
+            "description": "Optional notes for verification administrators"
           }
         },
         "type": "object",
@@ -4614,6 +4625,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",

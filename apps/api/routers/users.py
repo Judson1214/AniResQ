@@ -1,9 +1,9 @@
 import os
 import re
 import logging
-from typing import Optional, List
+from typing import Optional, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from supabase_config import supabase
 from auth import get_current_user
 from validators import validate_avatar_url
@@ -514,12 +514,39 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
         logger.error(f"Error updating user profile {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to update user profile")
 
+IdCardTypeLiteral = Literal[
+    "Government Photo ID",
+    "Aadhaar Card",
+    "Passport",
+    "Driver License",
+    "Voter ID",
+    "NGO Registration Certificate",
+    "Animal Shelter License",
+    "Veterinary Medical Council ID",
+]
+
 class RoleClearanceRequest(BaseModel):
     requestedRole: str
-    idCardType: Optional[str] = "Government Photo ID"
-    idCardNumber: str
-    idCardUrl: Optional[str] = None
-    notes: Optional[str] = None
+    idCardType: IdCardTypeLiteral = Field(
+        default="Government Photo ID",
+        description="Verified identification document type"
+    )
+    idCardNumber: str = Field(
+        ...,
+        min_length=1,
+        max_length=64,
+        description="Official ID or registration certificate number"
+    )
+    idCardUrl: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        description="Relative storage path in id-verification bucket"
+    )
+    notes: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Optional notes for verification administrators"
+    )
 
 @router.post("/request-clearance", response_model=UserResponse)
 def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict = Depends(get_current_user)):
@@ -530,14 +557,37 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
     
     uid = current_user["uid"]
     
-    existing = supabase.table("users").select("bio, display_name, email").eq("id", uid).execute()
-    curr_bio = existing.data[0].get("bio", "") if existing.data else ""
+    # Guard 1: Existing ADMIN users cannot request lower clearance
+    if current_user.get("role") == "ADMIN":
+        raise HTTPException(status_code=400, detail="Administrators already hold maximum clearance")
+    
+    existing = supabase.table("users").select("bio, display_name, email, role, requested_role").eq("id", uid).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user_row = existing.data[0]
+    curr_role = user_row.get("role")
+    pending_role = user_row.get("requested_role")
+
+    # Guard 2: Reject pointless requests if user already holds the target role
+    if curr_role == target_role:
+        raise HTTPException(status_code=409, detail=f"User already holds the '{target_role}' role")
+
+    # Guard 3: Reject repeat requests if a request is already pending review
+    if pending_role:
+        raise HTTPException(status_code=409, detail=f"A clearance request for '{pending_role}' is already pending administrator review")
+
+    clean_id_number = req.idCardNumber.strip()
+    if not clean_id_number:
+        raise HTTPException(status_code=422, detail="ID card number cannot be blank")
+
+    curr_bio = user_row.get("bio", "") or ""
     clean_bio = curr_bio.split("]", 1)[1].strip() if "[ID:" in curr_bio and "]" in curr_bio else curr_bio
     
     update_data = {
         "requested_role": target_role,
         "id_card_type": req.idCardType,
-        "id_card_number": req.idCardNumber,
+        "id_card_number": clean_id_number,
         "bio": clean_bio
     }
     if req.idCardUrl is not None:
@@ -547,8 +597,8 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
     if not res.data:
         raise HTTPException(status_code=404, detail="User not found")
         
-    u_name = current_user.get("name") or current_user.get("displayName") or (existing.data[0].get("display_name") if existing.data else "Operator")
-    u_email = current_user.get("email") or (existing.data[0].get("email") if existing.data else "")
+    u_name = current_user.get("name") or current_user.get("displayName") or user_row.get("display_name") or "Operator"
+    u_email = current_user.get("email") or user_row.get("email") or ""
     
     notify_admins_of_role_request(
         user_id=uid,
@@ -556,10 +606,11 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
         user_email=u_email,
         req_role=target_role,
         id_card_type=req.idCardType,
-        id_card_number=req.idCardNumber
+        id_card_number=clean_id_number
     )
     
-    return map_user(res.data[0], can_view_contact=True, can_view_sensitive=True)
+    row_data = {**(res.data[0] if res.data else {}), **update_data}
+    return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
 
 @router.patch("/{uid}/role", response_model=UserResponse)
 def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends(get_current_user)):

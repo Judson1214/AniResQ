@@ -8,7 +8,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Info } from "lucide-react";
 import { UserRole } from "@aniresq/shared-types";
 
@@ -20,8 +19,6 @@ const RegisterForm = () => {
   const {
     register,
     handleSubmit,
-    setValue,
-    watch,
     formState: { errors }
   } = useForm({
     resolver: zodResolver(registerSchema),
@@ -30,8 +27,6 @@ const RegisterForm = () => {
     }
   });
 
-  const selectedRole = watch("role");
-
   const onSubmit = async (data) => {
     setIsLoading(true);
     try {
@@ -39,20 +34,12 @@ const RegisterForm = () => {
         data.email,
         data.password,
         data.displayName,
-        data.role,
         data.phone
       );
-      if (data.role && data.role !== UserRole.CITIZEN) {
-        toast({
-          title: "Account Created",
-          description: `Welcome to AniResQ! You can upload verification documents from your Profile page to request ${data.role} privileges.`
-        });
-      } else {
-        toast({
-          title: "Account Created",
-          description: "Welcome to AniResQ!"
-        });
-      }
+      toast({
+        title: "Account Created",
+        description: "Welcome to AniResQ!"
+      });
       navigate("/dashboard");
     } catch (error) {
       console.error(error);
@@ -63,23 +50,6 @@ const RegisterForm = () => {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const getRoleDescription = (role) => {
-    switch (role) {
-      case UserRole.CITIZEN:
-        return "Report rescues, find lost pets, and adopt animals.";
-      case UserRole.VOLUNTEER:
-        return "Help with rescues, transport, and fostering (Admin verified).";
-      case UserRole.SHELTER:
-        return "Manage shelter inventory and adoption listings (Admin verified).";
-      case UserRole.NGO:
-        return "Coordinate rescue operations and campaigns (Admin verified).";
-      case UserRole.VET:
-        return "Provide veterinary triage and consultations (Admin verified).";
-      default:
-        return "";
     }
   };
 
@@ -120,33 +90,14 @@ const RegisterForm = () => {
           {errors.password && <p className="text-sm text-rose-500">{errors.password.message}</p>}
         </div>
 
-        <div className="space-y-2">
-          <Label className="text-slate-300">Requested Access Level</Label>
-          <Select onValueChange={(val) => setValue("role", val)} defaultValue={selectedRole}>
-            <SelectTrigger className="bg-slate-950/50 border-slate-700 text-white focus:ring-emerald-500 h-11 rounded-xl">
-              <SelectValue placeholder="Select a role" />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-900 border-slate-800 text-white">
-              <SelectItem value={UserRole.CITIZEN} className="focus:bg-slate-800 focus:text-white">Citizen (Standard)</SelectItem>
-              <SelectItem value={UserRole.VOLUNTEER} className="focus:bg-slate-800 focus:text-white">Volunteer</SelectItem>
-              <SelectItem value={UserRole.SHELTER} className="focus:bg-slate-800 focus:text-white">Shelter / Foster</SelectItem>
-              <SelectItem value={UserRole.NGO} className="focus:bg-slate-800 focus:text-white">NGO / Rescue Organization</SelectItem>
-              <SelectItem value={UserRole.VET} className="focus:bg-slate-800 focus:text-white">Veterinarian</SelectItem>
-            </SelectContent>
-          </Select>
-          {errors.role && <p className="text-sm text-rose-500">{errors.role.message}</p>}
-          <p className="text-xs text-emerald-400 mt-1 font-medium">{getRoleDescription(selectedRole)}</p>
-          {selectedRole !== UserRole.CITIZEN && (
-            <div className="flex items-start gap-2.5 text-xs text-amber-300 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20 mt-2">
-              <Info size={16} className="shrink-0 mt-0.5 text-amber-400" />
-              <div className="space-y-1">
-                <span className="font-semibold text-amber-200">Clearance Verification Notice:</span>
-                <p className="text-amber-300/80 leading-relaxed">
-                  Accounts start with standard Citizen access. After signing in, you can securely upload your official credentials and ID proof directly from your Profile settings to request {selectedRole} verification.
-                </p>
-              </div>
-            </div>
-          )}
+        <div className="flex items-start gap-2.5 text-xs text-emerald-300 bg-emerald-500/10 p-3.5 rounded-xl border border-emerald-500/20">
+          <Info size={16} className="shrink-0 mt-0.5 text-emerald-400" />
+          <div className="space-y-1">
+            <span className="font-semibold text-emerald-200">Standard Citizen Registration:</span>
+            <p className="text-emerald-300/80 leading-relaxed">
+              All accounts start with standard Citizen access. Responders, Shelters, NGOs, and Veterinarians can upload verified credentials and request role clearance from their Profile after signing in.
+            </p>
+          </div>
         </div>
 
         <Button 
