@@ -21,8 +21,9 @@ from main import app  # noqa: E402
 def export_schema(output_path: Path):
     schema = app.openapi()
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
+    with open(output_path, "w", encoding="utf-8", newline="\n") as f:
         json.dump(schema, f, indent=2)
+        f.write("\n")
     print(f"Exported OpenAPI schema to {output_path}")
 
 if __name__ == "__main__":
