@@ -84,13 +84,13 @@ describe('Auth Service', () => {
     });
   });
 
-  it('signUp disallows requesting ADMIN role in metadata', async () => {
+  it('signUp registers new user without requested_role in metadata', async () => {
     supabase.auth.signUp.mockResolvedValueOnce({
       data: { user: { id: 'new-user-id', email: 'test@example.com' } },
       error: null
     });
 
-    await signUp('test@example.com', 'Password123!', 'Test User', 'ADMIN');
+    await signUp('test@example.com', 'Password123!', 'Test User', 'VOLUNTEER');
 
     expect(supabase.auth.signUp).toHaveBeenCalledWith({
       email: 'test@example.com',
@@ -99,7 +99,6 @@ describe('Auth Service', () => {
         data: {
           display_name: 'Test User',
           phone: '',
-          requested_role: null, // Sanitized away from ADMIN
         }
       }
     });

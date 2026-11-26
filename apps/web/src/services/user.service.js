@@ -67,11 +67,17 @@ const declineRoleRequest = async (uid) => {
   return response.data;
 };
 
+const requestClearance = async (payload) => {
+  const response = await api.post("/users/request-clearance", payload);
+  return response.data;
+};
+
 export {
   declineRoleRequest,
   getUserById,
   getUsers,
   getUsersByRole,
+  requestClearance,
   searchUsers,
   updateUserProfile,
   updateUserRole

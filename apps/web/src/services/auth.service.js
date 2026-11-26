@@ -5,18 +5,14 @@ const signUp = async (
   email,
   password,
   displayName,
-  role = "CITIZEN",
+  _role = "CITIZEN",
   phone = ""
 ) => {
-  // Prevent users from requesting ADMIN role via signup metadata
-  const requestedRole = (role && role.toUpperCase() !== "ADMIN" && ["VOLUNTEER", "NGO", "SHELTER", "VET"].includes(role.toUpperCase()))
-    ? role.toUpperCase()
-    : null;
-
+  // All signups create a standard CITIZEN account with NO pending role request in metadata.
+  // Role upgrades with ID verification must be requested post-registration via /api/users/request-clearance.
   const metadata = {
     display_name: displayName,
     phone: phone || "",
-    requested_role: requestedRole,
   };
 
   const { data, error } = await supabase.auth.signUp({

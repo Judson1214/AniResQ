@@ -23,6 +23,7 @@ import {
   Info
 } from "lucide-react";
 import { updateUserProfile } from "@/services/auth.service";
+import { requestClearance } from "@/services/user.service";
 import { uploadIdDocument } from "@/services/storage.service";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuthStore } from "@/store/authStore";
@@ -123,15 +124,24 @@ const ProfilePage = () => {
   };
 
   const handleRoleRequest = async () => {
+    if (!idCardNumber.trim()) {
+      toast({
+        title: "ID Number Required",
+        description: "Please enter your ID, license, or registration number.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSubmittingRole(true);
     try {
-      await updateUserProfile(user.uid, {
+      const updatedUser = await requestClearance({
         requestedRole: selectedRole,
         idCardType,
-        idCardNumber,
-        idCardUrl,
+        idCardNumber: idCardNumber.trim(),
+        idCardUrl: idCardUrl.trim() || undefined,
       });
-      setUser({ ...user, requestedRole: selectedRole });
+      setUser({ ...user, requestedRole: updatedUser.requestedRole || selectedRole });
       toast({
         title: "Clearance Request Submitted",
         description: `Your request for ${selectedRole} clearance with ID verification is pending administrator review.`,
@@ -580,7 +590,7 @@ const ProfilePage = () => {
                         type="text"
                         value={idCardUrl}
                         onChange={(e) => setIdCardUrl(e.target.value)}
-                        placeholder="Or enter private object path / verified document URL"
+                        placeholder="Or enter private object path in id-verification bucket (e.g. <uid>/id-proof.jpg)"
                         className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500"
                       />
                     </div>
