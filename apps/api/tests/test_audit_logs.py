@@ -413,3 +413,126 @@ def test_claims_and_deletions_are_audited(monkeypatch):
         app.dependency_overrides.clear()
 
 
+def test_audit_log_missing_table_fails_closed_when_required(monkeypatch):
+    """Test that when fail_closed=True, log_audit_event raises HTTPException(500)
+    even when the database returns PGRST205 (table missing from schema cache)."""
+    from routers.audit import log_audit_event
+    from fastapi import HTTPException
+
+    mock_audit = MagicMock()
+    mock_audit.insert.return_value = mock_audit
+    mock_audit.execute.side_effect = Exception("PGRST205: could not find the table 'public.audit_logs' in the schema cache")
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_audit)
+
+    # 1. fail_closed=False -> swallowed with warning, does not raise
+    log_audit_event(
+        action="TEST_NON_CRITICAL",
+        entity_type="TEST",
+        entity_id="1",
+        performed_by="user-1",
+        fail_closed=False
+    )
+
+    # 2. fail_closed=True -> MUST raise 500
+    with pytest.raises(HTTPException) as exc_info:
+        log_audit_event(
+            action="ROLE_CHANGE",
+            entity_type="USER",
+            entity_id="user-1",
+            performed_by="admin-1",
+            fail_closed=True
+        )
+    assert exc_info.value.status_code == 500
+    assert "audit logging failed" in exc_info.value.detail.lower()
+
+
+def test_production_guard_aborts_on_missing_rpc_function(monkeypatch):
+    """Test that in production (is_test_environment()=False), any RPC failure (even missing function)
+    fails closed immediately with 500 without direct update fallback."""
+    import routers.users as users_router
+
+    # Force is_test_environment to return False (production simulation)
+    monkeypatch.setattr(users_router, "is_test_environment", lambda: False)
+
+    mock_users = MagicMock()
+    mock_users.select.return_value = mock_users
+    mock_users.update.return_value = mock_users
+    mock_users.eq.return_value = mock_users
+    mock_users.execute.return_value = MagicMock(data=[{"id": "target-user", "role": "CITIZEN", "display_name": "Target"}])
+
+    mock_rpc = MagicMock()
+    mock_rpc.execute.side_effect = Exception("PGRST202: could not find the function public.admin_update_user_role")
+
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_users)
+    monkeypatch.setattr(supabase_config.supabase, "rpc", lambda fn, params: mock_rpc)
+
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "admin-1", "email": "admin@aniresq.org", "name": "Admin", "role": "ADMIN"
+    }
+    try:
+        res = client.patch("/api/users/target-user/role", json={"role": "VOLUNTEER"})
+        assert res.status_code == 500
+        assert "audit logging failed" in res.json()["detail"].lower()
+        # Direct update fallback MUST NOT run in production!
+        assert mock_users.update.call_count == 0
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_id_card_pii_not_leaked_in_bio_or_notifications(monkeypatch):
+    """Test that ID card credentials are kept out of bio, never leak in notification text,
+    and are hidden from non-admin/unauthorized callers."""
+    created_notifications = []
+
+    def mock_create_notification(**kwargs):
+        created_notifications.append(kwargs)
+
+    monkeypatch.setattr("routers.users.create_system_notification", mock_create_notification)
+
+    mock_users = MagicMock()
+    mock_users.select.return_value = mock_users
+    mock_users.update.return_value = mock_users
+    mock_users.eq.return_value = mock_users
+    # Live row has clean bio
+    mock_users.execute.return_value = MagicMock(data=[{
+        "id": "op-1",
+        "display_name": "Operator One",
+        "email": "op@aniresq.org",
+        "role": "CITIZEN",
+        "bio": "Passionate animal lover",
+        "id_card_type": "Passport",
+        "id_card_number": "P12345678",
+        "id_card_url": "https://storage.aniresq.org/uploads/op-1/id_verification/doc.png"
+    }])
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_users)
+
+    # 1. Test clearance request endpoint
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "op-1", "email": "op@aniresq.org", "name": "Operator One", "role": "CITIZEN"
+    }
+    try:
+        res = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardType": "Aadhaar Card",
+            "idCardNumber": "9999-8888-7777",
+            "idCardUrl": "https://storage.aniresq.org/uploads/op-1/id_verification/aadhaar.png"
+        })
+        assert res.status_code == 200
+        # Verify update call did NOT inject "[ID:" into bio
+        update_calls = mock_users.update.call_args_list
+        assert len(update_calls) > 0
+        update_payload = update_calls[0].args[0]
+        assert "[ID:" not in update_payload.get("bio", "")
+        assert update_payload.get("id_card_number") == "9999-8888-7777"
+        assert update_payload.get("id_card_type") == "Aadhaar Card"
+
+        # Verify notification dispatched to admin does NOT leak the card number
+        assert len(created_notifications) > 0
+        admin_notif = created_notifications[0]
+        assert "9999-8888-7777" not in admin_notif["message"]
+        assert "Aadhaar Card" in admin_notif["message"]
+    finally:
+        app.dependency_overrides.clear()
+
+
+

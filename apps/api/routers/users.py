@@ -79,13 +79,13 @@ def notify_admins_of_role_request(
     """Pushes a high-priority system notification to all administrators when an operator applies for elevated clearance."""
     try:
         admins = supabase.table("users").select("id").eq("role", "ADMIN").execute()
-        id_info = f"{id_card_type}: {id_card_number}" if (id_card_type or id_card_number) else "Pending ID documentation"
+        doc_type = id_card_type or "Identity Document"
         for admin in (admins.data or []):
             create_system_notification(
                 user_id=admin["id"],
                 notif_type="ROLE_REQUEST",
                 title=f"New Clearance Request: {req_role}",
-                message=f"Operator '{user_name}' ({user_email}) has requested clearance for {req_role}. Verification: {id_info}.",
+                message=f"Operator '{user_name}' ({user_email}) has requested clearance for {req_role}. Verification document ({doc_type}) submitted for review.",
                 related_entity_id=user_id,
                 related_entity_type="USER"
             )
@@ -121,24 +121,27 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
     id_card_url = data.get("id_card_url") or data.get("idCardUrl")
 
     bio_text = data.get("bio") or ""
-    if not id_card_number and "[ID:" in bio_text:
+    if "[ID:" in bio_text:
         try:
-            raw_id = bio_text.split("[ID:")[1].split("]")[0].strip()
-            if " | " in raw_id:
-                parts = raw_id.split(" | ")
-                id_card_type = parts[0].strip()
-                id_card_number = parts[1].strip()
-                if len(parts) > 2 and parts[2].strip():
-                    id_card_url = parts[2].strip()
-            elif " - " in raw_id:
-                parts = raw_id.split(" - ")
-                id_card_type = parts[0].strip()
-                id_card_number = parts[1].strip()
-            else:
-                id_card_type = "ID Document"
-                id_card_number = raw_id
+            if not id_card_number:
+                raw_id = bio_text.split("[ID:")[1].split("]")[0].strip()
+                if " | " in raw_id:
+                    parts = raw_id.split(" | ")
+                    id_card_type = parts[0].strip()
+                    id_card_number = parts[1].strip()
+                    if len(parts) > 2 and parts[2].strip():
+                        id_card_url = parts[2].strip()
+                elif " - " in raw_id:
+                    parts = raw_id.split(" - ")
+                    id_card_type = parts[0].strip()
+                    id_card_number = parts[1].strip()
+                else:
+                    id_card_type = "ID Document"
+                    id_card_number = raw_id
         except Exception:
             pass
+        # Never leak ID credentials in bio to any user/client
+        bio_text = bio_text.split("]", 1)[1].strip() if "]" in bio_text else ""
 
     return {
         "id": user_id,
@@ -347,11 +350,15 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
             "role": target_role,
             "phone": profile.phoneNumber or "",
         }
+        if profile.idCardType:
+            data["id_card_type"] = profile.idCardType
+        if profile.idCardNumber:
+            data["id_card_number"] = profile.idCardNumber
+        if profile.idCardUrl:
+            data["id_card_url"] = profile.idCardUrl
+
         if req_role:
             data["requested_role"] = req_role
-            if profile.idCardType or profile.idCardNumber:
-                id_card_tag = f"[ID: {profile.idCardType or 'Document'} | {profile.idCardNumber or ''} | {profile.idCardUrl or ''}]"
-                data["bio"] = f"{id_card_tag} {data.get('bio', '')}".strip()
             notify_admins_of_role_request(
                 user_id=profile.uid,
                 user_name=profile.displayName,
@@ -388,15 +395,18 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
     if profile.address is not None: 
         update_data["address"] = profile.address
     if profile.bio is not None: 
-        update_data["bio"] = profile.bio
+        clean_bio = profile.bio
+        if "[ID:" in clean_bio:
+            clean_bio = clean_bio.split("]", 1)[1].strip() if "]" in clean_bio else ""
+        update_data["bio"] = clean_bio
     if profile.avatarUrl is not None: 
         update_data["avatar_url"] = validate_avatar_url(profile.avatarUrl)
-    if profile.idCardType or profile.idCardNumber:
-        clean_bio = profile.bio if profile.bio is not None else ""
-        if "[ID:" in clean_bio:
-            clean_bio = clean_bio.split("]", 1)[1].strip()
-        id_tag = f"[ID: {profile.idCardType or 'Document'} | {profile.idCardNumber or ''} | {profile.idCardUrl or ''}]"
-        update_data["bio"] = f"{id_tag} {clean_bio}".strip()
+    if profile.idCardType is not None:
+        update_data["id_card_type"] = profile.idCardType
+    if profile.idCardNumber is not None:
+        update_data["id_card_number"] = profile.idCardNumber
+    if profile.idCardUrl is not None:
+        update_data["id_card_url"] = profile.idCardUrl
     if profile.requestedRole is not None:
         raw_req = profile.requestedRole.strip().upper() if profile.requestedRole.strip() else None
         if raw_req == "ADMIN" or (raw_req and raw_req not in ALLOWED_REQUESTED_ROLES):
@@ -466,18 +476,19 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
         raise HTTPException(status_code=400, detail="Cannot request ADMIN or invalid role")
     
     uid = current_user["uid"]
-    id_tag = f"[ID: {req.idCardType or 'Document'} | {req.idCardNumber} | {req.idCardUrl or ''}]"
     
     existing = supabase.table("users").select("bio, display_name, email").eq("id", uid).execute()
     curr_bio = existing.data[0].get("bio", "") if existing.data else ""
-    if "[ID:" in curr_bio:
-        curr_bio = curr_bio.split("]", 1)[1].strip()
+    clean_bio = curr_bio.split("]", 1)[1].strip() if "[ID:" in curr_bio and "]" in curr_bio else curr_bio
     
-    new_bio = f"{id_tag} {curr_bio}".strip()
     update_data = {
         "requested_role": target_role,
-        "bio": new_bio
+        "id_card_type": req.idCardType,
+        "id_card_number": req.idCardNumber,
+        "bio": clean_bio
     }
+    if req.idCardUrl is not None:
+        update_data["id_card_url"] = req.idCardUrl
     
     res = supabase.table("users").update(update_data).eq("id", uid).execute()
     if not res.data:
@@ -551,7 +562,7 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
                 or "could not find the function" in err_msg.lower()
                 or ("admin_update_user_role" in err_msg.lower() and "does not exist" in err_msg.lower())
             )
-            if not is_missing_fn:
+            if not (is_test_environment() and is_missing_fn):
                 logger.error(f"SECURITY CRITICAL: Transactional RPC admin_update_user_role failed: {rpc_err}")
                 raise HTTPException(
                     status_code=500,
@@ -721,7 +732,7 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
                 or "could not find the function" in err_msg.lower()
                 or ("admin_decline_role_request" in err_msg.lower() and "does not exist" in err_msg.lower())
             )
-            if not is_missing_fn:
+            if not (is_test_environment() and is_missing_fn):
                 logger.error(f"SECURITY CRITICAL: Transactional RPC admin_decline_role_request failed: {rpc_err}")
                 raise HTTPException(
                     status_code=500,
