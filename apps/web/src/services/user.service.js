@@ -72,6 +72,11 @@ const requestClearance = async (payload) => {
   return response.data;
 };
 
+const withdrawClearance = async () => {
+  const response = await api.delete("/users/request-clearance");
+  return response.data;
+};
+
 export {
   declineRoleRequest,
   getUserById,
@@ -80,5 +85,6 @@ export {
   requestClearance,
   searchUsers,
   updateUserProfile,
-  updateUserRole
+  updateUserRole,
+  withdrawClearance
 };

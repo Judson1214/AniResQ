@@ -300,4 +300,43 @@ BEGIN
   RAISE NOTICE 'PASS: get_storage_prefix returns valid storage prefix (%)', v_prefix;
 END $$;
 
+-- 13. Verify direct mutations on public.users are blocked from anon and authenticated
+SET LOCAL ROLE anon;
+DO $$
+BEGIN
+  UPDATE public.users SET requested_role = 'ADMIN' WHERE id = '00000000-0000-0000-0000-111111111111';
+  RAISE EXCEPTION 'SECURITY VIOLATION: anon was able to directly UPDATE public.users';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: anon is denied direct UPDATE on public.users';
+END $$;
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-111111111111","role":"authenticated"}', true);
+DO $$
+BEGIN
+  UPDATE public.users
+  SET requested_role = 'NGO', id_card_type = 'anything', id_card_number = '123', id_card_url = 'x'
+  WHERE id = '00000000-0000-0000-0000-111111111111';
+  RAISE EXCEPTION 'SECURITY VIOLATION: authenticated was able to directly UPDATE public.users';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: authenticated is denied direct UPDATE on public.users';
+END $$;
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-333333333333","role":"authenticated"}', true);
+DO $$
+BEGIN
+  INSERT INTO public.users (id, email, display_name, role)
+  VALUES ('00000000-0000-0000-0000-333333333333', 'hacker@test.com', 'Hacker', 'ADMIN');
+  RAISE EXCEPTION 'SECURITY VIOLATION: authenticated was able to directly INSERT into public.users';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: authenticated is denied direct INSERT on public.users';
+END $$;
+RESET ROLE;
+
 ROLLBACK;

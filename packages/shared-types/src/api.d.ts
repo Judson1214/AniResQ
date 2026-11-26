@@ -167,7 +167,12 @@ export interface paths {
          * @description Allows authenticated operators to submit clearance verification with identification details.
          */
         post: operations["submit_role_clearance_request_api_users_request_clearance_post"];
-        delete?: never;
+        /**
+         * Withdraw Role Clearance Request
+         * @description Allows an operator to withdraw their pending clearance verification request,
+         *     resetting requested_role and clearing unverified ID credentials so they can re-submit if needed.
+         */
+        delete: operations["withdraw_role_clearance_request_api_users_request_clearance_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1041,15 +1046,21 @@ export interface components {
             requestedRole: string;
             /**
              * Idcardtype
+             * @description Verified identification document type
              * @default Government Photo ID
+             * @enum {string}
              */
-            idCardType: string | null;
-            /** Idcardnumber */
+            idCardType: "Government Photo ID" | "Aadhaar Card" | "Passport" | "Driver License" | "Voter ID" | "NGO Registration Certificate" | "Animal Shelter License" | "Veterinary Medical Council ID";
+            /**
+             * Idcardnumber
+             * @description Official ID or registration certificate number
+             */
             idCardNumber: string;
-            /** Idcardurl */
+            /**
+             * Idcardurl
+             * @description Relative storage path in id-verification bucket
+             */
             idCardUrl?: string | null;
-            /** Notes */
-            notes?: string | null;
         };
         /** SystemSettings */
         SystemSettings: {
@@ -1145,14 +1156,6 @@ export interface components {
             role: string | null;
             /** Phonenumber */
             phoneNumber?: string | null;
-            /** Requestedrole */
-            requestedRole?: string | null;
-            /** Idcardtype */
-            idCardType?: string | null;
-            /** Idcardnumber */
-            idCardNumber?: string | null;
-            /** Idcardurl */
-            idCardUrl?: string | null;
         };
         /** UserProfileUpdate */
         UserProfileUpdate: {
@@ -1168,14 +1171,6 @@ export interface components {
             bio?: string | null;
             /** Avatarurl */
             avatarUrl?: string | null;
-            /** Requestedrole */
-            requestedRole?: string | null;
-            /** Idcardtype */
-            idCardType?: string | null;
-            /** Idcardnumber */
-            idCardNumber?: string | null;
-            /** Idcardurl */
-            idCardUrl?: string | null;
             /** Latitude */
             latitude?: number | null;
             /** Longitude */
@@ -1258,6 +1253,10 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -1701,6 +1700,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_role_clearance_request_api_users_request_clearance_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
                 };
             };
         };

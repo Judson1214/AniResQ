@@ -23,7 +23,7 @@ import {
   Info
 } from "lucide-react";
 import { updateUserProfile } from "@/services/auth.service";
-import { requestClearance } from "@/services/user.service";
+import { requestClearance, withdrawClearance } from "@/services/user.service";
 import { uploadIdDocument } from "@/services/storage.service";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuthStore } from "@/store/authStore";
@@ -45,6 +45,7 @@ const ProfilePage = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSubmittingRole, setIsSubmittingRole] = useState(false);
+  const [isWithdrawingClearance, setIsWithdrawingClearance] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
 
   const handleIdFileUpload = async (e) => {
@@ -157,6 +158,26 @@ const ProfilePage = () => {
     }
   };
 
+  const handleWithdrawClearance = async () => {
+    setIsWithdrawingClearance(true);
+    try {
+      await withdrawClearance();
+      setUser({ ...user, requestedRole: null });
+      toast({
+        title: "Clearance Request Withdrawn",
+        description: "Your pending clearance verification request has been cancelled.",
+      });
+    } catch (error) {
+      toast({
+        title: "Withdrawal Failed",
+        description: error.response?.data?.detail || error.message || "Could not withdraw clearance request.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsWithdrawingClearance(false);
+    }
+  };
+
   const handleDetectLocation = () => {
     if (!navigator.geolocation) {
       toast({ title: "Geolocation Unavailable", description: "Browser does not support GPS geolocation", variant: "destructive" });
@@ -220,8 +241,8 @@ const ProfilePage = () => {
 
         {/* PENDING ROLE CLEARANCE BANNER */}
         {hasPendingRoleRequest && (
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-3.5 animate-in fade-in">
-            <Clock className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center gap-3.5 animate-in fade-in">
+            <Clock className="w-5 h-5 text-amber-400 mt-0.5 sm:mt-0 shrink-0" />
             <div className="flex-1">
               <h4 className="text-sm font-bold text-amber-300">
                 Clearance Request Pending Administrator Review
@@ -231,9 +252,22 @@ const ProfilePage = () => {
                 Our platform administrators are currently reviewing your credentials. You will receive an in-app notification once verified.
               </p>
             </div>
-            <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs shrink-0">
-              PENDING
-            </Badge>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/30 text-xs shrink-0">
+                PENDING
+              </Badge>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isWithdrawingClearance}
+                onClick={handleWithdrawClearance}
+                className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 text-xs h-7 px-2.5"
+              >
+                {isWithdrawingClearance ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                Withdraw
+              </Button>
+            </div>
           </div>
         )}
 
@@ -476,19 +510,32 @@ const ProfilePage = () => {
           </CardHeader>
           <CardContent className="p-6">
             {hasPendingRoleRequest ? (
-              <div className="flex items-center justify-between p-4 rounded-xl bg-slate-900/80 border border-slate-800">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-slate-900/80 border border-slate-800">
                 <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-amber-400" />
+                  <Clock className="w-5 h-5 text-amber-400 shrink-0" />
                   <div>
                     <span className="text-sm font-bold text-white">Pending Clearance: {user.requestedRole}</span>
                     <p className="text-xs text-slate-400">
-                      Submitted for administrative review. If you need to make urgent changes, contact the administration.
+                      Submitted for administrative review. If you need to make corrections or re-upload your document, you can withdraw this request.
                     </p>
                   </div>
                 </div>
-                <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs">
-                  In Review
-                </Badge>
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20 text-xs">
+                    In Review
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isWithdrawingClearance}
+                    onClick={handleWithdrawClearance}
+                    className="border-red-500/30 text-red-400 hover:bg-red-500/10 hover:text-red-300 text-xs h-8"
+                  >
+                    {isWithdrawingClearance ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                    Withdraw Request
+                  </Button>
+                </div>
               </div>
             ) : user.role === "ADMIN" ? (
               <div className="text-sm text-slate-400 flex items-center gap-2">

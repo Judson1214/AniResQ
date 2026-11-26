@@ -854,3 +854,120 @@ def test_request_clearance_guards_and_validation(monkeypatch):
     finally:
         app.dependency_overrides.clear()
         limiter.reset()
+
+
+def test_withdraw_role_clearance_request(monkeypatch):
+    """Test DELETE /api/users/request-clearance:
+    - 400 when user has no pending clearance request
+    - 200 when user has a pending clearance request, resetting requestedRole and ID credentials
+    - User can submit a new clearance request after withdrawing without 409 conflict"""
+    mock_db = {
+        "user-cit": {
+            "id": "user-cit",
+            "display_name": "Citizen User",
+            "email": "cit@aniresq.org",
+            "role": "CITIZEN",
+            "requested_role": None,
+            "id_card_type": None,
+            "id_card_number": None,
+            "id_card_url": None,
+            "bio": "Citizen Bio"
+        },
+        "user-pending": {
+            "id": "user-pending",
+            "display_name": "Pending User",
+            "email": "pending@aniresq.org",
+            "role": "CITIZEN",
+            "requested_role": "SHELTER",
+            "id_card_type": "Animal Shelter License",
+            "id_card_number": "SHELTER-12345",
+            "id_card_url": "user-pending/license.pdf",
+            "bio": "Pending Bio"
+        }
+    }
+
+    class MockUserTable:
+        def __init__(self):
+            self.current_id = None
+            self.action = None
+            self.update_payload = None
+            self.is_col = None
+            self.is_val = None
+
+        def select(self, *args, **kwargs):
+            self.action = "select"
+            return self
+
+        def eq(self, col, val):
+            self.current_id = val
+            return self
+
+        def is_(self, col, val):
+            self.is_col = col
+            self.is_val = val
+            return self
+
+        def update(self, payload):
+            self.action = "update"
+            self.update_payload = payload
+            return self
+
+        def execute(self):
+            row = mock_db.get(self.current_id)
+            if self.action == "select":
+                return MagicMock(data=[dict(row)] if row else [])
+            elif self.action == "update":
+                if row:
+                    if self.is_col == "requested_role" and self.is_val == "null":
+                        if row.get("requested_role") is not None:
+                            return MagicMock(data=[])
+                    row.update(self.update_payload)
+                    return MagicMock(data=[dict(row)])
+                return MagicMock(data=[])
+            return MagicMock(data=[])
+
+    mock_table = MockUserTable()
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_table)
+    limiter.reset()
+
+    # 1. User with no pending clearance request -> 400
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-cit", "email": "cit@aniresq.org", "name": "Citizen User", "role": "CITIZEN"
+    }
+    try:
+        res = client.delete("/api/users/request-clearance")
+        assert res.status_code == 400
+        assert "No pending clearance request to withdraw" in res.json()["detail"]
+    finally:
+        app.dependency_overrides.clear()
+
+    # 2. User with pending clearance request -> 200 and fields reset to None
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "user-pending", "email": "pending@aniresq.org", "name": "Pending User", "role": "CITIZEN"
+    }
+    try:
+        res_withdraw = client.delete("/api/users/request-clearance")
+        assert res_withdraw.status_code == 200
+        data = res_withdraw.json()
+        assert data["requestedRole"] is None
+        assert data["idCardType"] is None
+        assert data["idCardNumber"] is None
+        assert data["idCardUrl"] is None
+
+        # Verify database record updated
+        assert mock_db["user-pending"]["requested_role"] is None
+        assert mock_db["user-pending"]["id_card_number"] is None
+
+        # 3. User can now submit a fresh clearance request without 409
+        res_reapply = client.post("/api/users/request-clearance", json={
+            "requestedRole": "NGO",
+            "idCardNumber": "NGO-998877",
+            "idCardType": "NGO Registration Certificate"
+        })
+        assert res_reapply.status_code == 200
+        reapply_data = res_reapply.json()
+        assert reapply_data["requestedRole"] == "NGO"
+        assert reapply_data["idCardNumber"] == "NGO-998877"
+    finally:
+        app.dependency_overrides.clear()
+        limiter.reset()

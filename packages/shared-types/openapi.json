@@ -871,6 +871,31 @@
             "HTTPBearer": []
           }
         ]
+      },
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Withdraw Role Clearance Request",
+        "description": "Allows an operator to withdraw their pending clearance verification request,\nresetting requested_role and clearing unverified ID credentials so they can re-submit if needed.",
+        "operationId": "withdraw_role_clearance_request_api_users_request_clearance_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
       }
     },
     "/api/users/{uid}/role": {

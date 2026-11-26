@@ -574,6 +574,34 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
     row_data = {**(res.data[0] if (res.data and isinstance(res.data[0], dict)) else {}), **update_data}
     return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
 
+@router.delete("/request-clearance", response_model=UserResponse)
+def withdraw_role_clearance_request(current_user: dict = Depends(get_current_user)):
+    """Allows an operator to withdraw their pending clearance verification request,
+    resetting requested_role and clearing unverified ID credentials so they can re-submit if needed."""
+    uid = current_user["uid"]
+
+    existing = supabase.table("users").select("role, requested_role").eq("id", uid).execute()
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_row = existing.data[0]
+    if not user_row.get("requested_role"):
+        raise HTTPException(status_code=400, detail="No pending clearance request to withdraw")
+
+    update_data = {
+        "requested_role": None,
+        "id_card_type": None,
+        "id_card_number": None,
+        "id_card_url": None,
+    }
+
+    res = supabase.table("users").update(update_data).eq("id", uid).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    row_data = {**(res.data[0] if (res.data and isinstance(res.data[0], dict)) else {}), **update_data}
+    return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
+
 @router.patch("/{uid}/role", response_model=UserResponse)
 def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends(get_current_user)):
     if current_user.get("role") != "ADMIN":
