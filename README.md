@@ -327,3 +327,17 @@ The API enforces a sliding-window in-memory rate limiter per client IP:
 ## License
 
 This project is licensed under the MIT License.
+
+## Database checks
+
+`supabase/ci/run_db_checks.sh` applies every migration, in order, to an empty Postgres and then runs
+`supabase/ci/verify.sql`, which impersonates `anon`, `authenticated` and `service_role` and asserts
+what each can read or change (rescues, animals, adoptions, storage, role escalation, audit log, avatar URLs).
+CI runs it as the `db-ci` job. To run it locally against a **disposable** database:
+
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/aniresq_ci bash supabase/ci/run_db_checks.sh
+```
+
+`supabase/ci/00_supabase_stub.sql` fakes the Supabase `auth`/`storage` objects and roles. Never run it
+against a real Supabase project. When you add a table or policy, add a matching check to `verify.sql`.
