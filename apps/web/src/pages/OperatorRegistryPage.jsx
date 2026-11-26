@@ -464,7 +464,7 @@ export default function OperatorRegistryPage() {
                         <span className="text-slate-500">Credential / Reg No:</span>
                         <span className="font-mono text-purple-300 font-bold">{editingUser.idCardNumber || "Verified Document"}</span>
                       </div>
-                      {editingUser.idCardUrl && (
+                      {editingUser.idCardUrl && editingUser.idCardUrl.startsWith("https://") && (
                         <div className="pt-1">
                           <a
                             href={editingUser.idCardUrl}

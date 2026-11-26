@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,6 +15,26 @@ logger = logging.getLogger("users")
 
 def is_test_environment() -> bool:
     return os.getenv("TESTING", "").lower() in ("true", "1") or "PYTEST_CURRENT_TEST" in os.environ
+
+def validate_id_card_path(path: Optional[str], uid: str) -> Optional[str]:
+    """Validates that id_card_url is a scoped private storage path matching ^<uid>/[A-Za-z0-9._-]+$
+    Rejects raw URLs, javascript schemes, traversal paths, or mismatched user directories."""
+    if not path:
+        return None
+    clean_path = path.strip()
+    if not clean_path:
+        return None
+    # Strip optional bucket prefix if user provided it
+    if clean_path.startswith("id-verification/"):
+        clean_path = clean_path.split("id-verification/", 1)[1].strip()
+
+    pattern = rf"^{re.escape(uid)}/[A-Za-z0-9._-]+$"
+    if not re.match(pattern, clean_path):
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid ID document storage path. Must match format '{uid}/<filename>' and contain only safe alphanumeric characters."
+        )
+    return clean_path
 
 VALID_ROLES = {"CITIZEN", "NGO", "VOLUNTEER", "SHELTER", "VET", "ADMIN"}
 ALLOWED_REQUESTED_ROLES = {"NGO", "VOLUNTEER", "SHELTER", "VET"}
@@ -146,24 +167,28 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
     # Generate short-lived signed URL for private ID verification documents (admins/owner only)
     signed_id_url = None
     if can_view_sensitive and id_card_url:
-        signed_id_url = id_card_url
-        clean_path = id_card_url.strip()
+        clean_path = str(id_card_url).strip()
         if "/id-verification/" in clean_path:
             clean_path = clean_path.split("/id-verification/", 1)[1]
         elif clean_path.startswith("id-verification/"):
             clean_path = clean_path.split("id-verification/", 1)[1]
         clean_path = clean_path.split("?")[0].strip()
 
-        if clean_path and not clean_path.startswith("http://") and not clean_path.startswith("https://"):
+        # Enforce storage path format: <uid>/[A-Za-z0-9._-]+
+        if re.match(r"^[0-9a-fA-F-]{36}/[A-Za-z0-9._-]+$", clean_path):
             try:
                 signed_res = supabase.storage.from_("id-verification").create_signed_url(clean_path, 3600)
                 signed_val = (
                     signed_res.get("signedURL") or signed_res.get("signedUrl")
                 ) if isinstance(signed_res, dict) else getattr(signed_res, "signed_url", None)
-                if signed_val:
+                if signed_val and (signed_val.startswith("https://") or signed_val.startswith("http://")):
                     signed_id_url = signed_val
             except Exception as sign_err:
                 logger.warning(f"Could not generate signed URL for ID card ({clean_path}): {sign_err}")
+                signed_id_url = None
+        else:
+            # Reject non-storage paths or malicious schemes; never fall back to raw string
+            signed_id_url = None
 
     return {
         "id": user_id,
@@ -377,7 +402,7 @@ def create_user_profile(profile: UserProfileCreate, current_user: dict = Depends
         if profile.idCardNumber:
             data["id_card_number"] = profile.idCardNumber
         if profile.idCardUrl:
-            data["id_card_url"] = profile.idCardUrl
+            data["id_card_url"] = validate_id_card_path(profile.idCardUrl, profile.uid)
 
         if req_role:
             data["requested_role"] = req_role
@@ -428,7 +453,7 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
     if profile.idCardNumber is not None:
         update_data["id_card_number"] = profile.idCardNumber
     if profile.idCardUrl is not None:
-        update_data["id_card_url"] = profile.idCardUrl
+        update_data["id_card_url"] = validate_id_card_path(profile.idCardUrl, uid) if profile.idCardUrl.strip() else None
     if profile.requestedRole is not None:
         raw_req = profile.requestedRole.strip().upper() if profile.requestedRole.strip() else None
         if raw_req == "ADMIN" or (raw_req and raw_req not in ALLOWED_REQUESTED_ROLES):
@@ -510,7 +535,7 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
         "bio": clean_bio
     }
     if req.idCardUrl is not None:
-        update_data["id_card_url"] = req.idCardUrl
+        update_data["id_card_url"] = validate_id_card_path(req.idCardUrl, uid) if req.idCardUrl.strip() else None
     
     res = supabase.table("users").update(update_data).eq("id", uid).execute()
     if not res.data:

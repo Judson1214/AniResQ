@@ -515,7 +515,7 @@ def test_id_card_pii_not_leaked_in_bio_or_notifications(monkeypatch):
             "requestedRole": "VOLUNTEER",
             "idCardType": "Aadhaar Card",
             "idCardNumber": "9999-8888-7777",
-            "idCardUrl": "https://storage.aniresq.org/uploads/op-1/id_verification/aadhaar.png"
+            "idCardUrl": "op-1/aadhaar.png"
         })
         assert res.status_code == 200
         # Verify update call did NOT inject "[ID:" into bio
@@ -525,6 +525,7 @@ def test_id_card_pii_not_leaked_in_bio_or_notifications(monkeypatch):
         assert "[ID:" not in update_payload.get("bio", "")
         assert update_payload.get("id_card_number") == "9999-8888-7777"
         assert update_payload.get("id_card_type") == "Aadhaar Card"
+        assert update_payload.get("id_card_url") == "op-1/aadhaar.png"
 
         # Verify notification dispatched to admin does NOT leak the card number
         assert len(created_notifications) > 0
@@ -533,6 +534,64 @@ def test_id_card_pii_not_leaked_in_bio_or_notifications(monkeypatch):
         assert "Aadhaar Card" in admin_notif["message"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_id_card_url_path_validation_and_signing_safety(monkeypatch):
+    """Test that:
+    1. Unsafe idCardUrl input (e.g. javascript:... or cross-user path) is rejected with 422.
+    2. In map_user, if signing fails, idCardUrl returns None and NEVER falls back to the raw string."""
+    from routers.users import map_user
+
+    mock_users = MagicMock()
+    mock_users.select.return_value = mock_users
+    mock_users.update.return_value = mock_users
+    mock_users.eq.return_value = mock_users
+    mock_users.execute.return_value = MagicMock(data=[{"id": "op-1", "role": "CITIZEN", "display_name": "Op"}])
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_users)
+
+    app.dependency_overrides[get_current_user] = lambda: {
+        "uid": "op-1", "email": "op@aniresq.org", "name": "Op", "role": "CITIZEN"
+    }
+    try:
+        # A. javascript: scheme rejected
+        res_js = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "12345",
+            "idCardUrl": "javascript:alert(1)"
+        })
+        assert res_js.status_code == 422
+
+        # B. Cross-user path rejected
+        res_cross = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "12345",
+            "idCardUrl": "victim-user-id/id.png"
+        })
+        assert res_cross.status_code == 422
+
+        # C. Path traversal rejected
+        res_trav = client.post("/api/users/request-clearance", json={
+            "requestedRole": "VOLUNTEER",
+            "idCardNumber": "12345",
+            "idCardUrl": "op-1/../../../etc/passwd"
+        })
+        assert res_trav.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+    # D. Test map_user returns None if storage signing fails
+    mock_storage = MagicMock()
+    mock_storage.create_signed_url.side_effect = Exception("Storage error")
+    monkeypatch.setattr(supabase_config.supabase.storage, "from_", lambda b: mock_storage)
+
+    user_data = {
+        "id": "00000000-0000-0000-0000-000000000001",
+        "display_name": "Test User",
+        "role": "CITIZEN",
+        "id_card_url": "00000000-0000-0000-0000-000000000001/doc.png"
+    }
+    mapped = map_user(user_data, can_view_contact=True, can_view_sensitive=True)
+    assert mapped["idCardUrl"] is None, "idCardUrl must be None when signing fails, not raw string!"
 
 
 
