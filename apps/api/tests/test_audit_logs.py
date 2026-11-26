@@ -860,6 +860,10 @@ def test_withdraw_role_clearance_request(monkeypatch):
     """Test DELETE /api/users/request-clearance:
     - 400 when user has no pending clearance request
     - 200 when user has a pending clearance request, resetting requestedRole and ID credentials
+    - Removes uploaded ID document from private storage bucket
+    - Removes stale ROLE_REQUEST notifications from admin feeds
+    - Rejects concurrent / race condition when clearance is already processed (409)
+    - Rate limits excessive withdrawal requests (429)
     - User can submit a new clearance request after withdrawing without 409 conflict"""
     mock_db = {
         "user-cit": {
@@ -886,20 +890,33 @@ def test_withdraw_role_clearance_request(monkeypatch):
         }
     }
 
+    deleted_notifications = []
+    removed_storage_paths = []
+
     class MockUserTable:
-        def __init__(self):
+        def __init__(self, table_name="users"):
+            self.table_name = table_name
             self.current_id = None
             self.action = None
             self.update_payload = None
             self.is_col = None
             self.is_val = None
+            self.is_negated = False
+            self.filters = {}
+
+        @property
+        def not_(self):
+            self.is_negated = True
+            return self
 
         def select(self, *args, **kwargs):
             self.action = "select"
             return self
 
         def eq(self, col, val):
-            self.current_id = val
+            if col == "id":
+                self.current_id = val
+            self.filters[col] = val
             return self
 
         def is_(self, col, val):
@@ -912,22 +929,46 @@ def test_withdraw_role_clearance_request(monkeypatch):
             self.update_payload = payload
             return self
 
+        def delete(self, *args, **kwargs):
+            self.action = "delete"
+            return self
+
         def execute(self):
+            if self.table_name == "notifications":
+                if self.action == "delete":
+                    deleted_notifications.append(dict(self.filters))
+                    return MagicMock(data=[])
+                return MagicMock(data=[])
+
             row = mock_db.get(self.current_id)
             if self.action == "select":
                 return MagicMock(data=[dict(row)] if row else [])
             elif self.action == "update":
                 if row:
                     if self.is_col == "requested_role" and self.is_val == "null":
-                        if row.get("requested_role") is not None:
-                            return MagicMock(data=[])
+                        if self.is_negated:
+                            # Not null condition: must fail if requested_role IS null
+                            if row.get("requested_role") is None:
+                                return MagicMock(data=[])
+                        else:
+                            # Is null condition: must fail if requested_role is NOT null
+                            if row.get("requested_role") is not None:
+                                return MagicMock(data=[])
                     row.update(self.update_payload)
+                    # Reset condition flags
+                    self.is_col = None
+                    self.is_val = None
+                    self.is_negated = False
                     return MagicMock(data=[dict(row)])
                 return MagicMock(data=[])
             return MagicMock(data=[])
 
-    mock_table = MockUserTable()
-    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: mock_table)
+    monkeypatch.setattr(supabase_config.supabase, "table", lambda t: MockUserTable(t))
+
+    mock_storage = MagicMock()
+    mock_storage.remove.side_effect = lambda paths: removed_storage_paths.extend(paths)
+    monkeypatch.setattr(supabase_config.supabase.storage, "from_", lambda b: mock_storage)
+
     limiter.reset()
 
     # 1. User with no pending clearance request -> 400
@@ -958,6 +999,15 @@ def test_withdraw_role_clearance_request(monkeypatch):
         assert mock_db["user-pending"]["requested_role"] is None
         assert mock_db["user-pending"]["id_card_number"] is None
 
+        # Verify storage document was deleted from id-verification bucket
+        assert "user-pending/license.pdf" in removed_storage_paths
+
+        # Verify notifications were cleaned up
+        assert any(
+            n.get("related_entity_id") == "user-pending" and n.get("type") == "ROLE_REQUEST"
+            for n in deleted_notifications
+        )
+
         # 3. User can now submit a fresh clearance request without 409
         res_reapply = client.post("/api/users/request-clearance", json={
             "requestedRole": "NGO",
@@ -968,6 +1018,28 @@ def test_withdraw_role_clearance_request(monkeypatch):
         reapply_data = res_reapply.json()
         assert reapply_data["requestedRole"] == "NGO"
         assert reapply_data["idCardNumber"] == "NGO-998877"
+
+        # 4. Concurrent race condition: if an admin approved / cleared between select and update -> 409
+        mock_db["user-pending"]["requested_role"] = "NGO"
+        class RaceMockTable(MockUserTable):
+            def execute(self):
+                if self.action == "update":
+                    return MagicMock(data=[])
+                return super().execute()
+        monkeypatch.setattr(supabase_config.supabase, "table", lambda t: RaceMockTable(t) if t == "users" else MockUserTable(t))
+        res_race = client.delete("/api/users/request-clearance")
+        assert res_race.status_code == 409
+        assert "already processed or withdrawn" in res_race.json()["detail"]
+        monkeypatch.setattr(supabase_config.supabase, "table", lambda t: MockUserTable(t))
+
+        # 5. Rate limiter test on DELETE /api/users/request-clearance
+        limiter.reset()
+        mock_db["user-pending"]["requested_role"] = "NGO"
+        for _ in range(10):
+            client.delete("/api/users/request-clearance")
+        res_rate_limited = client.delete("/api/users/request-clearance")
+        assert res_rate_limited.status_code == 429
+
     finally:
         app.dependency_overrides.clear()
         limiter.reset()

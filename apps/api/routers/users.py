@@ -580,7 +580,16 @@ def withdraw_role_clearance_request(current_user: dict = Depends(get_current_use
     resetting requested_role and clearing unverified ID credentials so they can re-submit if needed."""
     uid = current_user["uid"]
 
-    existing = supabase.table("users").select("role, requested_role").eq("id", uid).execute()
+    # Rate limiting: 10 withdrawal requests per minute per user ID
+    user_key = f"user:{uid}"
+    allowed, retry_after = limiter.is_allowed(user_key, path="/api/users/request-clearance", method="DELETE")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many withdrawal requests. Please retry in {retry_after} seconds."
+        )
+
+    existing = supabase.table("users").select("role, requested_role, id_card_url").eq("id", uid).execute()
     if not existing.data:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -595,9 +604,44 @@ def withdraw_role_clearance_request(current_user: dict = Depends(get_current_use
         "id_card_url": None,
     }
 
-    res = supabase.table("users").update(update_data).eq("id", uid).execute()
+    # Conditional update: update ONLY if requested_role is NOT null to avoid overwriting approved roles in a race
+    res = (
+        supabase.table("users")
+        .update(update_data)
+        .eq("id", uid)
+        .not_.is_("requested_role", "null")
+        .execute()
+    )
     if not res.data:
-        raise HTTPException(status_code=404, detail="User not found")
+        existing_chk = supabase.table("users").select("id, requested_role").eq("id", uid).execute()
+        if not existing_chk.data:
+            raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=409,
+            detail="Clearance request was already processed or withdrawn"
+        )
+
+    # Clean up uploaded verification document from private storage bucket
+    doc_url = user_row.get("id_card_url")
+    if doc_url:
+        clean_path = str(doc_url).strip()
+        if "/id-verification/" in clean_path:
+            clean_path = clean_path.split("/id-verification/", 1)[1]
+        elif clean_path.startswith("id-verification/"):
+            clean_path = clean_path.split("id-verification/", 1)[1]
+        clean_path = clean_path.split("?")[0].strip()
+        if clean_path:
+            try:
+                supabase.storage.from_("id-verification").remove([clean_path])
+                logger.info(f"Removed ID document '{clean_path}' for user {uid} upon clearance withdrawal")
+            except Exception as storage_err:
+                logger.warning(f"Could not remove ID document {clean_path} from storage on clearance withdrawal: {storage_err}")
+
+    # Remove stale ROLE_REQUEST notifications from admin feeds
+    try:
+        supabase.table("notifications").delete().eq("related_entity_id", uid).eq("type", "ROLE_REQUEST").execute()
+    except Exception as notif_err:
+        logger.warning(f"Failed to clear ROLE_REQUEST notifications for user {uid}: {notif_err}")
 
     row_data = {**(res.data[0] if (res.data and isinstance(res.data[0], dict)) else {}), **update_data}
     return map_user(row_data, can_view_contact=True, can_view_sensitive=True)

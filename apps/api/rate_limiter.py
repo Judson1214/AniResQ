@@ -49,7 +49,7 @@ class SlidingWindowRateLimiter:
         elif norm_path in ["/api/rescues", "/api/lostfound"] and method_upper == "POST":
             limit = 15
             tier = "intake_post"
-        elif norm_path == "/api/users/request-clearance" and method_upper == "POST":
+        elif norm_path == "/api/users/request-clearance" and method_upper in ["POST", "DELETE"]:
             limit = 10
             tier = "clearance_request"
         elif method_upper in ["POST", "PATCH", "DELETE"]:
