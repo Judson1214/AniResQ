@@ -68,6 +68,32 @@ class MockApiHandler(BaseHTTPRequestHandler):
         self.send_response(404)
         self.end_headers()
 
+    def do_OPTIONS(self):
+        mode = getattr(self.server, "mode", "good")
+        origin = self.headers.get("Origin", "")
+
+        if mode == "bad":
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.end_headers()
+            return
+
+        # Good mode: allow specific configured origins
+        allowed_origins = ["http://127.0.0.1:8903"]
+        if origin in allowed_origins:
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Access-Control-Allow-Credentials", "true")
+            self.end_headers()
+        else:
+            # Unauthorized origin (e.g. evil.example.com): omit Access-Control-Allow-Origin
+            self.send_response(403)
+            self.end_headers()
+
     def do_POST(self):
         if self.path in ["/api/rescues/", "/api/rescues"]:
             auth = self.headers.get("Authorization", "")

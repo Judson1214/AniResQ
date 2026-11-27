@@ -21,8 +21,8 @@ python3 scripts/tests/mock_api_server.py --port "$PORT_GOOD" --mode good &
 PID_GOOD=$!
 sleep 1
 
-echo "Testing verify_live.sh against Good Mock Server (must succeed with exit code 0)..."
-API_URL="http://127.0.0.1:$PORT_GOOD" API_ONLY=1 TEST_USER_TOKEN="mock-token-xyz" bash scripts/verify_live.sh
+echo "Testing verify_live.sh against Good Mock Server with cross-origin WEB_URL (must succeed with exit code 0)..."
+API_URL="http://127.0.0.1:$PORT_GOOD" WEB_URL="http://127.0.0.1:8903" API_ONLY=1 TEST_USER_TOKEN="mock-token-xyz" bash scripts/verify_live.sh
 echo "Good mock verification passed!"
 
 kill "$PID_GOOD" 2>/dev/null || true
@@ -36,7 +36,7 @@ sleep 1
 
 echo "Testing verify_live.sh against Bad Mock Server (must fail with non-zero exit code)..."
 set +e
-API_URL="http://127.0.0.1:$PORT_BAD" API_ONLY=1 bash scripts/verify_live.sh
+API_URL="http://127.0.0.1:$PORT_BAD" WEB_URL="http://127.0.0.1:8903" API_ONLY=1 bash scripts/verify_live.sh
 BAD_EXIT=$?
 set -e
 

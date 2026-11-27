@@ -13,13 +13,32 @@ AniResQ includes configuration files for both Vercel (`apps/web/vercel.json`) an
 
 ---
 
-## 2. Configuring Production Backend API Target
+## 2. Configuring Production Backend API Target & Origin Strategy
 
-Both hosting configurations include rewrite rules to route `/api/*` requests to your FastAPI backend server without CORS preflight overhead.
+You can configure the frontend-to-API communication using one of two strategies:
 
-Before deploying to production, replace the placeholder `YOUR-API-HOST` with your production API domain (e.g. `api.aniresq.com`):
+### Option A: Unified Domain with `/api` Rewrite (Simpler & Recommended)
+When using the built-in rewrites in `vercel.json` or `netlify.toml`, frontend and API appear on the same origin to the browser:
+- Leave `VITE_API_URL` (and CI `API_URL`) **unset** or blank; the web app defaults to relative `/api`.
+- No cross-origin preflight requests (OPTIONS) occur.
+- Replace `YOUR-API-HOST` with your production API domain (e.g. `api.aniresq.com`).
 
-### In `apps/web/vercel.json`:
+### Option B: Separate Origins (Cross-Origin API)
+When the API is hosted on a separate domain (e.g., frontend on `https://app.aniresq.com` and API directly accessed at `https://api.aniresq.com` without proxying):
+1. **Set `API_URL` environment variable** in deployment environments (e.g., `VITE_API_URL=https://api.aniresq.com` for web build and `API_URL=https://api.aniresq.com` in CI).
+2. **Configure backend API `CORS_ORIGINS`** to your exact production web origin (`https://app.aniresq.com`). Wildcards (`*`) are strictly forbidden.
+3. **Regenerate and commit CSP deployment headers**:
+   ```bash
+   VITE_SUPABASE_URL="https://<YOUR-PROJECT-REF>.supabase.co" \
+   VITE_API_URL="https://api.aniresq.com" \
+   pnpm --filter @aniresq/web run generate:headers
+   ```
+   Commit the resulting changes in `apps/web/vercel.json` and `apps/web/netlify.toml` so the API origin is whitelisted in `connect-src`.
+4. **Security Notice**: `VITE_API_URL` is baked into client bundles at build time. It **must never contain secrets, tokens, or credentials**.
+
+### Host Rewrite Templates:
+
+#### In `apps/web/vercel.json`:
 ```json
 {
   "rewrites": [

@@ -214,7 +214,47 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 7. API Security Headers, Cache-Control, and Validation Error Sanitization
+# 7. Cross-Origin CORS Preflight Checks (when WEB_URL and API_URL origins differ)
+# ------------------------------------------------------------------------------
+WEB_ORIGIN=$(echo "$WEB_URL" | sed -E 's|^(https?://[^/]+).*|\1|')
+API_ORIGIN=$(echo "$API_URL" | sed -E 's|^(https?://[^/]+).*|\1|')
+
+if [ -n "$WEB_URL" ] && [ -n "$API_URL" ] && [ "$WEB_ORIGIN" != "$API_ORIGIN" ]; then
+  info "Checking cross-origin CORS preflight from $WEB_ORIGIN to $API_ORIGIN..."
+
+  # Probe CORS preflight from expected web origin
+  CORS_HEADERS=$(curl -s -i -X OPTIONS "$API_URL/api/lostfound" \
+    -H "Origin: $WEB_ORIGIN" \
+    -H "Access-Control-Request-Method: GET")
+
+  ACAO=$(echo "$CORS_HEADERS" | grep -i "^access-control-allow-origin:" | tr -d '\r' | sed -E 's/^[Aa]ccess-[Cc]ontrol-[Aa]llow-[Oo]rigin:\s*//' || true)
+  # Trim whitespace
+  ACAO=$(echo "$ACAO" | xargs)
+
+  if [ "$ACAO" = "$WEB_ORIGIN" ]; then
+    pass "CORS preflight from $WEB_ORIGIN returns Access-Control-Allow-Origin: $WEB_ORIGIN"
+  elif [ "$ACAO" = "*" ]; then
+    fail "CORS preflight" "Access-Control-Allow-Origin is wildcard '*' instead of $WEB_ORIGIN"
+  else
+    fail "CORS preflight" "Expected Access-Control-Allow-Origin: $WEB_ORIGIN, got '$ACAO'"
+  fi
+
+  # Probe CORS preflight from unauthorized evil origin
+  EVIL_HEADERS=$(curl -s -i -X OPTIONS "$API_URL/api/lostfound" \
+    -H "Origin: https://evil.example.com" \
+    -H "Access-Control-Request-Method: GET")
+
+  if echo "$EVIL_HEADERS" | grep -qi "^access-control-allow-origin:"; then
+    fail "CORS unauthorized origin" "Access-Control-Allow-Origin header returned for https://evil.example.com"
+  else
+    pass "CORS preflight rejects unauthorized origin https://evil.example.com"
+  fi
+else
+  skip "Cross-origin CORS check (WEB_URL and API_URL have same origin or WEB_URL is unset)"
+fi
+
+# ------------------------------------------------------------------------------
+# 8. API Security Headers, Cache-Control, and Validation Error Sanitization
 # ------------------------------------------------------------------------------
 info "Checking API response headers and validation error sanitization..."
 API_HEADERS=$(curl -s -D - "$API_URL/api/lostfound" -o /dev/null)
@@ -262,7 +302,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 8. Rate Limiting Enforcement
+# 9. Rate Limiting Enforcement
 # ------------------------------------------------------------------------------
 info "Sending rapid requests to test rate limiter on $API_URL/ready..."
 RATE_LIMIT_HIT=0

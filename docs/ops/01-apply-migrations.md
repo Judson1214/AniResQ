@@ -81,6 +81,17 @@ Immediately following migration application:
    bash scripts/verify_live.sh
    ```
 
+> [!NOTE]
+> **Cross-Origin API & CORS Verification**:
+> When `WEB_URL` and `API_URL` are on separate origins (e.g. `https://app.aniresq.com` and `https://api.aniresq.com`), `scripts/verify_live.sh` automatically probes CORS preflight (`OPTIONS /api/lostfound`) to confirm:
+> - `Access-Control-Allow-Origin` strictly matches the frontend origin (`https://app.aniresq.com`, not wildcard `*`).
+> - Probing with unauthorized origins (`https://evil.example.com`) returns no allow-origin header.
+>
+> **Configuration Rules for Cross-Origin Setup**:
+> - When the API is on a separate origin: (a) set the `API_URL` environment variable, (b) configure backend `CORS_ORIGINS` to the exact HTTPS web origin, and (c) run `pnpm --filter @aniresq/web run generate:headers` with `VITE_SUPABASE_URL` and `VITE_API_URL` and commit the updated deployment configs.
+> - When using `/api` rewrite on the same domain, leave `API_URL` unset (simpler option; skips cross-origin preflight).
+> - Note: `VITE_API_URL` must never contain secrets or credentials.
+
 ---
 
 ## 5. Backward-Compatible Migration Design & Rollback Strategy
