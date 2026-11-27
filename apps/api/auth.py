@@ -177,12 +177,42 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
                 }
             _USER_CACHE[user_id] = (profile_data, now + CACHE_TTL_SECONDS)
         except Exception as db_err:
-            logger.error(f"Database error loading user profile for {user_id}: {db_err}")
-            # Fail closed with 503 for protected routes instead of silently assuming CITIZEN
-            raise HTTPException(
-                status_code=503,
-                detail="User authentication service temporarily unavailable"
-            )
+            err_str = str(db_err)
+            if "is_disabled" in err_str or "42703" in err_str:
+                try:
+                    fallback_res = (
+                        supabase.table("users")
+                        .select("role, display_name")
+                        .eq("id", user_id)
+                        .execute()
+                    )
+                    if fallback_res.data:
+                        profile_row = fallback_res.data[0]
+                        profile_data = {
+                            "role": profile_row.get("role", "CITIZEN"),
+                            "display_name": profile_row.get("display_name") or metadata.get("display_name", "Unknown User"),
+                            "is_disabled": False,
+                        }
+                    else:
+                        profile_data = {
+                            "role": "CITIZEN",
+                            "display_name": metadata.get("display_name", "Unknown User"),
+                            "is_disabled": False,
+                        }
+                    _USER_CACHE[user_id] = (profile_data, now + CACHE_TTL_SECONDS)
+                except Exception as fb_err:
+                    logger.error(f"Fallback database error loading user profile for {user_id}: {fb_err}")
+                    raise HTTPException(
+                        status_code=503,
+                        detail="User authentication service temporarily unavailable"
+                    )
+            else:
+                logger.error(f"Database error loading user profile for {user_id}: {db_err}")
+                # Fail closed with 503 for protected routes instead of silently assuming CITIZEN
+                raise HTTPException(
+                    status_code=503,
+                    detail="User authentication service temporarily unavailable"
+                )
 
     # Reject disabled/banned accounts with 403 Forbidden
     if profile_data.get("is_disabled") is True:

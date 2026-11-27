@@ -8,11 +8,12 @@ import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { sanitizeReturnTo } from "@/lib/utils";
 
 const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -28,6 +29,7 @@ const LoginForm = () => {
 
   const onSubmit = async (data) => {
     setIsLoading(true);
+    setLoginError("");
     try {
       await signIn(data.email, data.password);
       toast({
@@ -38,9 +40,11 @@ const LoginForm = () => {
       const targetPath = sanitizeReturnTo(rawReturnTo);
       navigate(targetPath, { replace: true });
     } catch (error) {
+      const msg = error.message || "Invalid email or password.";
+      setLoginError(msg);
       toast({
         title: "Login Failed",
-        description: error.message || "Invalid email or password.",
+        description: msg,
         variant: "destructive"
       });
     } finally {
@@ -51,6 +55,12 @@ const LoginForm = () => {
   return (
     <div className="w-full">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {loginError && (
+          <div role="alert" className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-center gap-2.5">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <span>{loginError}</span>
+          </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="email" className="text-slate-300">Operator Email</Label>
           <Input 

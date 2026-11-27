@@ -252,7 +252,28 @@ def list_users(
         if has_requested_role:
             query = query.not_.is_("requested_role", "null")
             
-        res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
+        try:
+            res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
+        except Exception as query_err:
+            if "42703" in str(query_err) or "does not exist" in str(query_err):
+                # Fallback to baseline columns if new migration columns are not yet applied on remote DB
+                base_columns = (
+                    "id, display_name, email, phone, role, requested_role, "
+                    "avatar_url, created_at, address, bio, latitude, longitude, "
+                    "service_radius_km, alerts_enabled"
+                )
+                if is_admin:
+                    base_columns += ", id_card_type, id_card_url"
+                query = supabase.table("users").select(base_columns)
+                if role:
+                    query = query.eq("role", role.upper())
+                if search:
+                    query = query.ilike("display_name", f"%{search}%")
+                if has_requested_role:
+                    query = query.not_.is_("requested_role", "null")
+                res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
+            else:
+                raise
         users_data = res.data or []
         
         return [

@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AuthInitializer } from "@/components/auth/AuthInitializer";
+import { Toaster } from "@/components/ui/toaster";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { UserRole } from "@aniresq/shared-types";
 
@@ -41,6 +42,7 @@ function App() {
   return (
     <>
       <AuthInitializer />
+      <Toaster />
       <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public Routes */}
