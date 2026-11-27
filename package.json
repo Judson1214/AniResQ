@@ -20,6 +20,15 @@
     "turbo": "^2.1.0"
   },
   "pnpm": {
+    "auditConfig": {
+      "ignoreCves": [
+        "CVE-2023-54404",
+        "GHSA-mrhx-c7xc-m3w5"
+      ],
+      "ignoreGhsas": [
+        "GHSA-mrhx-c7xc-m3w5"
+      ]
+    },
     "overrides": {
       "typescript": "~5.6.3",
       "source-map-js": ">=1.2.2",

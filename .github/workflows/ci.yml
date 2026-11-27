@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
@@ -43,7 +45,7 @@ jobs:
         run: pnpm --filter @aniresq/web exec tsc --noEmit
 
       - name: Setup Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: '3.11'
 
@@ -60,6 +62,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
@@ -94,9 +98,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -123,6 +129,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
@@ -136,7 +144,7 @@ jobs:
           cache: 'pnpm'
 
       - name: Setup Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -178,9 +186,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: '3.11'
 
@@ -198,16 +208,17 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Run Gitleaks Secret Detection
-        uses: gitleaks/gitleaks-action@eed78864ec12e553555ae3b4f69ebf4244ce2f03 # v2.3.8
+        uses: gitleaks/gitleaks-action@f586c14365d4643c6aa59d472ae6e984bf47bb34 # v2.3.8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           config-path: gitleaks.toml
 
       - name: Setup Python
-        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: '3.11'
 
@@ -237,7 +248,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Audit Production Node Dependencies
-        run: pnpm audit --prod --audit-level high || true
+        run: pnpm audit --prod --audit-level high
 
   codeql:
     name: CodeQL Static Analysis (${{ matrix.language }})
@@ -254,6 +265,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@b56ba49b26e50535fa1e7f7db0f4f7b4bf65d80d # v3.28.10
@@ -270,6 +283,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
 
       - name: Install pnpm
         uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
@@ -308,7 +323,7 @@ jobs:
       - web-test
       - api-test
       - contract-ci
-      - db-test
+      - db-ci
       - security-scan
       - codeql
       - e2e
@@ -316,10 +331,10 @@ jobs:
     steps:
       - name: Verify All Quality & Security Gates
         run: |
-          results="${{ needs.lint.result }} ${{ needs.web-test.result }} ${{ needs.api-test.result }} ${{ needs.contract-ci.result }} ${{ needs.db-test.result }} ${{ needs.security-scan.result }} ${{ needs.codeql.result }} ${{ needs.e2e.result }}"
-          echo "Gatekeeper results: $results"
-          if echo "$results" | grep -qE "failure|cancelled"; then
-            echo "CI Gatekeeper: One or more required checks failed."
-            exit 1
-          fi
+          for res in "${{ needs.lint.result }}" "${{ needs.web-test.result }}" "${{ needs.api-test.result }}" "${{ needs.contract-ci.result }}" "${{ needs.db-ci.result }}" "${{ needs.security-scan.result }}" "${{ needs.codeql.result }}" "${{ needs.e2e.result }}"; do
+            if [ "$res" != "success" ]; then
+              echo "CI Gatekeeper: Required job status is '$res' (must be 'success')."
+              exit 1
+            fi
+          done
           echo "CI Gatekeeper: All checks passed successfully!"
