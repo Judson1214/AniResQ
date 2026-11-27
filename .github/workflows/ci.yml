@@ -256,6 +256,16 @@ jobs:
       - name: Audit Production Node Dependencies
         run: pnpm audit --prod --audit-level high
 
+      - name: Run Trivy Security & Vulnerability Scanner
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
   codeql:
     name: CodeQL Static Analysis (${{ matrix.language }})
     runs-on: ubuntu-latest

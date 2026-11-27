@@ -11,8 +11,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from errors import AppError
 from logging_config import setup_logging, request_id_ctx_var
 from rate_limiter import RateLimitMiddleware, limiter, get_client_ip
+from config_validator import validate_production_config
 from supabase_config import supabase
 from routers import rescues, users, animals, adoptions, lostfound, notifications, audit, settings
+
+# Validate production environment security configuration
+validate_production_config()
 
 # Configure structured JSON logging
 setup_logging(level=logging.INFO)
