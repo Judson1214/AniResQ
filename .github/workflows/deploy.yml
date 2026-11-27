@@ -19,6 +19,9 @@ jobs:
   pre-flight:
     name: Verify Build & CI Status
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
     timeout-minutes: 10
     steps:
       - name: Confirm Deployment Intent
@@ -46,12 +49,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Checking GitHub CI check run status for ${{ github.sha }}..."
-          # Verify that CI workflow concluded successfully on this exact commit SHA
-          CI_STATUS=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs --jq '.check_runs[] | select(.name == "Code Quality & Linting" or .name == "Frontend Tests & Build") | .conclusion' | sort -u)
-          if echo "$CI_STATUS" | grep -q -v "success"; then
-            echo "::warning::Some CI check runs have status: $CI_STATUS. Verifying required gates..."
+          echo "Checking CI Gatekeeper status for ${{ github.sha }}..."
+          CHECK_CONCLUSIONS=$(gh api --paginate "repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs" \
+            --jq '.check_runs[] | select(.name == "CI Gatekeeper Summary") | .conclusion')
+
+          if [ -z "$CHECK_CONCLUSIONS" ]; then
+            echo "::error::No 'CI Gatekeeper Summary' check run found for commit ${{ github.sha }}. CI has not run or has no check runs."
+            exit 1
           fi
+
+          for status in $CHECK_CONCLUSIONS; do
+            if [ "$status" != "success" ]; then
+              echo "::error::Required check 'CI Gatekeeper Summary' status is '$status' (expected 'success'). Cannot release."
+              exit 1
+            fi
+          done
+
+          echo "CI Gatekeeper Summary verified successfully with conclusion: success"
 
       - name: Setup Node.js
         uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
