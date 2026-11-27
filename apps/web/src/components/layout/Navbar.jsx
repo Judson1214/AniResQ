@@ -156,7 +156,7 @@ const Navbar = () => {
                     </Avatar>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium">{user?.displayName}</span>
-                      <span className="text-xs text-gray-500 capitalize">{user?.role.toLowerCase()}</span>
+                      <span className="text-xs text-gray-500 capitalize">{user?.role?.toLowerCase()}</span>
                     </div>
                   </div>}
                 

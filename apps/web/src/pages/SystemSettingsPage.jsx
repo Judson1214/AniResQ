@@ -23,7 +23,7 @@ export default function SystemSettingsPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const { data: settings, isLoading } = useQuery({
+  const { data: settings, isLoading, error } = useQuery({
     queryKey: ["system-settings"],
     queryFn: getSystemSettings,
   });
@@ -67,6 +67,20 @@ export default function SystemSettingsPage() {
       });
     },
   });
+
+  if (error?.response?.status === 403) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-4xl mx-auto my-12 p-8 text-center bg-slate-900 border border-amber-500/30 rounded-xl space-y-4">
+          <Lock className="w-12 h-12 text-amber-500 mx-auto" />
+          <h2 className="text-xl font-bold text-white">Access Restricted</h2>
+          <p className="text-slate-400">
+            You do not have administrative clearance to view or edit System Settings.
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const handleNumberChange = (field, value) => {
     const num = parseInt(value, 10);

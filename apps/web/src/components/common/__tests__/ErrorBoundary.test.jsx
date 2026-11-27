@@ -1,28 +1,52 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ErrorBoundary } from '../ErrorBoundary';
 
 const GoodChild = () => React.createElement('div', { id: 'good' }, 'Working fine');
+const BadChild = () => {
+  throw new Error('Test crash in component');
+};
 
 describe('ErrorBoundary Component', () => {
   it('renders children when no error is thrown', () => {
-    const instance = new ErrorBoundary({ children: React.createElement(GoodChild) });
-    expect(instance.state.hasError).toBe(false);
+    render(
+      <ErrorBoundary>
+        <GoodChild />
+      </ErrorBoundary>
+    );
+    expect(screen.getByText('Working fine')).toBeInTheDocument();
   });
 
-  it('updates state via getDerivedStateFromError when a child component fails', () => {
-    const testError = new Error('Test crash');
-    const newState = ErrorBoundary.getDerivedStateFromError(testError);
-
-    expect(newState.hasError).toBe(true);
-    expect(newState.error).toBe(testError);
-  });
-
-  it('calls onRetry callback when handleRetry is triggered', () => {
+  it('renders fallback alert and handles retry when an error occurs', () => {
     const onRetryMock = vi.fn();
-    const instance = new ErrorBoundary({ children: React.createElement(GoodChild), onRetry: onRetryMock });
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    instance.handleRetry();
+    render(
+      <ErrorBoundary onRetry={onRetryMock} title="Custom failure title">
+        <BadChild />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+    expect(screen.getByText('Custom failure title')).toBeInTheDocument();
+
+    const retryBtn = screen.getByRole('button', { name: /Try Again/i });
+    fireEvent.click(retryBtn);
     expect(onRetryMock).toHaveBeenCalledTimes(1);
+
+    spy.mockRestore();
+  });
+
+  it('renders custom fallback element if provided', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <ErrorBoundary fallback={<div>Custom Error View</div>}>
+        <BadChild />
+      </ErrorBoundary>
+    );
+    expect(screen.getByText('Custom Error View')).toBeInTheDocument();
+    spy.mockRestore();
   });
 });

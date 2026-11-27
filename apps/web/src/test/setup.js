@@ -41,3 +41,11 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {}
   disconnect() {}
 };
+
+// URL.createObjectURL and revokeObjectURL mock
+if (typeof window !== 'undefined') {
+  window.URL.createObjectURL = vi.fn(() => 'blob:mock');
+  window.URL.revokeObjectURL = vi.fn();
+}
+global.URL.createObjectURL = vi.fn(() => 'blob:mock');
+global.URL.revokeObjectURL = vi.fn();

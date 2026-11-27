@@ -40,7 +40,7 @@ export default function AuditLogsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedLogId, setExpandedLogId] = useState(null);
 
-  const { data: logs = [], isLoading, isFetching, refetch } = useQuery({
+  const { data: logs = [], isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ["audit-logs", selectedAction, selectedEntity],
     queryFn: () => {
       const params = {};
@@ -63,6 +63,20 @@ export default function AuditLogsPage() {
         log.entityType?.toLowerCase().includes(q)
     );
   }, [logs, searchQuery]);
+
+  if (error?.response?.status === 403) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-4xl mx-auto my-12 p-8 text-center bg-slate-900 border border-amber-500/30 rounded-xl space-y-4">
+          <ShieldCheck className="w-12 h-12 text-amber-500 mx-auto" />
+          <h2 className="text-xl font-bold text-white">Access Restricted</h2>
+          <p className="text-slate-400">
+            You do not have administrative clearance to view System Audit Logs.
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (user && user.role !== UserRole.ADMIN) {
     return <Navigate to="/unauthorized" replace />;

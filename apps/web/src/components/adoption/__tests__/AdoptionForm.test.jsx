@@ -105,4 +105,45 @@ describe('AdoptionForm validation and conflict handling', () => {
       );
     });
   });
+
+  it('handles successful application submission and back button', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(adoptionService, 'submitApplication').mockResolvedValueOnce({ id: 'app-success-1' });
+
+    renderWithProviders(<AdoptionForm animal={mockAnimal} />);
+
+    // Step 1
+    await user.selectOptions(screen.getByLabelText(/Environment Type/i), 'apartment');
+    await user.click(screen.getByRole('button', { name: /next/i }));
+
+    // Back button
+    await screen.findByText(/Personal & Household/i);
+    await user.click(screen.getByRole('button', { name: /previous|back/i }));
+    expect(screen.getByText(/Living Situation/i)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /next/i }));
+
+    // Step 2
+    await user.clear(screen.getByLabelText(/Number of Family Members/i));
+    await user.type(screen.getByLabelText(/Number of Family Members/i), '2');
+    await user.type(screen.getByLabelText(/Work Schedule/i), 'Work from home');
+    await user.type(screen.getByLabelText(/Prior Pet Experience/i), 'Experienced owner');
+    await user.click(screen.getByRole('button', { name: /next/i }));
+
+    // Step 3
+    await screen.findByText(/Motivation/i);
+    await user.type(screen.getByLabelText(/Why do you want to adopt/i), 'Ready to give a great loving home forever.');
+    await user.click(screen.getByRole('button', { name: /next/i }));
+
+    // Step 4
+    await screen.findByText(/Review Application/i);
+    await user.click(screen.getByRole('button', { name: /submit application/i }));
+
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Application Submitted',
+        })
+      );
+    });
+  });
 });

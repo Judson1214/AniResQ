@@ -4,24 +4,32 @@ function cn(...inputs) {
   return twMerge(clsx(inputs));
 }
 function formatDate(date) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "";
   return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric"
-  }).format(new Date(date));
+  }).format(d);
 }
 function formatDateTime(date) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "";
   return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit"
-  }).format(new Date(date));
+  }).format(d);
 }
 function formatRelativeTime(date) {
-  const now = /* @__PURE__ */ new Date();
+  if (!date) return "";
+  const now = new Date();
   const then = new Date(date);
+  if (isNaN(then.getTime())) return "";
   const diffMs = now.getTime() - then.getTime();
   const diffMins = Math.floor(diffMs / 6e4);
   const diffHours = Math.floor(diffMs / 36e5);

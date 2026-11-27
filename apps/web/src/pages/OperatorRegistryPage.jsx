@@ -40,7 +40,7 @@ export default function OperatorRegistryPage() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 50;
 
-  const { data: rawUsers = [], isLoading, isFetching, refetch } = useQuery({
+  const { data: rawUsers = [], isLoading, isFetching, refetch, error } = useQuery({
     queryKey: ["operator-registry-users", selectedRole, onlyPending, searchQuery, page],
     queryFn: () => getUsers({
       role: selectedRole === "ALL" ? undefined : selectedRole,
@@ -123,6 +123,20 @@ export default function OperatorRegistryPage() {
 
     return { total, volunteers, shelters, vets, admins, pending };
   }, [users]);
+
+  if (error?.response?.status === 403) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-4xl mx-auto my-12 p-8 text-center bg-slate-900 border border-amber-500/30 rounded-xl space-y-4">
+          <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto" />
+          <h2 className="text-xl font-bold text-white">Access Restricted</h2>
+          <p className="text-slate-400">
+            You do not have administrative clearance to access the Operator Registry.
+          </p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const getRoleBadge = (role) => {
     switch (role) {

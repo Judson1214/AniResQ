@@ -91,21 +91,33 @@ describe('Auth workflows: Login, Register, Logout & Cache Clearing', () => {
   });
 
   it('clears auth store and query cache on logout and 401 response', async () => {
-    // Set initial authenticated state
+    // Set initial authenticated state and cache data
     useAuthStore.getState().setUser({
       uid: 'logged-in-user',
       email: 'logged@aniresq.org',
       role: 'CITIZEN',
     });
+    const { queryClient } = await import('@/lib/queryClient');
+    queryClient.setQueryData(['test-cache-key'], { cached: true });
 
     expect(useAuthStore.getState().isAuthenticated).toBe(true);
-    expect(useAuthStore.getState().user).not.toBeNull();
+    expect(queryClient.getQueryData(['test-cache-key'])).toBeDefined();
 
-    // Call clearAuth()
-    useAuthStore.getState().clearAuth();
+    const { supabase } = await import('@/config/supabase');
+    vi.spyOn(supabase.auth, 'signOut').mockResolvedValue({ error: null });
+
+    // Call signOutUser()
+    await authService.signOutUser();
 
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
     expect(useAuthStore.getState().user).toBeNull();
-    expect(useAuthStore.getState().sessionUser).toBeNull();
+    expect(queryClient.getQueryData(['test-cache-key'])).toBeUndefined();
+
+    useAuthStore.getState().setSessionUser({ uid: 'sess-1' });
+    expect(useAuthStore.getState().sessionUser).toEqual({ uid: 'sess-1' });
+    useAuthStore.getState().setLoading(false);
+    expect(useAuthStore.getState().isLoading).toBe(false);
+    useAuthStore.getState().logout();
+    expect(useAuthStore.getState().user).toBeNull();
   });
 });

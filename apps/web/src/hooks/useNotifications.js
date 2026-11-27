@@ -11,11 +11,12 @@ const useNotifications = () => {
     limit: 50
   };
 
-  const { data: notifications, isLoading } = useRealtimeCollection(
+  const { data: rawData, isLoading } = useRealtimeCollection(
     "/notifications",
     params,
     isAuthenticated && !!user?.uid
   );
+  const notifications = Array.isArray(rawData) ? rawData : (rawData?.items || []);
   const unreadCount = notifications.filter((n) => !n.isRead).length;
   const handleMarkAsRead = async (id) => {
     await markAsRead(id);

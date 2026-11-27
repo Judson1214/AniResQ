@@ -27,6 +27,19 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const status = error?.response?.status;
+    if (status === 429) {
+      const detail = error?.response?.data?.detail || "Too many requests. Please slow down and try again later.";
+      if (typeof window !== "undefined") {
+        import("@/components/ui/use-toast").then(({ toast }) => {
+          toast({
+            title: "Rate limit reached",
+            description: detail,
+            variant: "destructive"
+          });
+        }).catch(() => {});
+      }
+    }
+
     if (status === 401) {
       try {
         await supabase.auth.signOut();

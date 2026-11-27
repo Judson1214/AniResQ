@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { LostFoundCard } from '../LostFoundCard';
 import { renderWithProviders } from '@/test/utils';
 import { LostFoundStatus, LostFoundType } from '@aniresq/shared-types';
+import * as lostfoundService from '@/services/lostfound.service';
 
 vi.mock('@/hooks/useAuth', () => ({
   useAuth: vi.fn(),
@@ -70,5 +71,47 @@ describe('LostFoundCard anonymous redaction & contact display', () => {
     expect(phoneLink.getAttribute('href')).toBe('tel:+1-555-0199');
     expect(screen.getByText(/verified contact/i)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /sign in to view/i })).not.toBeInTheDocument();
+  });
+
+  it('allows owner to resolve post', () => {
+    useAuth.mockReturnValue({
+      user: { uid: 'reporter-123', role: 'CITIZEN' },
+      isAuthenticated: true,
+    });
+
+    const updateSpy = vi.spyOn(lostfoundService, 'updatePostStatus').mockResolvedValue({});
+    const onUpdate = vi.fn();
+    renderWithProviders(<LostFoundCard post={basePost} onUpdate={onUpdate} />);
+
+    const resolveBtn = screen.getByRole('button', { name: /Mark as Found/i });
+    fireEvent.click(resolveBtn);
+    expect(updateSpy).toHaveBeenCalledWith(basePost.id, LostFoundStatus.RESOLVED);
+  });
+
+  it('opens replies dialog and allows submitting a reply', async () => {
+    useAuth.mockReturnValue({
+      user: { uid: 'reporter-123', role: 'CITIZEN' },
+      isAuthenticated: true,
+    });
+    vi.spyOn(lostfoundService, 'getReplies').mockResolvedValue([
+      { id: 'rep-1', userName: 'Helper', text: 'Saw him near 5th ave', createdAt: new Date().toISOString() },
+    ]);
+    const addReplySpy = vi.spyOn(lostfoundService, 'addReply').mockResolvedValue({});
+
+    renderWithProviders(<LostFoundCard post={basePost} />);
+
+    const repliesBtn = screen.getByRole('button', { name: /Replies/i });
+    fireEvent.click(repliesBtn);
+
+    expect(await screen.findByText('Sightings & Replies')).toBeInTheDocument();
+    expect(await screen.findByText('Saw him near 5th ave')).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText(/I saw this animal at.../i);
+    fireEvent.change(input, { target: { value: 'Spotted at bakery' } });
+    fireEvent.keyDown(input, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(addReplySpy).toHaveBeenCalledWith(basePost.id, 'Spotted at bakery');
+    });
   });
 });
