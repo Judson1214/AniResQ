@@ -10,9 +10,9 @@ describe('Production Deployment Security Headers & CSP', () => {
     expect(fs.existsSync(vercelConfigPath)).toBe(true);
 
     const rawContent = fs.readFileSync(vercelConfigPath, 'utf-8');
-    // Strip comments starting with // on their own line without modifying URLs in strings
-    const cleanContent = rawContent.replace(/^\s*\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-    const config = JSON.parse(cleanContent);
+    // vercel.json must be 100% valid JSON without any // comment markers
+    expect(rawContent).not.toMatch(/^\s*\/\//m);
+    const config = JSON.parse(rawContent);
 
     expect(config.headers).toBeDefined();
     expect(config.headers.length).toBeGreaterThan(0);
