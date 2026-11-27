@@ -29,7 +29,10 @@ WITH expected_migrations(version, filename) AS (
     ('20261126060000', '20261126060000_create_system_settings.sql'),
     ('20261126070000', '20261126070000_add_user_is_disabled.sql'),
     ('20261126080000', '20261126080000_allow_reporter_set_null.sql'),
-    ('20261126090000', '20261126090000_harden_uploads_bucket_limits.sql')
+    ('20261126090000', '20261126090000_harden_uploads_bucket_limits.sql'),
+    ('20261127100000', '20261127100000_create_content_reports.sql'),
+    ('20261127110000', '20261127110000_add_user_terms_and_id_last4.sql'),
+    ('20261127120000', '20261127120000_index_users_is_disabled.sql')
 ),
 applied_migrations AS (
   SELECT version, name
@@ -114,7 +117,8 @@ WITH sensitive_tables AS (
     'lost_and_found', 
     'lost_and_found_replies', 
     'audit_logs', 
-    'system_settings'
+    'system_settings',
+    'content_reports'
   ]) AS table_name
 ),
 active_select_grants AS (

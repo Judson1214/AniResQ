@@ -65,7 +65,10 @@ SELECT COUNT(*) FROM (
       ('20261126060000', '20261126060000_create_system_settings.sql'),
       ('20261126070000', '20261126070000_add_user_is_disabled.sql'),
       ('20261126080000', '20261126080000_allow_reporter_set_null.sql'),
-      ('20261126090000', '20261126090000_harden_uploads_bucket_limits.sql')
+      ('20261126090000', '20261126090000_harden_uploads_bucket_limits.sql'),
+      ('20261127100000', '20261127100000_create_content_reports.sql'),
+      ('20261127110000', '20261127110000_add_user_terms_and_id_last4.sql'),
+      ('20261127120000', '20261127120000_index_users_is_disabled.sql')
   ),
   applied_migrations AS (
     SELECT version, name FROM supabase_migrations.schema_migrations
@@ -88,7 +91,7 @@ SELECT COUNT(*) FROM (
   -- Check 4
   SELECT 1 FROM information_schema.role_table_grants
   WHERE table_schema = 'public' AND grantee IN ('anon', 'authenticated')
-    AND privilege_type = 'SELECT' AND table_name IN ('lost_and_found', 'lost_and_found_replies', 'audit_logs', 'system_settings')
+    AND privilege_type = 'SELECT' AND table_name IN ('lost_and_found', 'lost_and_found_replies', 'audit_logs', 'system_settings', 'content_reports')
   UNION ALL
   -- Check 5
   SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace

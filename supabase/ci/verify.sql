@@ -644,4 +644,158 @@ BEGIN
   RAISE NOTICE 'PASS: user deletion cascades SET NULL to rescue reporter_id without triggering transfer block';
 END $$;
 
+-- 23. Verify content_reports has RLS enabled and anon/authenticated have no privileges
+DO $$
+DECLARE
+  v_rls BOOLEAN;
+  v_leaked_privileges TEXT;
+BEGIN
+  SELECT c.relrowsecurity INTO v_rls
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public' AND c.relname = 'content_reports';
+
+  IF NOT v_rls THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: content_reports does not have RLS enabled';
+  END IF;
+
+  SELECT string_agg(grantee || ':' || privilege_type, ', ') INTO v_leaked_privileges
+  FROM information_schema.role_table_grants
+  WHERE table_schema = 'public'
+    AND table_name = 'content_reports'
+    AND grantee IN ('anon', 'authenticated');
+
+  IF v_leaked_privileges IS NOT NULL THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: content_reports leaked privileges to: %', v_leaked_privileges;
+  END IF;
+
+  RAISE NOTICE 'PASS: content_reports has RLS enabled and zero privileges for anon/authenticated';
+END $$;
+
+-- 24. Verify unique partial index on content_reports blocks duplicate OPEN report and allows new one after DISMISSED
+DO $$
+DECLARE
+  v_rep_id UUID := '00000000-0000-0000-0000-111111111111';
+  v_target_id UUID := '00000000-0000-0000-0000-222222222222';
+  v_report_id UUID;
+  v_duplicate_blocked BOOLEAN := false;
+BEGIN
+  -- Seed test reporter user
+  INSERT INTO auth.users (id, email) VALUES (v_rep_id, 'reporter_test@aniresq.com') ON CONFLICT DO NOTHING;
+  INSERT INTO public.users (id, email, display_name, role)
+  VALUES (v_rep_id, 'reporter_test@aniresq.com', 'Test Reporter', 'CITIZEN')
+  ON CONFLICT (id) DO NOTHING;
+
+  -- First OPEN report
+  INSERT INTO public.content_reports (id, reporter_id, target_type, target_id, reason, details, status)
+  VALUES (gen_random_uuid(), v_rep_id, 'RESCUE', v_target_id, 'SPAM', 'First spam report', 'OPEN')
+  RETURNING id INTO v_report_id;
+
+  -- Attempt duplicate OPEN report on same target
+  BEGIN
+    INSERT INTO public.content_reports (id, reporter_id, target_type, target_id, reason, details, status)
+    VALUES (gen_random_uuid(), v_rep_id, 'RESCUE', v_target_id, 'ABUSE', 'Duplicate spam report', 'OPEN');
+  EXCEPTION
+    WHEN unique_violation THEN
+      v_duplicate_blocked := true;
+  END;
+
+  IF NOT v_duplicate_blocked THEN
+    RAISE EXCEPTION 'VIOLATION: Duplicate OPEN report was allowed for same reporter and target';
+  END IF;
+
+  -- Dismiss the first report
+  UPDATE public.content_reports SET status = 'DISMISSED', handled_at = now() WHERE id = v_report_id;
+
+  -- Now filing a new OPEN report on the same target must succeed
+  INSERT INTO public.content_reports (id, reporter_id, target_type, target_id, reason, details, status)
+  VALUES (gen_random_uuid(), v_rep_id, 'RESCUE', v_target_id, 'SPAM', 'Second report after dismissed', 'OPEN');
+
+  RAISE NOTICE 'PASS: content_reports partial unique index blocks duplicate OPEN report and permits new report after status is DISMISSED';
+END $$;
+
+-- 25. Verify id_card_last4 check constraint rejects 5 characters and accepts up to 4 alphanumeric
+DO $$
+DECLARE
+  v_u_id UUID := '00000000-0000-0000-0000-333333333333';
+  v_5char_blocked BOOLEAN := false;
+BEGIN
+  INSERT INTO auth.users (id, email) VALUES (v_u_id, 'idtest@aniresq.com') ON CONFLICT DO NOTHING;
+  INSERT INTO public.users (id, email, display_name, role, id_card_last4)
+  VALUES (v_u_id, 'idtest@aniresq.com', 'ID Test User', 'CITIZEN', '1234')
+  ON CONFLICT (id) DO UPDATE SET id_card_last4 = '1234';
+
+  BEGIN
+    UPDATE public.users SET id_card_last4 = '12345' WHERE id = v_u_id;
+  EXCEPTION
+    WHEN check_violation THEN
+      v_5char_blocked := true;
+  END;
+
+  IF NOT v_5char_blocked THEN
+    RAISE EXCEPTION 'VIOLATION: 5-character id_card_last4 was permitted';
+  END IF;
+
+  RAISE NOTICE 'PASS: users.id_card_last4 constraint strictly rejects 5+ characters';
+END $$;
+
+-- 26. Verify id_card_last4 backfill logic on a test row
+DO $$
+DECLARE
+  v_u_id UUID := '00000000-0000-0000-0000-444444444444';
+  v_last4 TEXT;
+BEGIN
+  INSERT INTO auth.users (id, email) VALUES (v_u_id, 'backfilltest@aniresq.com') ON CONFLICT DO NOTHING;
+  INSERT INTO public.users (id, email, display_name, role, id_card_number, id_card_last4)
+  VALUES (v_u_id, 'backfilltest@aniresq.com', 'Backfill Test User', 'CITIZEN', 'DL987654321', NULL)
+  ON CONFLICT (id) DO UPDATE SET id_card_number = 'DL987654321', id_card_last4 = NULL;
+
+  UPDATE public.users
+  SET id_card_last4 = RIGHT(id_card_number, 4)
+  WHERE id = v_u_id;
+
+  SELECT id_card_last4 INTO v_last4 FROM public.users WHERE id = v_u_id;
+
+  IF v_last4 != '4321' THEN
+    RAISE EXCEPTION 'VIOLATION: Expected backfilled id_card_last4 to be 4321, got %', v_last4;
+  END IF;
+
+  RAISE NOTICE 'PASS: id_card_last4 backfill correctly extracted last 4 characters';
+END $$;
+
+-- 27. Verify deleting a user sets content_reports.reporter_id to NULL instead of deleting the report
+DO $$
+DECLARE
+  v_u_id UUID := '00000000-0000-0000-0000-555555555555';
+  v_report_id UUID := gen_random_uuid();
+  v_rep_after UUID;
+  v_report_exists BOOLEAN;
+BEGIN
+  INSERT INTO auth.users (id, email) VALUES (v_u_id, 'report_del@aniresq.com') ON CONFLICT DO NOTHING;
+  INSERT INTO public.users (id, email, display_name, role)
+  VALUES (v_u_id, 'report_del@aniresq.com', 'Deletable Reporter', 'CITIZEN')
+  ON CONFLICT (id) DO NOTHING;
+
+  INSERT INTO public.content_reports (id, reporter_id, target_type, target_id, reason, details, status)
+  VALUES (v_report_id, v_u_id, 'USER', '00000000-0000-0000-0000-666666666666', 'ABUSE', 'Reporter deletion test', 'OPEN');
+
+  -- Delete the reporter user
+  DELETE FROM public.users WHERE id = v_u_id;
+
+  -- Confirm the report still exists and reporter_id is NULL
+  SELECT EXISTS(SELECT 1 FROM public.content_reports WHERE id = v_report_id), reporter_id
+  INTO v_report_exists, v_rep_after
+  FROM public.content_reports WHERE id = v_report_id;
+
+  IF NOT v_report_exists THEN
+    RAISE EXCEPTION 'VIOLATION: content_reports row was deleted when reporter user was deleted';
+  END IF;
+
+  IF v_rep_after IS NOT NULL THEN
+    RAISE EXCEPTION 'VIOLATION: content_reports.reporter_id was not set to NULL after user deletion';
+  END IF;
+
+  RAISE NOTICE 'PASS: user deletion sets content_reports.reporter_id to NULL and preserves report row';
+END $$;
+
 ROLLBACK;
