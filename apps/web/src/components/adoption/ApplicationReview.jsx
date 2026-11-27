@@ -27,12 +27,13 @@ const ApplicationReview = ({ application, onReview }) => {
       </div>
 
       <div className="space-y-2 pt-4 border-t">
-        <label className="text-sm font-medium">Screening Notes</label>
+        <label htmlFor="screening-notes-input" className="text-sm font-medium">Screening Notes</label>
         <Textarea
-    value={notes}
-    onChange={(e) => setNotes(e.target.value)}
-    placeholder="Add internal notes or feedback for the applicant..."
-  />
+          id="screening-notes-input"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="Add internal notes or feedback for the applicant..."
+        />
       </div>
 
       <div className="flex gap-4">

@@ -135,10 +135,11 @@ export const RescueVerificationModal = ({ isOpen, onClose, onConfirm, isSubmitti
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Care summary notes */}
           <div>
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+            <label htmlFor="resolution-care-notes" className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
               Resolution Notes / Care Actions <span className="text-rose-400">*</span>
             </label>
             <textarea
+              id="resolution-care-notes"
               rows={3}
               required
               value={notes}
@@ -150,9 +151,9 @@ export const RescueVerificationModal = ({ isOpen, onClose, onConfirm, isSubmitti
 
           {/* Verification Photo Upload */}
           <div>
-            <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
+            <span className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
               Verification Proof Photos (On-Scene / Rescued Animal)
-            </label>
+            </span>
             
             {/* File drop zone */}
             <div className="relative border-2 border-dashed border-slate-700 hover:border-emerald-500/60 rounded-2xl p-4 text-center cursor-pointer transition-colors bg-slate-800/40">

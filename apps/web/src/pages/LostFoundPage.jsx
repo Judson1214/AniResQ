@@ -4,7 +4,7 @@ import { getPosts } from "@/services/lostfound.service";
 import { MainLayout } from "@/components/layout/MainLayout";
 import { LostFoundCard } from "@/components/lostfound/LostFoundCard";
 import { LostFoundForm } from "@/components/lostfound/LostFoundForm";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { LostFoundType } from "@aniresq/shared-types";
@@ -15,6 +15,23 @@ function LostFoundPage() {
     queryKey: ["lostfound", activeTab],
     queryFn: () => getPosts({ type: activeTab !== "ALL" ? activeTab : void 0 })
   });
+
+  const renderContent = () => (
+    isLoading ? (
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {[1, 2, 3, 4].map((i) => <div key={i} className="h-80 bg-slate-900 border border-slate-800 animate-pulse rounded-2xl" />)}
+      </div>
+    ) : posts?.length === 0 ? (
+      <div className="text-center py-20 bg-slate-900/50 border border-slate-800 rounded-2xl">
+        <p className="text-slate-500">No reports found.</p>
+      </div>
+    ) : (
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        {posts?.map((post) => <LostFoundCard key={post.id} post={post} onUpdate={refetch} />)}
+      </div>
+    )
+  );
+
   return (
     <MainLayout>
       <div className="container mx-auto py-8 px-4">
@@ -43,26 +60,15 @@ function LostFoundPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)} className="mb-6">
-          <TabsList className="bg-slate-900 border border-slate-800 p-1">
+          <TabsList className="bg-slate-900 border border-slate-800 p-1 mb-6">
             <TabsTrigger value="ALL" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white text-slate-400">All Reports</TabsTrigger>
             <TabsTrigger value={LostFoundType.LOST} className="data-[state=active]:bg-rose-500/20 data-[state=active]:text-rose-400 text-slate-400">Lost Pets</TabsTrigger>
             <TabsTrigger value={LostFoundType.FOUND} className="data-[state=active]:bg-emerald-500/20 data-[state=active]:text-emerald-400 text-slate-400">Found Pets</TabsTrigger>
           </TabsList>
+          <TabsContent value="ALL">{renderContent()}</TabsContent>
+          <TabsContent value={LostFoundType.LOST}>{renderContent()}</TabsContent>
+          <TabsContent value={LostFoundType.FOUND}>{renderContent()}</TabsContent>
         </Tabs>
-
-        {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map((i) => <div key={i} className="h-80 bg-slate-900 border border-slate-800 animate-pulse rounded-2xl" />)}
-          </div>
-        ) : posts?.length === 0 ? (
-          <div className="text-center py-20 bg-slate-900/50 border border-slate-800 rounded-2xl">
-            <p className="text-slate-500">No reports found.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {posts?.map((post) => <LostFoundCard key={post.id} post={post} onUpdate={refetch} />)}
-          </div>
-        )}
       </div>
     </MainLayout>
   );

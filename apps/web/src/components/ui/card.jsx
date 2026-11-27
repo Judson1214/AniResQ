@@ -15,14 +15,14 @@ const CardHeader = React.forwardRef(({ className, ...props }, ref) => <div
   {...props}
 />);
 CardHeader.displayName = "CardHeader";
-const CardTitle = React.forwardRef(({ className, ...props }, ref) => <h3
+const CardTitle = React.forwardRef(({ className, children, ...props }, ref) => <h3
   ref={ref}
   className={cn(
     "text-2xl font-semibold leading-none tracking-tight",
     className
   )}
   {...props}
-/>);
+>{children}</h3>);
 CardTitle.displayName = "CardTitle";
 const CardDescription = React.forwardRef(({ className, ...props }, ref) => <p
   ref={ref}

@@ -12,33 +12,36 @@ const AnimalFilters = ({ filters, setFilters }) => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
         
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700">Search</label>
+          <label htmlFor="animal-filter-search" className="text-sm font-medium text-gray-700">Search</label>
           <Input
-    placeholder="Search by name..."
-    value={filters.search}
-    onChange={(e) => handleChange("search", e.target.value)}
-  />
+            id="animal-filter-search"
+            placeholder="Search by name..."
+            value={filters.search}
+            onChange={(e) => handleChange("search", e.target.value)}
+          />
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700">Species</label>
+          <label htmlFor="animal-filter-species" className="text-sm font-medium text-gray-700">Species</label>
           <select
-    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-    value={filters.species}
-    onChange={(e) => handleChange("species", e.target.value)}
-  >
+            id="animal-filter-species"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+            value={filters.species}
+            onChange={(e) => handleChange("species", e.target.value)}
+          >
             <option value="All">All Species</option>
             {Object.values(Species).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-sm font-medium text-gray-700">Status</label>
+          <label htmlFor="animal-filter-status" className="text-sm font-medium text-gray-700">Status</label>
           <select
-    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-    value={filters.status}
-    onChange={(e) => handleChange("status", e.target.value)}
-  >
+            id="animal-filter-status"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+            value={filters.status}
+            onChange={(e) => handleChange("status", e.target.value)}
+          >
             <option value="All">All Statuses</option>
             {Object.values(AdoptionStatus).map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
           </select>

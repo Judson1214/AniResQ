@@ -140,8 +140,8 @@ const LostFoundForm = ({ onSuccess }) => {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label>Species</Label>
-            <select {...register("species")} className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-white">
+            <Label htmlFor="lost-found-species">Species</Label>
+            <select id="lost-found-species" {...register("species")} aria-label="Species" className="flex h-10 w-full rounded-md border border-slate-700 bg-slate-900 px-3 text-white">
               {Object.values(Species).map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>

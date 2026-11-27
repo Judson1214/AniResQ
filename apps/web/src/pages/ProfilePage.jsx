@@ -397,6 +397,7 @@ const ProfilePage = () => {
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
+                  <span className="sr-only">Receive Emergency SOS Notifications</span>
                   <input
                     type="checkbox"
                     checked={alertsEnabled}
@@ -581,10 +582,11 @@ const ProfilePage = () => {
                   
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                      <label htmlFor="id-card-type-select" className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
                         Document Type
                       </label>
                       <select
+                        id="id-card-type-select"
                         value={idCardType}
                         onChange={(e) => setIdCardType(e.target.value)}
                         className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
@@ -597,10 +599,11 @@ const ProfilePage = () => {
                     </div>
 
                     <div>
-                      <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                      <label htmlFor="id-card-number-input" className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
                         ID / License / Reg Number *
                       </label>
                       <input
+                        id="id-card-number-input"
                         type="text"
                         value={idCardNumber}
                         onChange={(e) => setIdCardNumber(e.target.value)}
@@ -611,9 +614,9 @@ const ProfilePage = () => {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
+                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
                       ID Document / Certificate Proof
-                    </label>
+                    </span>
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <label className="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl px-3 py-2 text-xs font-medium inline-flex items-center gap-1.5 transition">

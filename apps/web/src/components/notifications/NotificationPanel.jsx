@@ -17,9 +17,10 @@ const NotificationPanel = () => {
             <Bell className="mx-auto h-8 w-8 text-gray-300 mb-2" />
             <p className="text-sm">No notifications</p>
           </div> : <div className="divide-y">
-            {notifications.map((notif) => <div
+            {notifications.map((notif) => <button
+    type="button"
     key={notif.id}
-    className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${notif.isRead ? "opacity-70" : "bg-blue-50/30"}`}
+    className={`w-full text-left p-4 hover:bg-gray-50 cursor-pointer transition-colors ${notif.isRead ? "opacity-70" : "bg-blue-50/30"}`}
     onClick={() => {
       if (!notif.isRead) markAsRead(notif.id);
     }}
@@ -36,7 +37,7 @@ const NotificationPanel = () => {
                     </p>
                   </div>
                 </div>
-              </div>)}
+              </button>)}
           </div>}
       </div>
     </div>;

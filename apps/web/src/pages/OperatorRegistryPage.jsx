@@ -572,9 +572,9 @@ export default function OperatorRegistryPage() {
                 )}
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
                     Current Clearance
-                  </label>
+                  </span>
                   <span
                     className={`inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg border ${getRoleBadge(
                       editingUser.role
@@ -585,10 +585,11 @@ export default function OperatorRegistryPage() {
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
+                  <label htmlFor="target-user-role-select" className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
                     Select New Role
                   </label>
                   <select
+                    id="target-user-role-select"
                     value={targetRole}
                     onChange={(e) => setTargetRole(e.target.value)}
                     className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-purple-500"
@@ -612,10 +613,11 @@ export default function OperatorRegistryPage() {
                     </div>
 
                     <div className="space-y-1.5 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
-                      <label className="block text-xs font-bold text-rose-300 uppercase tracking-wider">
+                      <label htmlFor="admin-clearance-confirm-text" className="block text-xs font-bold text-rose-300 uppercase tracking-wider">
                         Type &quot;GRANT ADMIN&quot; to authorize full clearance:
                       </label>
                       <input
+                        id="admin-clearance-confirm-text"
                         type="text"
                         value={adminConfirmText}
                         onChange={(e) => setAdminConfirmText(e.target.value)}

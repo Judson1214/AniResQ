@@ -220,13 +220,13 @@ const RescueReportForm = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label className="text-slate-300">Species</Label>
-                    <select {...register("species")} className="w-full h-10 rounded-md border border-slate-700 bg-slate-900 text-white px-3 text-sm">
+                    <select {...register("species")} aria-label="Species" className="w-full h-10 rounded-md border border-slate-700 bg-slate-900 text-white px-3 text-sm">
                       {Object.values(Species).map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div className="space-y-2">
                     <Label className="text-slate-300 text-rose-400 font-bold">Severity Level</Label>
-                    <select {...register("severity")} className="w-full h-10 rounded-md border border-slate-700 bg-slate-900 text-rose-400 font-bold px-3 text-sm">
+                    <select {...register("severity")} aria-label="Severity Level" className="w-full h-10 rounded-md border border-slate-700 bg-slate-900 text-rose-400 font-bold px-3 text-sm">
                       {Object.values(RescueSeverity).map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
@@ -247,7 +247,7 @@ const RescueReportForm = () => {
                   <h2 className="text-xl font-bold text-white">Attach Photos (Crucial)</h2>
                 </div>
                 <div className="border-2 border-dashed border-slate-700 rounded-xl p-6 text-center hover:bg-slate-800 transition-colors cursor-pointer relative">
-                  <Input type="file" accept="image/*" multiple onChange={handlePhotoChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  <Input type="file" accept="image/*" multiple onChange={handlePhotoChange} aria-label="Attach emergency photos" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                   <p className="text-blue-400 font-medium">Tap to take a photo or select from gallery</p>
                   <p className="text-xs text-slate-500 mt-1">Photos help our dispatchers identify the animal instantly.</p>
                 </div>

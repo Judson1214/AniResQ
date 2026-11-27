@@ -15,9 +15,9 @@ const Footer = () => {
               A community-driven platform dedicated to animal rescue, fostering, and adoption. Every life matters.
             </p>
             <div className="flex gap-4 text-gray-400">
-              <a href="#" className="hover:text-emerald-600 transition-colors"><Twitter className="w-5 h-5" /></a>
-              <a href="#" className="hover:text-emerald-600 transition-colors"><Instagram className="w-5 h-5" /></a>
-              <a href="#" className="hover:text-emerald-600 transition-colors"><Github className="w-5 h-5" /></a>
+              <a href="https://twitter.com" target="_blank" rel="noreferrer" aria-label="Twitter" className="hover:text-emerald-600 transition-colors"><Twitter className="w-5 h-5" /></a>
+              <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram" className="hover:text-emerald-600 transition-colors"><Instagram className="w-5 h-5" /></a>
+              <a href="https://github.com" target="_blank" rel="noreferrer" aria-label="GitHub" className="hover:text-emerald-600 transition-colors"><Github className="w-5 h-5" /></a>
             </div>
           </div>
           
@@ -37,17 +37,17 @@ const Footer = () => {
               <li><Link to="/register" className="hover:text-emerald-600">Join as Volunteer</Link></li>
               <li><Link to="/register" className="hover:text-emerald-600">Register Shelter</Link></li>
               <li><Link to="/register" className="hover:text-emerald-600">Veterinarian Access</Link></li>
-              <li><a href="#" className="hover:text-emerald-600">Success Stories</a></li>
+              <li><Link to="/animals" className="hover:text-emerald-600">Success Stories</Link></li>
             </ul>
           </div>
           
           <div>
             <h3 className="font-semibold text-gray-900 mb-4">Support</h3>
             <ul className="space-y-2 text-sm text-gray-500">
-              <li><a href="#" className="hover:text-emerald-600">Help Center</a></li>
-              <li><a href="#" className="hover:text-emerald-600">Contact Us</a></li>
-              <li><a href="#" className="hover:text-emerald-600">Privacy Policy</a></li>
-              <li><a href="#" className="hover:text-emerald-600">Terms of Service</a></li>
+              <li><Link to="/report-rescue" className="hover:text-emerald-600">Help Center</Link></li>
+              <li><Link to="/report-rescue" className="hover:text-emerald-600">Contact Us</Link></li>
+              <li><span className="cursor-default">Privacy Policy</span></li>
+              <li><span className="cursor-default">Terms of Service</span></li>
             </ul>
           </div>
         </div>

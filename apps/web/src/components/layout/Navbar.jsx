@@ -90,7 +90,7 @@ const Navbar = () => {
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild className="hidden md:flex">
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                  <Button variant="ghost" className="relative h-8 w-8 rounded-full" aria-label="User account menu">
                     <Avatar className="h-8 w-8">
                       <AvatarImage src={user?.avatarUrl} alt={user?.displayName} />
                       <AvatarFallback className="bg-emerald-100 text-emerald-700">
@@ -134,7 +134,7 @@ const Navbar = () => {
 
           <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetTrigger asChild className="md:hidden">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label="Open mobile menu">
                 <Menu className="w-6 h-6 text-gray-600" />
               </Button>
             </SheetTrigger>

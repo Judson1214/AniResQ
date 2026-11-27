@@ -36,10 +36,14 @@ describe('Source & Build Output Credential Scrubbing', () => {
     expect(leakedAdminFiles).toEqual([]);
   });
 
-  it('ensures production dist bundle (if built) contains no hardcoded credentials', () => {
+  it('ensures production dist bundle (if built) contains no sensitive strings or credentials', () => {
     if (fs.existsSync(distDir)) {
-      const leakedInDist = scanDirForPattern(distDir, /Password123!/);
-      expect(leakedInDist).toEqual([]);
+      const forbiddenStrings = ['Password123', 'admin@aniresq.com', 'service_role', 'eyJhbGciOi'];
+      for (const str of forbiddenStrings) {
+        const pattern = new RegExp(str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const matches = scanDirForPattern(distDir, pattern);
+        expect(matches, `Expected no occurrences of forbidden string "${str}" in dist bundle, found in: ${matches.join(', ')}`).toEqual([]);
+      }
     }
   });
 });
