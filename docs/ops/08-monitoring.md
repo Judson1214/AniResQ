@@ -34,11 +34,19 @@ AniResQ provides an internal metrics endpoint exposing Prometheus format and str
 
 - **Path**: `GET /metrics`
 - **Authentication**: Protected by a secret token (`METRICS_TOKEN`).
+- **Security & Timing Protection**: Compared in constant time using `hmac.compare_digest` over fixed-length SHA-256 hashes to eliminate timing and string-length side-channels.
 - **Access**:
   ```bash
   curl -H "Authorization: Bearer <YOUR-METRICS-TOKEN>" https://api.aniresq.com/metrics
   ```
   *(Or with header `X-Metrics-Token: <YOUR-METRICS-TOKEN>`)*
+
+### Metrics Cardinality & Route Template Policy
+
+To prevent denial-of-service memory exhaustion via unbounded label cardinality from random or parameterized URLs:
+1. **Route Templates**: Endpoints record the parameterized route template (e.g. `/api/animals/{id}`) extracted from `request.scope.get("route").path` after request execution, rather than raw paths or query strings.
+2. **Unmatched Paths**: Requests that do not match any defined application route are categorized under the static label `__unmatched__`.
+3. **Strict Cardinality Cap**: Distinct metric keys are strictly capped at **1,000**. When the cap is reached, any additional keys are aggregated into the `__overflow__` label without unbounded memory growth.
 
 ### Sample Prometheus Output:
 ```text
@@ -46,6 +54,8 @@ AniResQ provides an internal metrics endpoint exposing Prometheus format and str
 # TYPE aniresq_http_requests_total counter
 aniresq_http_requests_total{method="GET",route="/health",status="200"} 1240
 aniresq_http_requests_total{method="GET",route="/api/lostfound",status="200"} 850
+aniresq_http_requests_total{method="GET",route="/api/animals/{id}",status="200"} 110
+aniresq_http_requests_total{method="GET",route="__unmatched__",status="404"} 15
 aniresq_http_requests_total{method="POST",route="/api/rescues/",status="201"} 32
 
 # HELP aniresq_http_request_duration_seconds_avg Average request duration in seconds.

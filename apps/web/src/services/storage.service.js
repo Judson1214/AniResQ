@@ -30,9 +30,12 @@ export const validateFile = async (file, options = {}) => {
     throw new Error(`File name "${file.name}" exceeds maximum allowed length of 120 characters`);
   }
 
-  // Reject names with path separators, null bytes, or control characters
-  if (/[/\\\x00-\x1F\x7F]/.test(file.name)) {
-    throw new Error(`File name "${file.name}" contains invalid characters (path separators, null bytes, or control characters)`);
+  // Reject names with path separators ('/', '\'), null bytes, or control characters (0-31, 127)
+  for (let i = 0; i < file.name.length; i++) {
+    const code = file.name.charCodeAt(i);
+    if (code === 47 || code === 92 || code <= 31 || code === 127) {
+      throw new Error(`File name "${file.name}" contains invalid characters (path separators, null bytes, or control characters)`);
+    }
   }
 
   // Reject zero-byte files

@@ -82,6 +82,7 @@ Navigate to **Settings** > **Secrets and variables** > **Actions**:
 | `SUPABASE_ACCESS_TOKEN` | Supabase CLI personal access token. Generate at `https://supabase.com/dashboard/account/tokens`. |
 | `SUPABASE_DB_PASSWORD` | Production database superuser password. |
 | `SUPABASE_ANON_KEY` | Public client anon key. Copy from **Project Settings** > **API**. |
+| `TEST_USER_TOKEN` | (Optional) Valid user JWT for post-deploy verification (`scripts/verify_live.sh`) to test HTTP 422 schema sanitization without leaking `input` or `ctx` fields. |
 | `API_DEPLOY_WEBHOOK_URL` | (Optional) Hosting webhook to trigger API container redeployment after GHCR image push. |
 | `WEB_DEPLOY_WEBHOOK_URL` | (Optional) Hosting webhook to trigger static frontend deploy (e.g., Vercel / Netlify / Cloudflare Pages). |
 

@@ -11,7 +11,7 @@ export function initFrontendSentry() {
 
   try {
     // Dynamic import to prevent bundler errors when @sentry/react is not installed
-    import('@sentry/react')
+    import(/* @vite-ignore */ '@sentry/react')
       .then((Sentry) => {
         Sentry.init({
           dsn,
@@ -26,7 +26,6 @@ export function initFrontendSentry() {
             return event;
           },
         });
-        console.info('Frontend Sentry monitoring initialized.');
       })
       .catch(() => {
         // Optional dependency not installed; silently ignore
