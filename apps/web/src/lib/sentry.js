@@ -10,8 +10,9 @@ export function initFrontendSentry() {
   }
 
   try {
-    // Dynamic import to prevent bundler errors when @sentry/react is not installed
-    import(/* @vite-ignore */ '@sentry/react')
+    // Dynamic import with variable to prevent Vite import-analysis errors when @sentry/react is not installed
+    const sentryPkg = '@sentry/react';
+    import(/* @vite-ignore */ sentryPkg)
       .then((Sentry) => {
         Sentry.init({
           dsn,
