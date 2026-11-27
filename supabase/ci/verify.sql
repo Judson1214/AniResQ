@@ -401,14 +401,14 @@ BEGIN
   RETURNING id INTO v_animal_id;
 
   -- 1st open application succeeds
-  INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, prior_pet_experience, work_schedule, why_adopt, status)
-  VALUES (v_animal_id, v_user_id, 'HOUSE'::public.living_environment, 'None', 'Remote', 'Love pets', 'SUBMITTED'::public.application_status)
+  INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, family_members, prior_pet_experience, work_schedule, why_adopt, status)
+  VALUES (v_animal_id, v_user_id, 'HOUSE'::public.living_environment, 1, 'None', 'Remote', 'Love pets', 'SUBMITTED'::public.application_status)
   RETURNING id INTO v_app1_id;
 
   -- 2nd open application for same animal and applicant must fail with unique_violation (23505)
   BEGIN
-    INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, prior_pet_experience, work_schedule, why_adopt, status)
-    VALUES (v_animal_id, v_user_id, 'HOUSE'::public.living_environment, 'None', 'Remote', 'Love pets', 'UNDER_REVIEW'::public.application_status)
+    INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, family_members, prior_pet_experience, work_schedule, why_adopt, status)
+    VALUES (v_animal_id, v_user_id, 'HOUSE'::public.living_environment, 1, 'None', 'Remote', 'Love pets', 'UNDER_REVIEW'::public.application_status)
     RETURNING id INTO v_app2_id;
     RAISE EXCEPTION 'SECURITY/DATA VIOLATION: Duplicate open adoption application was allowed';
   EXCEPTION
@@ -420,8 +420,8 @@ BEGIN
   UPDATE public.adoption_applications SET status = 'REJECTED' WHERE id = v_app1_id;
 
   -- Now submitting a new open application should succeed
-  INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, prior_pet_experience, work_schedule, why_adopt, status)
-  VALUES (v_animal_id, v_user_id, 'HOUSE'::public.living_environment, 'None', 'Remote', 'Love pets', 'SUBMITTED'::public.application_status);
+  INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, family_members, prior_pet_experience, work_schedule, why_adopt, status)
+  VALUES (v_animal_id, v_user_id, 'HOUSE'::public.living_environment, 1, 'None', 'Remote', 'Love pets', 'SUBMITTED'::public.application_status);
 
   RAISE NOTICE 'PASS: partial unique index permits re-application once prior application is closed';
 END $$;
@@ -467,8 +467,8 @@ BEGIN
   VALUES ('Cascade Animal', 'DOG'::public.species, '1 yr', 'FEMALE'::public.gender, 'HEALTHY'::public.health_status, 'AVAILABLE'::public.adoption_status, 'Test animal')
   RETURNING id INTO v_animal_id;
 
-  INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, prior_pet_experience, work_schedule, why_adopt, status)
-  VALUES (v_animal_id, v_del_user_id, 'APARTMENT'::public.living_environment, 'Yes', 'WFH', 'Adopt', 'SUBMITTED'::public.application_status)
+  INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, family_members, prior_pet_experience, work_schedule, why_adopt, status)
+  VALUES (v_animal_id, v_del_user_id, 'APARTMENT'::public.living_environment, 1, 'Yes', 'WFH', 'Adopt', 'SUBMITTED'::public.application_status)
   RETURNING id INTO v_app_id;
 
   -- Delete the user
@@ -600,6 +600,48 @@ BEGIN
   END IF;
 
   RAISE NOTICE 'PASS: All mutation privileges are strictly revoked from anon and authenticated on public tables';
+END $$;
+
+-- 22. Verify direct update of rescues.reporter_id by non-service_role is blocked, while deleting reporter succeeds
+DO $$
+DECLARE
+  v_u1 UUID := '00000000-0000-0000-0000-aaaaaaaaaaaa';
+  v_u2 UUID := '00000000-0000-0000-0000-bbbbbbbbbbbb';
+  v_check_rep UUID;
+BEGIN
+  -- Seed test users
+  INSERT INTO auth.users (id, email) VALUES (v_u1, 'rep1@test.com'), (v_u2, 'rep2@test.com') ON CONFLICT DO NOTHING;
+  INSERT INTO public.users (id, email, display_name, role)
+  VALUES (v_u1, 'rep1@test.com', 'Reporter 1', 'CITIZEN'),
+         (v_u2, 'rep2@test.com', 'Reporter 2', 'CITIZEN')
+  ON CONFLICT (id) DO NOTHING;
+
+  -- Create rescue
+  INSERT INTO public.rescues (id, reporter_id, title, description, severity, species, latitude, longitude, address)
+  VALUES ('00000000-0000-0000-0000-cccccccccccc', v_u1, 'Ownership Rescue', 'Ownership description', 'LOW'::public.rescue_severity, 'DOG', 12.9, 77.6, 'Addr')
+  ON CONFLICT (id) DO UPDATE SET reporter_id = v_u1;
+
+  -- Direct update as authenticated user must fail
+  PERFORM set_config('request.jwt.claims', format('{"sub":"%s","role":"authenticated"}', v_u1), true);
+  BEGIN
+    UPDATE public.rescues SET reporter_id = v_u2 WHERE id = '00000000-0000-0000-0000-cccccccccccc';
+    RAISE EXCEPTION 'SECURITY VIOLATION: Direct transfer of rescue reporter_id was permitted';
+  EXCEPTION
+    WHEN OTHERS THEN
+      IF SQLERRM LIKE '%Cannot transfer rescue reporter ownership%' THEN
+        RAISE NOTICE 'PASS: direct update of rescues.reporter_id blocked by protect_rescue_update';
+      ELSE
+        RAISE EXCEPTION 'Unexpected error on direct reporter update: %', SQLERRM;
+      END IF;
+  END;
+
+  -- Deleting the user who has a rescue succeeds and leaves rescue with reporter_id NULL (via trigger depth > 1)
+  DELETE FROM public.users WHERE id = v_u1;
+  SELECT reporter_id INTO v_check_rep FROM public.rescues WHERE id = '00000000-0000-0000-0000-cccccccccccc';
+  IF v_check_rep IS NOT NULL THEN
+    RAISE EXCEPTION 'VIOLATION: rescue reporter_id was not set to NULL after user deletion';
+  END IF;
+  RAISE NOTICE 'PASS: user deletion cascades SET NULL to rescue reporter_id without triggering transfer block';
 END $$;
 
 ROLLBACK;
