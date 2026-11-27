@@ -1,5 +1,6 @@
 import logging
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -28,18 +29,41 @@ class SystemSettingsUpdate(BaseModel):
     autoAlertHighSeverity: Optional[bool] = None
     autoDispatchEnabled: Optional[bool] = None
 
-# Active system runtime settings state
-_RUNTIME_SETTINGS = {
+DEFAULT_SETTINGS = {
     "defaultDispatchRadiusKm": 15,
     "maxBroadcastCeilingKm": 100,
     "autoAlertHighSeverity": True,
     "autoDispatchEnabled": True,
 }
 
+_RUNTIME_SETTINGS = dict(DEFAULT_SETTINGS)
+
+def get_system_setting(key: str, default: Any = None) -> Any:
+    """Read active runtime system setting with fallback."""
+    val = _RUNTIME_SETTINGS.get(key)
+    if val is not None:
+        return val
+    return default
+
+def sync_settings_from_db():
+    """Sync runtime settings cache from public.system_settings."""
+    try:
+        res = supabase.table("system_settings").select("key, value").execute()
+        if res.data:
+            for row in res.data:
+                k = row.get("key")
+                v = row.get("value")
+                if k in _RUNTIME_SETTINGS and v is not None:
+                    _RUNTIME_SETTINGS[k] = v
+    except Exception as e:
+        logger.warning(f"Failed to sync system_settings from db: {e}")
+
 @router.get("", response_model=SystemSettings)
 def get_system_settings(admin_user: dict = Depends(require_roles(["ADMIN"]))):
-    """Admin-only endpoint to retrieve global system configuration and telemetry."""
+    """Admin-only endpoint to retrieve global system configuration and telemetry from database."""
     try:
+        sync_settings_from_db()
+
         users_res = supabase.table("users").select("id, role").execute()
         user_rows = users_res.data or []
         
@@ -47,10 +71,10 @@ def get_system_settings(admin_user: dict = Depends(require_roles(["ADMIN"]))):
         operators_count = sum(1 for u in user_rows if u.get("role") in ["VOLUNTEER", "NGO", "SHELTER", "VET"])
 
         return SystemSettings(
-            defaultDispatchRadiusKm=_RUNTIME_SETTINGS["defaultDispatchRadiusKm"],
-            maxBroadcastCeilingKm=_RUNTIME_SETTINGS["maxBroadcastCeilingKm"],
-            autoAlertHighSeverity=_RUNTIME_SETTINGS["autoAlertHighSeverity"],
-            autoDispatchEnabled=_RUNTIME_SETTINGS["autoDispatchEnabled"],
+            defaultDispatchRadiusKm=int(_RUNTIME_SETTINGS.get("defaultDispatchRadiusKm", 15)),
+            maxBroadcastCeilingKm=int(_RUNTIME_SETTINGS.get("maxBroadcastCeilingKm", 100)),
+            autoAlertHighSeverity=bool(_RUNTIME_SETTINGS.get("autoAlertHighSeverity", True)),
+            autoDispatchEnabled=bool(_RUNTIME_SETTINGS.get("autoDispatchEnabled", True)),
             appendOnlyAuditEnforced=True,
             directMutationProtection=True,
             platformVersion="1.0.0",
@@ -66,16 +90,37 @@ def get_system_settings(admin_user: dict = Depends(require_roles(["ADMIN"]))):
 def update_system_settings(payload: SystemSettingsUpdate, admin_user: dict = Depends(require_roles(["ADMIN"]))):
     """Admin-only endpoint to update global dispatch, broadcast, and routing configurations."""
     try:
+        sync_settings_from_db()
         old_state = dict(_RUNTIME_SETTINGS)
-        
+        updates = {}
+
         if payload.defaultDispatchRadiusKm is not None:
+            updates["defaultDispatchRadiusKm"] = payload.defaultDispatchRadiusKm
             _RUNTIME_SETTINGS["defaultDispatchRadiusKm"] = payload.defaultDispatchRadiusKm
         if payload.maxBroadcastCeilingKm is not None:
+            updates["maxBroadcastCeilingKm"] = payload.maxBroadcastCeilingKm
             _RUNTIME_SETTINGS["maxBroadcastCeilingKm"] = payload.maxBroadcastCeilingKm
         if payload.autoAlertHighSeverity is not None:
+            updates["autoAlertHighSeverity"] = payload.autoAlertHighSeverity
             _RUNTIME_SETTINGS["autoAlertHighSeverity"] = payload.autoAlertHighSeverity
         if payload.autoDispatchEnabled is not None:
+            updates["autoDispatchEnabled"] = payload.autoDispatchEnabled
             _RUNTIME_SETTINGS["autoDispatchEnabled"] = payload.autoDispatchEnabled
+
+        if updates:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for key, val in updates.items():
+                try:
+                    supabase.table("system_settings").upsert({
+                        "key": key,
+                        "value": val,
+                        "updated_by": admin_user["uid"],
+                        "updated_at": now_iso,
+                    }).execute()
+                except Exception as db_err:
+                    logger.warning(f"Failed to persist setting '{key}' to database: {db_err}")
+
+        new_state = dict(_RUNTIME_SETTINGS)
 
         log_audit_event(
             action="SYSTEM_SETTINGS_UPDATE",
@@ -83,7 +128,7 @@ def update_system_settings(payload: SystemSettingsUpdate, admin_user: dict = Dep
             entity_id="global_settings",
             performed_by=admin_user["uid"],
             old_value=old_state,
-            new_value=_RUNTIME_SETTINGS,
+            new_value=new_state,
         )
 
         users_res = supabase.table("users").select("id, role").execute()
@@ -92,10 +137,10 @@ def update_system_settings(payload: SystemSettingsUpdate, admin_user: dict = Dep
         operators_count = sum(1 for u in user_rows if u.get("role") in ["VOLUNTEER", "NGO", "SHELTER", "VET"])
 
         return SystemSettings(
-            defaultDispatchRadiusKm=_RUNTIME_SETTINGS["defaultDispatchRadiusKm"],
-            maxBroadcastCeilingKm=_RUNTIME_SETTINGS["maxBroadcastCeilingKm"],
-            autoAlertHighSeverity=_RUNTIME_SETTINGS["autoAlertHighSeverity"],
-            autoDispatchEnabled=_RUNTIME_SETTINGS["autoDispatchEnabled"],
+            defaultDispatchRadiusKm=int(_RUNTIME_SETTINGS.get("defaultDispatchRadiusKm", 15)),
+            maxBroadcastCeilingKm=int(_RUNTIME_SETTINGS.get("maxBroadcastCeilingKm", 100)),
+            autoAlertHighSeverity=bool(_RUNTIME_SETTINGS.get("autoAlertHighSeverity", True)),
+            autoDispatchEnabled=bool(_RUNTIME_SETTINGS.get("autoDispatchEnabled", True)),
             appendOnlyAuditEnforced=True,
             directMutationProtection=True,
             platformVersion="1.0.0",

@@ -66,7 +66,11 @@ const AdoptionForm = ({ animal }) => {
       navigate("/my-applications");
     } catch (error) {
       console.error(error);
-      toast({ title: "Error", description: "Failed to submit application.", variant: "destructive" });
+      toast({ 
+        title: "Application Failed", 
+        description: error?.response?.data?.detail || "Failed to submit application.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -87,8 +91,8 @@ const AdoptionForm = ({ animal }) => {
               <h2 className="text-xl font-semibold mb-4">Living Situation</h2>
               
               <div className="space-y-2">
-                <Label>Environment Type</Label>
-                <select {...register("environmentType")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <Label htmlFor="environmentType">Environment Type</Label>
+                <select id="environmentType" {...register("environmentType")} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                   <option value="">Select type...</option>
                   <option value="apartment">Apartment</option>
                   <option value="house">House</option>
@@ -103,8 +107,8 @@ const AdoptionForm = ({ animal }) => {
               </div>
 
               <div className="space-y-2">
-                <Label>Other Pets in Household (Specify types, ages or 'None')</Label>
-                <Input {...register("otherPets")} placeholder="E.g., 1 cat (3 years old)" />
+                <Label htmlFor="otherPets">Other Pets in Household (Specify types, ages or 'None')</Label>
+                <Input id="otherPets" {...register("otherPets")} placeholder="E.g., 1 cat (3 years old)" />
                 {errors.otherPets && <p className="text-red-500 text-sm">{errors.otherPets.message}</p>}
               </div>
             </div>}
@@ -114,8 +118,8 @@ const AdoptionForm = ({ animal }) => {
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Number of Family Members</Label>
-                  <Input type="number" {...register("familyMembers", { valueAsNumber: true })} />
+                  <Label htmlFor="familyMembers">Number of Family Members</Label>
+                  <Input id="familyMembers" type="number" {...register("familyMembers", { valueAsNumber: true })} />
                   {errors.familyMembers && <p className="text-red-500 text-sm">{errors.familyMembers.message}</p>}
                 </div>
                 
@@ -126,14 +130,14 @@ const AdoptionForm = ({ animal }) => {
               </div>
 
               <div className="space-y-2">
-                <Label>Work Schedule (Who will be home with the pet?)</Label>
-                <Input {...register("workSchedule")} placeholder="E.g., Work from home, Away 9-5" />
+                <Label htmlFor="workSchedule">Work Schedule (Who will be home with the pet?)</Label>
+                <Input id="workSchedule" {...register("workSchedule")} placeholder="E.g., Work from home, Away 9-5" />
                 {errors.workSchedule && <p className="text-red-500 text-sm">{errors.workSchedule.message}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label>Prior Pet Experience</Label>
-                <Textarea {...register("priorExperience")} placeholder="Describe your experience with pets..." />
+                <Label htmlFor="priorExperience">Prior Pet Experience</Label>
+                <Textarea id="priorExperience" {...register("priorExperience")} placeholder="Describe your experience with pets..." />
                 {errors.priorExperience && <p className="text-red-500 text-sm">{errors.priorExperience.message}</p>}
               </div>
             </div>}
@@ -142,12 +146,13 @@ const AdoptionForm = ({ animal }) => {
               <h2 className="text-xl font-semibold mb-4">Motivation</h2>
               
               <div className="space-y-2">
-                <Label>Why do you want to adopt {animal.name}?</Label>
+                <Label htmlFor="motivation">Why do you want to adopt {animal.name}?</Label>
                 <Textarea
-    {...register("motivation")}
-    placeholder="Share why you think this animal is a good fit for you..."
-    rows={6}
-  />
+                  id="motivation"
+                  {...register("motivation")}
+                  placeholder="Share why you think this animal is a good fit for you..."
+                  rows={6}
+                />
                 {errors.motivation && <p className="text-red-500 text-sm">{errors.motivation.message}</p>}
               </div>
             </div>}

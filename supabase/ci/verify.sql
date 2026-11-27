@@ -387,4 +387,219 @@ EXCEPTION
 END $$;
 RESET ROLE;
 
+-- 16. Verify partial unique index prevents duplicate open adoption applications
+DO $$
+DECLARE
+  v_animal_id UUID;
+  v_user_id UUID := '00000000-0000-0000-0000-111111111111';
+  v_app1_id UUID;
+  v_app2_id UUID;
+BEGIN
+  -- Insert a test animal
+  INSERT INTO public.animals (name, species, age_estimate, gender, health_status, adoption_status, description)
+  VALUES ('Test Tiger', 'CAT'::public.species, '2 yrs', 'MALE'::public.gender, 'HEALTHY'::public.health_status, 'AVAILABLE'::public.adoption_status, 'Test animal')
+  RETURNING id INTO v_animal_id;
+
+  -- 1st open application succeeds
+  INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, prior_pet_experience, work_schedule, why_adopt, status)
+  VALUES (v_animal_id, v_user_id, 'HOUSE'::public.living_environment, 'None', 'Remote', 'Love pets', 'SUBMITTED'::public.application_status)
+  RETURNING id INTO v_app1_id;
+
+  -- 2nd open application for same animal and applicant must fail with unique_violation (23505)
+  BEGIN
+    INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, prior_pet_experience, work_schedule, why_adopt, status)
+    VALUES (v_animal_id, v_user_id, 'HOUSE'::public.living_environment, 'None', 'Remote', 'Love pets', 'UNDER_REVIEW'::public.application_status)
+    RETURNING id INTO v_app2_id;
+    RAISE EXCEPTION 'SECURITY/DATA VIOLATION: Duplicate open adoption application was allowed';
+  EXCEPTION
+    WHEN unique_violation THEN
+      RAISE NOTICE 'PASS: partial unique index blocks duplicate open adoption application (23505)';
+  END;
+
+  -- Update 1st application to REJECTED (closed)
+  UPDATE public.adoption_applications SET status = 'REJECTED' WHERE id = v_app1_id;
+
+  -- Now submitting a new open application should succeed
+  INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, prior_pet_experience, work_schedule, why_adopt, status)
+  VALUES (v_animal_id, v_user_id, 'HOUSE'::public.living_environment, 'None', 'Remote', 'Love pets', 'SUBMITTED'::public.application_status);
+
+  RAISE NOTICE 'PASS: partial unique index permits re-application once prior application is closed';
+END $$;
+
+-- 17. Verify user deletion triggers ON DELETE SET NULL and sanitizes PII
+DO $$
+DECLARE
+  v_del_user_id UUID := '00000000-0000-0000-0000-999999999999';
+  v_rescue_id UUID;
+  v_lf_id UUID;
+  v_reply_id UUID;
+  v_app_id UUID;
+  v_animal_id UUID;
+  v_check_reporter UUID;
+  v_check_phone TEXT;
+  v_check_email TEXT;
+  v_check_user_name TEXT;
+  v_check_applicant UUID;
+BEGIN
+  -- Create ephemeral user in auth.users & public.users
+  INSERT INTO auth.users (id, email) VALUES (v_del_user_id, 'delete_me@example.com') ON CONFLICT DO NOTHING;
+  INSERT INTO public.users (id, email, display_name, role)
+  VALUES (v_del_user_id, 'delete_me@example.com', 'Delete Me User', 'CITIZEN')
+  ON CONFLICT (id) DO UPDATE SET email = EXCLUDED.email;
+
+  -- Create rescue
+  INSERT INTO public.rescues (reporter_id, title, description, severity, species, latitude, longitude, address)
+  VALUES (v_del_user_id, 'Cascade Test Rescue', 'Test desc', 'LOW'::public.rescue_severity, 'DOG', 12.9, 77.6, 'Test addr')
+  RETURNING id INTO v_rescue_id;
+
+  -- Create lost and found post
+  INSERT INTO public.lost_and_found (reporter_id, type, title, description, species, latitude, longitude, last_seen_address, last_seen_date, contact_phone, contact_email)
+  VALUES (v_del_user_id, 'LOST'::public.lost_found_type, 'Test Lost', 'Test desc', 'CAT', 12.9, 77.6, 'Test addr', NOW(), '9999999999', 'pii@example.com')
+  RETURNING id INTO v_lf_id;
+
+  -- Create reply
+  INSERT INTO public.lost_and_found_replies (lost_and_found_id, user_id, user_name, text)
+  VALUES (v_lf_id, v_del_user_id, 'Delete Me User', 'I saw your pet')
+  RETURNING id INTO v_reply_id;
+
+  -- Create test animal and adoption application
+  INSERT INTO public.animals (name, species, age_estimate, gender, health_status, adoption_status, description)
+  VALUES ('Cascade Animal', 'DOG'::public.species, '1 yr', 'FEMALE'::public.gender, 'HEALTHY'::public.health_status, 'AVAILABLE'::public.adoption_status, 'Test animal')
+  RETURNING id INTO v_animal_id;
+
+  INSERT INTO public.adoption_applications (animal_id, applicant_id, living_environment, prior_pet_experience, work_schedule, why_adopt, status)
+  VALUES (v_animal_id, v_del_user_id, 'APARTMENT'::public.living_environment, 'Yes', 'WFH', 'Adopt', 'SUBMITTED'::public.application_status)
+  RETURNING id INTO v_app_id;
+
+  -- Delete the user
+  DELETE FROM public.users WHERE id = v_del_user_id;
+
+  -- Verify rescue still exists with reporter_id NULL
+  SELECT reporter_id INTO v_check_reporter FROM public.rescues WHERE id = v_rescue_id;
+  IF v_check_reporter IS NOT NULL THEN
+    RAISE EXCEPTION 'VIOLATION: rescues.reporter_id was not set to NULL on user delete';
+  END IF;
+
+  -- Verify lost_and_found still exists with reporter_id NULL and PII redacted
+  SELECT reporter_id, contact_phone, contact_email INTO v_check_reporter, v_check_phone, v_check_email
+  FROM public.lost_and_found WHERE id = v_lf_id;
+  IF v_check_reporter IS NOT NULL THEN
+    RAISE EXCEPTION 'VIOLATION: lost_and_found.reporter_id was not set to NULL on user delete';
+  END IF;
+  IF v_check_phone != '[Deleted User]' OR v_check_email IS NOT NULL THEN
+    RAISE EXCEPTION 'VIOLATION: lost_and_found contact details were not sanitized upon user delete (phone=%, email=%)', v_check_phone, v_check_email;
+  END IF;
+
+  -- Verify reply still exists with user_id NULL and sanitized name
+  SELECT user_id, user_name INTO v_check_reporter, v_check_user_name
+  FROM public.lost_and_found_replies WHERE id = v_reply_id;
+  IF v_check_reporter IS NOT NULL THEN
+    RAISE EXCEPTION 'VIOLATION: lost_and_found_replies.user_id was not set to NULL on user delete';
+  END IF;
+  IF v_check_user_name != 'Deleted User' THEN
+    RAISE EXCEPTION 'VIOLATION: lost_and_found_replies.user_name was not sanitized on user delete';
+  END IF;
+
+  -- Verify adoption application still exists with applicant_id NULL
+  SELECT applicant_id INTO v_check_applicant FROM public.adoption_applications WHERE id = v_app_id;
+  IF v_check_applicant IS NOT NULL THEN
+    RAISE EXCEPTION 'VIOLATION: adoption_applications.applicant_id was not set to NULL on user delete';
+  END IF;
+
+  RAISE NOTICE 'PASS: user deletion preserves rescue/adoption history with SET NULL and redacts PII';
+END $$;
+
+-- 18. Verify system_settings denies direct operations to anon and authenticated
+SET LOCAL ROLE anon;
+DO $$
+BEGIN
+  PERFORM * FROM public.system_settings LIMIT 1;
+  RAISE EXCEPTION 'SECURITY VIOLATION: anon was able to query public.system_settings';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: anon is denied SELECT on public.system_settings';
+END $$;
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-111111111111","role":"authenticated"}', true);
+DO $$
+BEGIN
+  PERFORM * FROM public.system_settings LIMIT 1;
+  RAISE EXCEPTION 'SECURITY VIOLATION: authenticated was able to query public.system_settings';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: authenticated is denied SELECT on public.system_settings';
+END $$;
+RESET ROLE;
+
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-111111111111","role":"authenticated"}', true);
+DO $$
+BEGIN
+  UPDATE public.system_settings SET value = 'false'::jsonb WHERE key = 'autoDispatchEnabled';
+  RAISE EXCEPTION 'SECURITY VIOLATION: authenticated was able to update public.system_settings';
+EXCEPTION
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'PASS: authenticated is denied UPDATE on public.system_settings';
+END $$;
+RESET ROLE;
+
+-- 19. Verify users.is_disabled exists and defaults to false
+DO $$
+DECLARE
+  v_has_col BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+      AND table_name = 'users' 
+      AND column_name = 'is_disabled'
+  ) INTO v_has_col;
+
+  IF NOT v_has_col THEN
+    RAISE EXCEPTION 'VIOLATION: users.is_disabled column does not exist';
+  END IF;
+  RAISE NOTICE 'PASS: users.is_disabled column exists';
+END $$;
+
+-- 20. Catalog query: Verify RLS is enabled on all base tables in the public schema
+DO $$
+DECLARE
+  v_unprotected_tables TEXT;
+BEGIN
+  SELECT string_agg(relname, ', ') INTO v_unprotected_tables
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid = c.relnamespace
+  WHERE n.nspname = 'public'
+    AND c.relkind = 'r'
+    AND c.relrowsecurity = false;
+
+  IF v_unprotected_tables IS NOT NULL THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: RLS is not enabled on public tables: %', v_unprotected_tables;
+  END IF;
+
+  RAISE NOTICE 'PASS: RLS (relrowsecurity) is enabled on all public tables';
+END $$;
+
+-- 21. Catalog query: Verify mutation privileges (INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER)
+-- are completely revoked from anon and authenticated on all public tables
+DO $$
+DECLARE
+  v_violations TEXT;
+BEGIN
+  SELECT string_agg(format('%s on %s to %s', privilege_type, table_name, grantee), ', ')
+  INTO v_violations
+  FROM information_schema.role_table_grants
+  WHERE table_schema = 'public'
+    AND grantee IN ('anon', 'authenticated')
+    AND privilege_type IN ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER');
+
+  IF v_violations IS NOT NULL THEN
+    RAISE EXCEPTION 'SECURITY VIOLATION: Unsafe mutation privileges granted to anon/authenticated: %', v_violations;
+  END IF;
+
+  RAISE NOTICE 'PASS: All mutation privileges are strictly revoked from anon and authenticated on public tables';
+END $$;
+
 ROLLBACK;

@@ -2401,7 +2401,7 @@
           "settings"
         ],
         "summary": "Get System Settings",
-        "description": "Admin-only endpoint to retrieve global system configuration and telemetry.",
+        "description": "Admin-only endpoint to retrieve global system configuration and telemetry from database.",
         "operationId": "get_system_settings_api_settings_get",
         "responses": {
           "200": {
@@ -2465,6 +2465,46 @@
             "HTTPBearer": []
           }
         ]
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Health Check",
+        "description": "Liveness probe: verifies the process is responsive.",
+        "operationId": "health_check_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ready": {
+      "get": {
+        "tags": [
+          "system"
+        ],
+        "summary": "Readiness Check",
+        "description": "Readiness probe: verifies operational connectivity to database.",
+        "operationId": "readiness_check_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
       }
     },
     "/": {
@@ -2561,7 +2601,14 @@
             "title": "Animalid"
           },
           "applicantId": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Applicantid"
           },
           "livingEnvironment": {
@@ -2715,8 +2762,7 @@
         "type": "object",
         "required": [
           "id",
-          "animalId",
-          "applicantId"
+          "animalId"
         ],
         "title": "AdoptionResponse"
       },
@@ -3524,8 +3570,16 @@
             "title": "Color"
           },
           "contactPhone": {
-            "type": "string",
-            "title": "Contactphone"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contactphone",
+            "default": ""
           },
           "contactEmail": {
             "anyOf": [
@@ -3551,11 +3605,25 @@
             "title": "Lastseendate"
           },
           "reporterId": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Reporterid"
           },
           "userId": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Userid"
           },
           "photoUrls": {
@@ -3593,12 +3661,9 @@
           "title",
           "description",
           "species",
-          "contactPhone",
           "location",
           "lastSeenAddress",
           "lastSeenDate",
-          "reporterId",
-          "userId",
           "status",
           "createdAt"
         ],
@@ -3869,7 +3934,14 @@
             "title": "Status"
           },
           "reporterId": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Reporterid"
           },
           "assignedTo": {
@@ -3915,7 +3987,6 @@
           "species",
           "severity",
           "status",
-          "reporterId",
           "location",
           "address",
           "createdAt",

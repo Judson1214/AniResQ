@@ -21,6 +21,26 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    environment: 'node',
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.js'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/e2e/**', '**/.{idea,git,cache,output,temp}/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      include: ['src/**/*.{js,jsx,ts,tsx}'],
+      exclude: [
+        'src/test/**',
+        'src/mocks/**',
+        'src/**/*.d.ts',
+        'src/main.jsx',
+        'src/index.css',
+      ],
+      thresholds: {
+        lines: 20,
+        branches: 20,
+        functions: 20,
+        statements: 20,
+      },
+    },
   },
 });

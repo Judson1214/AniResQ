@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { createPost } from "@/services/lostfound.service";
+import { validateFile } from "@/services/storage.service";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
@@ -113,7 +114,11 @@ const LostFoundForm = ({ onSuccess }) => {
       toast({ title: "Post Created Successfully" });
       if (onSuccess) onSuccess();
     } catch (error) {
-      toast({ title: "Error", variant: "destructive" });
+      toast({ 
+        title: "Error", 
+        description: error?.response?.data?.detail || "Failed to create lost & found post.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -169,7 +174,28 @@ const LostFoundForm = ({ onSuccess }) => {
 
         <div className="space-y-2">
           <Label>Photos (Max 3)</Label>
-          <Input type="file" accept="image/*" multiple className="bg-slate-900 border-slate-700 text-white" onChange={(e) => setPhotos(Array.from(e.target.files || []))} />
+          <Input 
+            type="file" 
+            accept="image/jpeg,image/png,image/webp" 
+            multiple 
+            className="bg-slate-900 border-slate-700 text-white" 
+            onChange={(e) => {
+              const selected = Array.from(e.target.files || []).slice(0, 3);
+              for (const file of selected) {
+                try {
+                  validateFile(file);
+                } catch (err) {
+                  toast({
+                    title: "Invalid File",
+                    description: err.message,
+                    variant: "destructive"
+                  });
+                  return;
+                }
+              }
+              setPhotos(selected);
+            }} 
+          />
         </div>
 
         <div className="space-y-2">

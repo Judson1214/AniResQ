@@ -1,6 +1,31 @@
 import { supabase } from "@/config/supabase";
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const DEFAULT_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+export const validateFile = (file, options = {}) => {
+  const maxSize = options.maxSize || MAX_FILE_SIZE;
+  const allowedTypes = options.allowedTypes || DEFAULT_ALLOWED_TYPES;
+
+  if (!file) {
+    throw new Error("No file provided for upload");
+  }
+
+  if (file.size > maxSize) {
+    const sizeInMb = (maxSize / (1024 * 1024)).toFixed(0);
+    throw new Error(`File "${file.name}" exceeds maximum allowed size of ${sizeInMb}MB`);
+  }
+
+  if (!allowedTypes.includes(file.type)) {
+    const acceptedList = allowedTypes.map(t => t.split('/')[1]?.toUpperCase() || t).join(', ');
+    throw new Error(`File "${file.name}" has invalid format "${file.type}". Allowed formats: ${acceptedList}`);
+  }
+
+  return true;
+};
+
 const uploadFile = async (path, file, onProgress) => {
+  validateFile(file);
   // Ensure the upload path is strictly scoped under {auth.uid()}/... to satisfy storage RLS policies
   const { data: { session } } = await supabase.auth.getSession();
   const userId = session?.user?.id;
@@ -69,6 +94,12 @@ const compressImage = (file, maxWidth = 800) => {
 const uploadMultipleFiles = async (basePath, files, onProgress) => {
   const totalFiles = files.length;
   if (totalFiles === 0) return [];
+  
+  // Validate all files before processing
+  for (const file of files) {
+    validateFile(file);
+  }
+
   let overallProgress = 0;
   const progressPerFile = 100 / totalFiles;
   
@@ -118,6 +149,11 @@ const deleteFile = async (url) => {
 };
 
 const uploadIdDocument = async (file, onProgress) => {
+  validateFile(file, {
+    maxSize: MAX_FILE_SIZE,
+    allowedTypes: [...DEFAULT_ALLOWED_TYPES, "application/pdf"],
+  });
+
   const { data: { session } } = await supabase.auth.getSession();
   const userId = session?.user?.id;
   if (!userId) throw new Error("Must be logged in to upload identification documents");

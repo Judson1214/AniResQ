@@ -6,6 +6,7 @@ import { RescueStatusBadge } from "./RescueStatusBadge";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { UserRole } from "@aniresq/shared-types";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import icon from "leaflet/dist/images/marker-icon.png";
 import iconShadow from "leaflet/dist/images/marker-shadow.png";
 let DefaultIcon = L.icon({
@@ -96,23 +97,25 @@ const RescueMap = ({
     { id: "h3", name: "Paws & Claws Clinic", lat: mapCenter[0] + 0.01, lng: mapCenter[1] + 0.04, phone: "+1 555 123 4567" }
   ];
 
-  return <div className="w-full h-full rounded-md overflow-hidden z-0 relative" style={{ minHeight: "300px" }}>
-      <MapContainer
-        center={mapCenter}
-        zoom={mapZoom}
-        minZoom={5}
-        maxBounds={[
-          [6.4626999, 68.1097],   // Southwest coordinates of India
-          [35.513327, 97.3953586] // Northeast coordinates of India
-        ]}
-        maxBoundsViscosity={1.0}
-        style={{ height: "100%", width: "100%", zIndex: 1 }}
-      >
-        <TileLayer
-    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-  />
-        <MapUpdater center={mapCenter} zoom={mapZoom} />
+  return (
+    <ErrorBoundary title="Failed to load map interface. Please check network connectivity.">
+      <div className="w-full h-full rounded-md overflow-hidden z-0 relative" style={{ minHeight: "300px" }}>
+        <MapContainer
+          center={mapCenter}
+          zoom={mapZoom}
+          minZoom={5}
+          maxBounds={[
+            [6.4626999, 68.1097],   // Southwest coordinates of India
+            [35.513327, 97.3953586] // Northeast coordinates of India
+          ]}
+          maxBoundsViscosity={1.0}
+          style={{ height: "100%", width: "100%", zIndex: 1 }}
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          <MapUpdater center={mapCenter} zoom={mapZoom} />
         
         {/* Render Rescue Requests */}
         {itemsToRender.map((rescue) => {
@@ -164,8 +167,10 @@ const RescueMap = ({
           </Marker>
         ))}
 
-      </MapContainer>
-    </div>;
+        </MapContainer>
+      </div>
+    </ErrorBoundary>
+  );
 };
 export {
   RescueMap

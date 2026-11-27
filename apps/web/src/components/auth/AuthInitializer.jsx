@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useAuthStore } from "@/store/authStore";
 import { getUserProfile, onAuthChange } from "@/services/auth.service";
+import { queryClient } from "@/lib/queryClient";
 
 export const AuthInitializer = () => {
   const { setUser, setLoading, logout } = useAuthStore();
@@ -24,10 +25,12 @@ export const AuthInitializer = () => {
             setUser({ ...newProfile, id: sessionUser.id, avatarUrl: "", isVerified: false });
           }
         } else {
+          queryClient.clear();
           logout();
         }
       } catch (error) {
         console.error("Auth state change error:", error);
+        queryClient.clear();
         logout();
       } finally {
         setLoading(false);

@@ -19,6 +19,11 @@ __pycache__/
 *$py.class
 .pytest_cache/
 *.egg-info/
+.coverage
+.coverage.*
+coverage/
+*.lcov
+.nyc_output/
 
 # Environment files and credentials
 .env

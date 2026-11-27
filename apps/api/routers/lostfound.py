@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from supabase_config import supabase
 from auth import get_current_user, get_optional_user
 from validators import validate_photo_urls
+from errors import map_db_error
 
 router = APIRouter(prefix="/api/lostfound", tags=["lostfound"])
 logger = logging.getLogger("lostfound")
@@ -46,13 +47,13 @@ class LostFoundResponse(BaseModel):
     species: str
     breed: Optional[str] = None
     color: Optional[str] = None
-    contactPhone: str
+    contactPhone: Optional[str] = ""
     contactEmail: Optional[str] = ""
     location: Location
     lastSeenAddress: str
     lastSeenDate: str
-    reporterId: str
-    userId: str
+    reporterId: Optional[str] = None
+    userId: Optional[str] = None
     photoUrls: List[str] = []
     status: str
     createdAt: str
@@ -72,8 +73,8 @@ def map_post_to_camel(data: dict, can_view_contact: bool = False) -> dict:
         "location": {"latitude": data["latitude"], "longitude": data["longitude"]},
         "lastSeenAddress": data.get("last_seen_address") or "",
         "lastSeenDate": data.get("last_seen_date") or "",
-        "reporterId": data.get("reporter_id") or "",
-        "userId": data.get("reporter_id") or "",
+        "reporterId": data.get("reporter_id") or None,
+        "userId": data.get("reporter_id") or None,
         "photoUrls": data.get("images") or [],
         "status": data.get("status") or "ACTIVE",
         "createdAt": data.get("created_at") or "",
@@ -99,11 +100,11 @@ def get_lost_found(
         if reporterId:
             query = query.eq("reporter_id", reporterId)
         
-        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
         return [map_post_to_camel(d, can_view_contact=can_view_contact) for d in res.data]
     except Exception as e:
         logger.error(f"Error fetching lost/found posts: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve lost and found posts")
+        raise map_db_error(e, "fetching lost/found posts")
 
 @router.get("/{id}", response_model=LostFoundResponse)
 def get_lost_found_by_id(id: str, current_user: Optional[dict] = Depends(get_optional_user)):
@@ -221,6 +222,7 @@ def get_lost_found_replies(
             .select("*")
             .eq("lost_and_found_id", id)
             .order("created_at", desc=False)
+            .order("id", desc=False)
             .range(offset, offset + limit - 1)
             .execute()
         )
@@ -228,8 +230,8 @@ def get_lost_found_replies(
             {
                 "id": r["id"],
                 "postId": r["lost_and_found_id"],
-                "userId": r["user_id"],
-                "userName": r["user_name"],
+                "userId": r.get("user_id"),
+                "userName": r.get("user_name") or ("Deleted User" if not r.get("user_id") else "Community Member"),
                 "text": r["text"],
                 "createdAt": r["created_at"],
             }

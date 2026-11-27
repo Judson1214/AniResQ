@@ -127,8 +127,12 @@ export const RescueIncidentReport = ({ rescue, timeline = [], onClose }) => {
               <div className="flex items-center gap-2 mb-2 text-xs font-bold text-slate-400 print:text-gray-500 uppercase tracking-wider">
                 <User size={14} className="text-emerald-400 print:text-emerald-700" /> Reporting Citizen
               </div>
-              <div className="text-sm font-semibold text-white print:text-black">{rescue.reporterName || "Citizen Reporter"}</div>
-              <div className="text-xs text-slate-400 print:text-gray-500 font-mono mt-0.5">ID: {maskId(rescue.reporterId)}</div>
+              <div className="text-sm font-semibold text-white print:text-black">
+                {rescue.reporterId ? (rescue.reporterName || "Citizen Reporter") : "Deleted User"}
+              </div>
+              <div className="text-xs text-slate-400 print:text-gray-500 font-mono mt-0.5">
+                {rescue.reporterId ? `ID: ${maskId(rescue.reporterId)}` : "Account Deactivated"}
+              </div>
             </div>
             
             <div className="p-4 rounded-xl bg-slate-800/30 print:bg-gray-50 border border-slate-700/50 print:border-gray-200">

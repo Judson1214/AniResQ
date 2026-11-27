@@ -9,8 +9,15 @@ function useRealtimeCollection(endpoint, params = {}, enabled = true) {
       return response.data;
     },
     enabled: enabled,
-    // Add optional polling if needed, or leave it as standard react-query
-    refetchInterval: 5000, // Poll every 5s to simulate realtime, or omit
+    refetchIntervalInBackground: false,
+    refetchInterval: (query) => {
+      // Pause polling if query encountered an error or tab is not active
+      if (query.state.error) return false;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return false;
+      }
+      return 10000; // Poll every 10s when active and healthy
+    },
   });
 
   return { 

@@ -20,9 +20,11 @@ const NotificationBell = ({ buttonClassName = "relative p-2 text-gray-600 hover:
   if (!isAuthenticated) return null;
   return <div className="relative" ref={wrapperRef}>
       <button
-    onClick={() => setIsOpen(!isOpen)}
-    className={buttonClassName}
-  >
+        type="button"
+        aria-label="Notifications"
+        onClick={() => setIsOpen(!isOpen)}
+        className={buttonClassName}
+      >
         <Bell size={20} className={iconClassName} />
         {unreadCount > 0 && <span className="absolute top-1 right-1 flex items-center justify-center w-4 h-4 text-[10px] font-bold text-white bg-red-500 rounded-full border-2 border-white">
             {unreadCount > 9 ? "9+" : unreadCount}

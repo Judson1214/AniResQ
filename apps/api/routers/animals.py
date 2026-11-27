@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from supabase_config import supabase
 from auth import get_current_user, get_optional_user, require_roles
 from validators import validate_photo_urls
+from errors import map_db_error
 from .notifications import create_system_notification
 from .audit import log_audit_event
 
@@ -138,11 +139,11 @@ def get_animals(
         if shelterId:
             query = query.eq("shelter_id", shelterId)
             
-        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
         return [map_animal(item, viewer=user) for item in res.data]
     except Exception as e:
         logger.error(f"Error fetching animals: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve animals")
+        raise map_db_error(e, "fetching animals")
 
 @router.get("/{id}", response_model=AnimalResponse)
 def get_animal(id: str, user: Optional[dict] = Depends(get_optional_user)):

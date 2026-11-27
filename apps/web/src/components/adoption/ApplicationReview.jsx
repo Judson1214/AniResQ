@@ -10,7 +10,7 @@ const ApplicationReview = ({ application, onReview }) => {
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div className="space-y-1">
           <p className="text-gray-500">Applicant ID</p>
-          <p className="font-medium">{application.applicantId}</p>
+          <p className="font-medium">{application.applicantId || "Deleted user"}</p>
         </div>
         <div className="space-y-1">
           <p className="text-gray-500">Status</p>

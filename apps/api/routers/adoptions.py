@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from supabase_config import supabase
 from auth import get_current_user, require_roles
+from errors import map_db_error
 from .notifications import create_system_notification
 from .audit import log_audit_event
 
@@ -35,7 +36,7 @@ class AdoptionStatusUpdate(BaseModel):
 class AdoptionResponse(BaseModel):
     id: str
     animalId: str
-    applicantId: str
+    applicantId: Optional[str] = None
     livingEnvironment: Optional[str] = None
     hasYard: bool = False
     hasOtherPets: bool = False
@@ -56,7 +57,7 @@ def map_adoption(db_data: dict) -> dict:
     return {
         "id": db_data["id"],
         "animalId": db_data["animal_id"],
-        "applicantId": db_data["applicant_id"],
+        "applicantId": db_data.get("applicant_id"),
         "livingEnvironment": db_data.get("living_environment"),
         "hasYard": bool(db_data.get("has_yard")),
         "hasOtherPets": bool(db_data.get("has_other_pets")),
@@ -116,11 +117,11 @@ def get_adoptions(
         if status:
             query = query.eq("status", status.upper())
             
-        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
         return [map_adoption(d) for d in res.data]
     except Exception as e:
         logger.error(f"Error fetching adoption applications: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve adoption applications")
+        raise map_db_error(e, "fetching adoption applications")
 
 @router.get("/{id}", response_model=AdoptionResponse)
 def get_adoption(id: str, user: dict = Depends(get_current_user)):
@@ -159,6 +160,40 @@ def submit_adoption_application(payload: AdoptionCreate, user: dict = Depends(ge
         raise HTTPException(status_code=422, detail=f"Invalid living environment '{payload.livingEnvironment}'")
         
     try:
+        # 1. Validate animal existence and status
+        anim_res = supabase.table("animals").select("id, adoption_status, surrendered_by").eq("id", payload.animalId).execute()
+        if not anim_res.data:
+            raise HTTPException(status_code=404, detail="Animal not found")
+            
+        animal = anim_res.data[0]
+        curr_status = (animal.get("adoption_status") or "").upper()
+        if curr_status != "AVAILABLE":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Animal is not available for adoption (current status: {curr_status})"
+            )
+            
+        if animal.get("surrendered_by") and animal.get("surrendered_by") == user["uid"]:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot apply to adopt an animal you previously surrendered"
+            )
+
+        # 2. Check for duplicate open application before inserting
+        existing_app = (
+            supabase.table("adoption_applications")
+            .select("id")
+            .eq("animal_id", payload.animalId)
+            .eq("applicant_id", user["uid"])
+            .in_("status", ["SUBMITTED", "UNDER_REVIEW"])
+            .execute()
+        )
+        if existing_app.data:
+            raise HTTPException(
+                status_code=409,
+                detail="An active adoption application for this animal is already under review"
+            )
+
         new_app = {
             "animal_id": payload.animalId,
             "applicant_id": user["uid"],
@@ -181,7 +216,18 @@ def submit_adoption_application(payload: AdoptionCreate, user: dict = Depends(ge
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error creating adoption application: {e}")
+        err_msg = str(e)
+        logger.error(f"Error creating adoption application: {err_msg}")
+        if "23505" in err_msg or "duplicate key" in err_msg.lower() or "uq_adoption_apps_open" in err_msg:
+            raise HTTPException(
+                status_code=409,
+                detail="An active adoption application for this animal is already under review"
+            )
+        if "23503" in err_msg or "foreign key" in err_msg.lower():
+            raise HTTPException(
+                status_code=404,
+                detail="Referenced animal or applicant does not exist"
+            )
         raise HTTPException(status_code=500, detail="Failed to submit application")
 
 @router.patch("/{id}/status", response_model=AdoptionResponse)
@@ -191,7 +237,7 @@ def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = 
         raise HTTPException(status_code=422, detail=f"Invalid status '{payload.status}'. Must be one of {sorted(VALID_APP_STATUSES)}")
         
     try:
-        existing = supabase.table("adoption_applications").select("id, animal_id, applicant_id").eq("id", id).execute()
+        existing = supabase.table("adoption_applications").select("id, animal_id, applicant_id, status").eq("id", id).execute()
         if not existing.data:
             raise HTTPException(status_code=404, detail="Adoption application not found")
             
@@ -218,9 +264,20 @@ def update_adoption_status(id: str, payload: AdoptionStatusUpdate, user: dict = 
         if payload.screeningNotes is not None:
             update_data["screening_notes"] = payload.screeningNotes
             
-        res = supabase.table("adoption_applications").update(update_data).eq("id", id).execute()
+        # Conditional atomic update: review only if status matches current state
+        curr_status = app_record.get("status")
+        query_update = supabase.table("adoption_applications").update(update_data).eq("id", id)
+        if curr_status:
+            query_update = query_update.eq("status", curr_status)
+        res = query_update.execute()
         if not res.data:
-            raise HTTPException(status_code=404, detail="Adoption application not found")
+            chk = supabase.table("adoption_applications").select("id, status").eq("id", id).execute()
+            if not chk.data:
+                raise HTTPException(status_code=404, detail="Adoption application not found")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Adoption application status was concurrently modified by another reviewer (current status: {chk.data[0].get('status')})"
+            )
             
         # Automatically update animal adoption status when approved
         if target_status == "APPROVED" and app_record.get("animal_id"):

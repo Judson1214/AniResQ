@@ -86,7 +86,7 @@ def list_audit_logs(
         if performed_by:
             query = query.eq("performed_by", performed_by)
 
-        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
         return [map_audit_log(row) for row in res.data]
     except HTTPException:
         raise

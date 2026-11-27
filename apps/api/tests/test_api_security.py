@@ -498,7 +498,6 @@ def test_role_change_audited(monkeypatch):
 
 def test_rate_limiter_blocks_excessive_requests():
     from rate_limiter import SlidingWindowRateLimiter, get_client_ip
-    from starlette.datastructures import Headers
 
     limiter = SlidingWindowRateLimiter(default_limit=3, window_seconds=10)
     client_ip = "192.168.1.100"

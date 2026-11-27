@@ -11,6 +11,9 @@ describe('API Boundary Security Check', () => {
     'lost_and_found',
     'lost_and_found_replies',
     'notifications',
+    'users',
+    'audit_logs',
+    'system_settings',
   ];
 
   function getAllSourceFiles(dir, fileList = []) {

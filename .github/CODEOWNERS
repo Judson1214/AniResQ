@@ -1,0 +1,24 @@
+# AniResQ Monorepo Codeowners
+
+# Monorepo Root & Workflows
+* @aniresq/core-team
+
+# CI/CD Workflows & Security
+.github/workflows/ @aniresq/security-team @aniresq/infra-team
+.github/dependabot.yml @aniresq/infra-team
+SECURITY.md @aniresq/security-team
+gitleaks.toml @aniresq/security-team
+bandit.yaml @aniresq/security-team
+
+# Backend API
+apps/api/ @aniresq/backend-team
+
+# Frontend Web Application
+apps/web/ @aniresq/frontend-team
+
+# Database Migrations & Security Checks
+supabase/ @aniresq/database-team @aniresq/security-team
+
+# Shared Schemas & Contracts
+packages/shared-types/ @aniresq/backend-team @aniresq/frontend-team
+packages/validation/ @aniresq/backend-team @aniresq/frontend-team

@@ -7,6 +7,9 @@ set -euo pipefail
 DIR="$(cd "$(dirname "$0")/.." && pwd)"
 PSQL=(psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q)
 
+echo "== Migration integrity & ordering checks"
+python3 "$DIR/ci/check_migrations.py"
+
 echo "== Supabase platform stub"
 "${PSQL[@]}" -f "$DIR/ci/00_supabase_stub.sql"
 

@@ -1,0 +1,34 @@
+### Bandit Configuration File for AniResQ API ###
+# Exclude test files, virtualenvs, and migration scripts
+skips: []
+
+exclude_dirs:
+  - 'tests'
+  - 'venv'
+  - '.venv'
+  - 'node_modules'
+  - 'apps/api/venv'
+  - 'apps/api/tests'
+
+tests:
+  - B201  # flask_debug_true
+  - B301  # pickle
+  - B302  # marshal
+  - B303  # md5 / sha1
+  - B304  # ciphers
+  - B305  # cipher modes
+  - B306  # mktemp_q
+  - B307  # eval
+  - B308  # mark_safe
+  - B311  # pseudo-random generator
+  - B324  # hashlib insecure functions
+  - B501  # request_with_no_cert_validation
+  - B502  # ssl_with_bad_version
+  - B503  # ssl_with_bad_defaults
+  - B504  # ssl_with_no_version
+  - B505  # weak_cryptographic_key
+  - B506  # yaml_load
+  - B507  # ssh_no_host_key_default
+  - B601  # paramiko_calls
+  - B602  # subprocess_popen_with_shell_equals_true
+  - B608  # hardcoded_sql_expressions

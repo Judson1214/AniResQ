@@ -1,0 +1,21 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Global allowlist for benign test fixtures and dummy credentials"
+paths = [
+  '''apps/api/tests/.*''',
+  '''apps/web/src/test/.*''',
+  '''apps/web/src/mocks/.*''',
+  '''supabase/ci/00_supabase_stub.sql''',
+  '''supabase/ci/verify.sql''',
+]
+regexes = [
+  '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]+''',
+  '''placeholder.*''',
+  '''dummy.*''',
+]
+stopwords = [
+  "dummy-project.supabase.co",
+  "placeholder",
+]

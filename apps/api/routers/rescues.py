@@ -7,8 +7,10 @@ from pydantic import BaseModel, Field
 from supabase_config import supabase
 from auth import get_current_user
 from validators import validate_photo_urls
+from errors import map_db_error
 from .notifications import create_system_notification, create_bulk_system_notifications
 from .audit import log_audit_event
+from .settings import get_system_setting
 
 router = APIRouter(prefix="/api/rescues", tags=["rescues"])
 logger = logging.getLogger("rescues")
@@ -47,7 +49,7 @@ class RescueResponse(BaseModel):
     species: str
     severity: str
     status: str
-    reporterId: str
+    reporterId: Optional[str] = None
     assignedTo: Optional[str] = None
     location: Location
     address: str
@@ -104,7 +106,7 @@ def map_rescue_to_camel(data: dict) -> dict:
         "species": data.get("species") or "",
         "severity": data.get("severity") or "",
         "status": data.get("status") or "PENDING",
-        "reporterId": data.get("reporter_id") or data.get("reporterId") or "",
+        "reporterId": data.get("reporter_id") or data.get("reporterId") or None,
         "assignedTo": data.get("assigned_to") or data.get("assignedTo"),
         "location": loc,
         "address": data.get("address") or "",
@@ -143,11 +145,11 @@ def get_all_rescues(
         else:
             query = query.eq("reporter_id", user["uid"])
             
-        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
         return [map_rescue_to_camel(data) for data in res.data]
     except Exception as e:
         logger.error(f"Error fetching rescues: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve rescues")
+        raise map_db_error(e, "fetching rescues")
 
 @router.get("/public", response_model=List[PublicRescueResponse])
 def get_public_rescues(
@@ -175,7 +177,7 @@ def get_public_rescues(
         if species:
             query = query.eq("species", species)
             
-        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
         public_rescues = []
         for data in res.data:
             lat = round(data["latitude"], 2) if data.get("latitude") is not None else None
@@ -238,11 +240,12 @@ def dispatch_nearby_responder_alerts(
     try:
         nearby_responders = []
         try:
-            # 1. Spatial Haversine lookup via Supabase RPC (100km max search ceiling)
+            # 1. Spatial Haversine lookup via Supabase RPC with configurable broadcast ceiling
+            max_ceiling = int(get_system_setting("maxBroadcastCeilingKm", 100))
             rpc_res = supabase.rpc("get_nearby_responders", {
                 "p_lat": latitude,
                 "p_lon": longitude,
-                "p_max_radius_km": 100,
+                "p_max_radius_km": max_ceiling,
             }).execute()
             if rpc_res.data:
                 nearby_responders = rpc_res.data
@@ -344,7 +347,8 @@ def create_rescue_request(
             logger.warning(f"Failed to record initial timeline: {te_err}")
 
         # Offload spatial responder alert broadcast to background task so the API responds instantly
-        if target_sev in ["CRITICAL", "HIGH"]:
+        auto_alert_enabled = bool(get_system_setting("autoAlertHighSeverity", True))
+        if auto_alert_enabled and target_sev in ["CRITICAL", "HIGH"]:
             background_tasks.add_task(
                 dispatch_nearby_responder_alerts,
                 rescue_id=doc_id,
@@ -410,9 +414,24 @@ def update_rescue_status(rescue_id: str, update: RescueRequestStatusUpdate, user
             merged_images = list(dict.fromkeys(current_images + valid_verification_photos))
             update_data["images"] = merged_images
 
-        res = supabase.table("rescues").update(update_data).eq("id", rescue_id).execute()
+        # Atomic conditional update enforcing state continuity
+        current_status = current_rescue.get("status")
+        res = (
+            supabase.table("rescues")
+            .update(update_data)
+            .eq("id", rescue_id)
+            .eq("status", current_status)
+            .execute()
+        )
         if not res.data:
-            raise HTTPException(status_code=404, detail="Rescue request not found")
+            # Check if rescue still exists or was concurrently modified
+            chk = supabase.table("rescues").select("id, status").eq("id", rescue_id).execute()
+            if not chk.data:
+                raise HTTPException(status_code=404, detail="Rescue request not found")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Rescue status was concurrently updated by another operation (current status: {chk.data[0].get('status')})"
+            )
             
         # Record timeline entry using verified identity from JWT token
         try:
@@ -481,6 +500,14 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
                 status_code=403,
                 detail="Forbidden: Only administrators, NGOs, shelters, or the assigned volunteer can assign or reassign responders"
             )
+
+        if is_self_assign:
+            auto_dispatch_enabled = bool(get_system_setting("autoDispatchEnabled", True))
+            if not auto_dispatch_enabled:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Volunteer direct claim is currently disabled by system policy"
+                )
             
         # Validate that volunteerId exists and is an authorized responder/volunteer
         vol_check = supabase.table("users").select("id, role, display_name").eq("id", req.volunteerId).execute()
@@ -494,13 +521,26 @@ def assign_volunteer(rescue_id: str, req: AssignVolunteerRequest, user: dict = D
         volunteer_name = vol_user.get("display_name") or req.volunteerName
         new_status = "DISPATCHED"
         
-        res = supabase.table("rescues").update({
-            "assigned_to": req.volunteerId,
-            "status": new_status,
-        }).eq("id", rescue_id).execute()
+        # Atomic conditional update: assign only if current status has not changed
+        res = (
+            supabase.table("rescues")
+            .update({
+                "assigned_to": req.volunteerId,
+                "status": new_status,
+            })
+            .eq("id", rescue_id)
+            .eq("status", current_status)
+            .execute()
+        )
         
         if not res.data:
-            raise HTTPException(status_code=404, detail="Rescue request not found")
+            chk = supabase.table("rescues").select("id, status, assigned_to").eq("id", rescue_id).execute()
+            if not chk.data:
+                raise HTTPException(status_code=404, detail="Rescue request not found")
+            raise HTTPException(
+                status_code=409,
+                detail="Rescue assignment failed: status was concurrently modified by another operator"
+            )
             
         try:
             timeline_entry = {
@@ -620,6 +660,7 @@ def get_rescue_timeline(
             .select("*")
             .eq("rescue_id", rescue_id)
             .order("created_at", desc=False)
+            .order("id", desc=False)
             .range(offset, offset + limit - 1)
             .execute()
         )

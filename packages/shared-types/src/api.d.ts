@@ -509,7 +509,7 @@ export interface paths {
         };
         /**
          * Get System Settings
-         * @description Admin-only endpoint to retrieve global system configuration and telemetry.
+         * @description Admin-only endpoint to retrieve global system configuration and telemetry from database.
          */
         get: operations["get_system_settings_api_settings_get"];
         put?: never;
@@ -522,6 +522,46 @@ export interface paths {
          * @description Admin-only endpoint to update global dispatch, broadcast, and routing configurations.
          */
         patch: operations["update_system_settings_api_settings_patch"];
+        trace?: never;
+    };
+    "/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Check
+         * @description Liveness probe: verifies the process is responsive.
+         */
+        get: operations["health_check_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Readiness Check
+         * @description Readiness probe: verifies operational connectivity to database.
+         */
+        get: operations["readiness_check_ready_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/": {
@@ -590,7 +630,7 @@ export interface components {
             /** Animalid */
             animalId: string;
             /** Applicantid */
-            applicantId: string;
+            applicantId?: string | null;
             /** Livingenvironment */
             livingEnvironment?: string | null;
             /**
@@ -892,8 +932,11 @@ export interface components {
             breed?: string | null;
             /** Color */
             color?: string | null;
-            /** Contactphone */
-            contactPhone: string;
+            /**
+             * Contactphone
+             * @default
+             */
+            contactPhone: string | null;
             /**
              * Contactemail
              * @default
@@ -905,9 +948,9 @@ export interface components {
             /** Lastseendate */
             lastSeenDate: string;
             /** Reporterid */
-            reporterId: string;
+            reporterId?: string | null;
             /** Userid */
-            userId: string;
+            userId?: string | null;
             /**
              * Photourls
              * @default []
@@ -1017,7 +1060,7 @@ export interface components {
             /** Status */
             status: string;
             /** Reporterid */
-            reporterId: string;
+            reporterId?: string | null;
             /** Assignedto */
             assignedTo?: string | null;
             location: components["schemas"]["Location"];
@@ -2586,6 +2629,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    health_check_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    readiness_check_ready_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

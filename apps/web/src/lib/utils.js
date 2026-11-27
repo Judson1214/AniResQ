@@ -36,10 +36,51 @@ function truncateText(text, maxLength) {
   if (text.length <= maxLength) return text;
   return text.slice(0, maxLength).trimEnd() + "...";
 }
+
+function sanitizeReturnTo(target) {
+  if (!target || typeof target !== "string") return "/dashboard";
+  const trimmed = target.trim();
+  // Reject path traversal and control characters
+  if (trimmed.includes("..") || trimmed.toLowerCase().includes("%2e%2e")) {
+    return "/dashboard";
+  }
+  // Relative path starting with single '/' and no protocol or double-slash
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.startsWith("/\\") && !trimmed.includes(":")) {
+    if (/^\/[a-zA-Z0-9_\-/?=&%#.@]*$/.test(trimmed)) {
+      return trimmed;
+    }
+  }
+  return "/dashboard";
+}
+
+function isSafeUrl(url) {
+  if (!url || typeof url !== "string") return false;
+  const trimmed = url.trim();
+  // Safe relative URLs
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//") && !trimmed.startsWith("/\\")) {
+    return true;
+  }
+  // Safe absolute URLs (https, mailto, or local development http)
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "https:" || parsed.protocol === "mailto:") {
+      return true;
+    }
+    if (parsed.protocol === "http:" && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export {
   cn,
   formatDate,
   formatDateTime,
   formatRelativeTime,
-  truncateText
+  truncateText,
+  sanitizeReturnTo,
+  isSafeUrl
 };

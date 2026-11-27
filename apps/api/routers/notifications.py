@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from supabase_config import supabase
@@ -77,6 +77,7 @@ def get_notifications(
             .select("*")
             .eq("user_id", user["uid"])
             .order("created_at", desc=True)
+            .order("id", desc=True)
             .range(offset, offset + limit - 1)
             .execute()
         )

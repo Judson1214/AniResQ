@@ -6,94 +6,137 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  web-ci:
-    name: Frontend (Lint, Test, Build)
+  lint:
+    name: Code Quality & Linting
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
         with:
           version: 9.9.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 20
           cache: 'pnpm'
 
-      - name: Install dependencies
+      - name: Install Node dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run lint
-        run: pnpm lint
+      - name: Frontend ESLint & Accessibility check
+        run: pnpm --filter @aniresq/web run lint
 
-      - name: Type check (TypeScript)
+      - name: TypeScript typecheck
         run: pnpm --filter @aniresq/web exec tsc --noEmit
 
-      - name: Run unit tests (Vitest)
-        run: pnpm test
-        env:
-          VITE_SUPABASE_URL: https://placeholder.supabase.co
-          VITE_SUPABASE_ANON_KEY: placeholder
+      - name: Setup Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
+        with:
+          python-version: '3.11'
 
-      - name: Run production build
-        run: pnpm build
-        env:
-          VITE_SUPABASE_URL: https://placeholder.supabase.co
-          VITE_SUPABASE_ANON_KEY: placeholder
+      - name: Run Ruff on Backend API
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff==0.9.9
+          ruff check apps/api --config apps/api/ruff.toml
 
-  api-ci:
-    name: Backend API (Pytest)
+  web-test:
+    name: Frontend Tests & Build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 9.9.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Vitest Unit Tests & Coverage
+        run: pnpm --filter @aniresq/web run test:coverage
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder
+
+      - name: Production Bundle Build
+        run: pnpm --filter @aniresq/web run build
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder
+
+  api-test:
+    name: Backend API Tests & Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
         with:
           python-version: '3.11'
           cache: 'pip'
           cache-dependency-path: 'apps/api/requirements.txt'
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r apps/api/requirements.txt pytest httpx
+          pip install -r apps/api/requirements-dev.txt
 
-      - name: Run API tests
+      - name: Run Pytest with Coverage & Randomized Order
         env:
           SUPABASE_URL: https://dummy-project.supabase.co
           SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy
           CORS_ORIGINS: http://localhost:3000
           PYTHONPATH: apps/api
         run: |
-          pytest apps/api/tests/
+          pytest apps/api/tests/ -v --cov=apps/api --cov-branch --cov-report=term-missing --cov-fail-under=85
 
   contract-ci:
     name: Schema Contract Sync (OpenAPI & TypeScript)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
         with:
           version: 9.9.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
           node-version: 20
           cache: 'pnpm'
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -115,8 +158,9 @@ jobs:
           git diff --exit-code packages/shared-types/openapi.json packages/shared-types/src/api.d.ts
 
   db-ci:
-    name: Database (migrations + security checks)
+    name: Database Integrity & Security Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
@@ -133,9 +177,149 @@ jobs:
           --health-retries 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Apply all migrations to an empty database and run security checks
+      - name: Setup Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
+        with:
+          python-version: '3.11'
+
+      - name: Apply Migrations & Verify Database Security
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/aniresq_ci
         run: bash supabase/ci/run_db_checks.sh
+
+  security-scan:
+    name: Security Scans (SAST, Secrets & Audits)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks Secret Detection
+        uses: gitleaks/gitleaks-action@eed78864ec12e553555ae3b4f69ebf4244ce2f03 # v2.3.8
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          config-path: gitleaks.toml
+
+      - name: Setup Python
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.3.0
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r apps/api/requirements-dev.txt
+
+      - name: Run Python Dependency Vulnerability Audit (pip-audit)
+        run: pip-audit -r apps/api/requirements.txt
+
+      - name: Run Static Application Security Testing (Bandit)
+        run: bandit -r apps/api -x apps/api/venv,apps/api/tests -c bandit.yaml
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 9.9.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit Production Node Dependencies
+        run: pnpm audit --prod --audit-level high || true
+
+  codeql:
+    name: CodeQL Static Analysis (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ['javascript-typescript', 'python']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@b56ba49b26e50535fa1e7f7db0f4f7b4bf65d80d # v3.28.10
+        with:
+          languages: ${{ matrix.language }}
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@b56ba49b26e50535fa1e7f7db0f4f7b4bf65d80d # v3.28.10
+
+  e2e:
+    name: Playwright End-to-End Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 9.9.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Node dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Browsers
+        run: pnpm --filter @aniresq/web exec playwright install --with-deps chromium
+
+      - name: Build Web Application
+        run: pnpm --filter @aniresq/web run build
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder
+
+      - name: Run Playwright E2E Tests
+        run: pnpm --filter @aniresq/web run test:e2e
+        env:
+          CI: true
+
+  ci-gatekeeper:
+    name: CI Gatekeeper Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - lint
+      - web-test
+      - api-test
+      - contract-ci
+      - db-test
+      - security-scan
+      - codeql
+      - e2e
+    if: always()
+    steps:
+      - name: Verify All Quality & Security Gates
+        run: |
+          results="${{ needs.lint.result }} ${{ needs.web-test.result }} ${{ needs.api-test.result }} ${{ needs.contract-ci.result }} ${{ needs.db-test.result }} ${{ needs.security-scan.result }} ${{ needs.codeql.result }} ${{ needs.e2e.result }}"
+          echo "Gatekeeper results: $results"
+          if echo "$results" | grep -qE "failure|cancelled"; then
+            echo "CI Gatekeeper: One or more required checks failed."
+            exit 1
+          fi
+          echo "CI Gatekeeper: All checks passed successfully!"

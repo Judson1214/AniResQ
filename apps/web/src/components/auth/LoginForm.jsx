@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { loginSchema } from "@aniresq/validation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
@@ -9,16 +9,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
+import { sanitizeReturnTo } from "@/lib/utils";
 
 const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors }
   } = useForm({
     resolver: zodResolver(loginSchema)
@@ -32,7 +34,9 @@ const LoginForm = () => {
         title: "Success",
         description: "You have successfully logged in."
       });
-      navigate("/dashboard");
+      const rawReturnTo = searchParams.get("returnTo") || location.state?.from?.pathname;
+      const targetPath = sanitizeReturnTo(rawReturnTo);
+      navigate(targetPath, { replace: true });
     } catch (error) {
       toast({
         title: "Login Failed",
@@ -79,33 +83,6 @@ const LoginForm = () => {
           Authenticate
         </Button>
       </form>
-
-      {import.meta.env.DEV && (
-        <div className="mt-6 flex flex-col sm:flex-row gap-3">
-          <button 
-            onClick={() => {
-              setValue('email', 'admin@aniresq.com');
-              setValue('password', 'Password123!');
-              toast({ title: 'Credentials Filled', description: 'Click Authenticate to login as Admin.' });
-            }}
-            className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg border border-slate-700 transition-colors"
-            type="button"
-          >
-            Auto-fill Admin (Dev Only)
-          </button>
-          <button 
-            onClick={() => {
-              setValue('email', 'public@aniresq.com');
-              setValue('password', 'Password123!');
-              toast({ title: 'Credentials Filled', description: 'Click Authenticate to login as Public.' });
-            }}
-            className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg border border-slate-700 transition-colors"
-            type="button"
-          >
-            Auto-fill Public (Dev Only)
-          </button>
-        </div>
-      )}
 
       <div className="mt-8 text-sm text-center text-slate-500">
         New Operator?{" "}

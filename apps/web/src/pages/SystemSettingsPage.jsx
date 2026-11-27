@@ -16,8 +16,7 @@ import {
   ArrowRight,
   Loader2,
   CheckCircle2,
-  RotateCcw,
-  AlertCircle
+  RotateCcw
 } from "lucide-react";
 
 export default function SystemSettingsPage() {
@@ -110,16 +109,16 @@ export default function SystemSettingsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
                 <Settings size={22} />
               </div>
               <h1 className="text-3xl font-black text-white tracking-tight">System Settings</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                Preview Mode
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                Active System Policy
               </span>
             </div>
             <p className="text-slate-400 text-sm mt-1">
-              Preview interface for dispatch boundaries and heuristic rules. Configuration changes here do not alter live rescue dispatch routing.
+              Live configuration for automated rescue dispatch boundaries, spatial ceilings, and responder alert heuristics.
             </p>
           </div>
 
@@ -147,14 +146,13 @@ export default function SystemSettingsPage() {
           )}
         </div>
 
-        {/* Preview Disclaimer Banner */}
-        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-amber-400" />
+        {/* Active Policy Status Banner */}
+        <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 flex items-start gap-3">
+          <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5 text-emerald-400" />
           <div className="space-y-1">
-            <h3 className="text-sm font-bold text-amber-200">Preview & Staging Configuration</h3>
-            <p className="text-xs text-amber-300/80 leading-relaxed">
-              Dispatch boundaries and heuristic toggles below are currently in <strong>preview mode</strong>. 
-              The backend rescue dispatch system currently runs on fixed defaults. Runtime configuration changes here are not yet evaluated by automated dispatch.
+            <h3 className="text-sm font-bold text-emerald-200">Active Enforcement</h3>
+            <p className="text-xs text-emerald-300/80 leading-relaxed">
+              Spatial ceilings and responder alert toggles configured here are stored in <code>system_settings</code> and actively govern live rescue alert dispatch and volunteer direct claims.
             </p>
           </div>
         </div>

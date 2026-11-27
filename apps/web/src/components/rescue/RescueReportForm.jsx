@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/use-toast";
 import { createRescueRequest } from "@/services/rescue.service";
+import { validateFile } from "@/services/storage.service";
 import { useAuth } from "@/hooks/useAuth";
 import { useGeolocation } from "@/hooks/useGeolocation";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
@@ -123,9 +124,31 @@ const RescueReportForm = () => {
     }
   };
 
+  // Revoke object URLs to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      photoPreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [photoPreviews]);
+
   const handlePhotoChange = (e) => {
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files).slice(0, 3);
+      for (const file of selectedFiles) {
+        try {
+          validateFile(file);
+        } catch (err) {
+          toast({
+            title: "Invalid Photo",
+            description: err.message,
+            variant: "destructive"
+          });
+          return;
+        }
+      }
+
+      photoPreviews.forEach((url) => URL.revokeObjectURL(url));
+
       setPhotos(selectedFiles);
       const previews = selectedFiles.map((file) => URL.createObjectURL(file));
       setPhotoPreviews(previews);

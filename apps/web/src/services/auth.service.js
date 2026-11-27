@@ -1,5 +1,7 @@
 import { supabase } from "@/config/supabase";
 import api from "@/lib/api";
+import { queryClient } from "@/lib/queryClient";
+import { useAuthStore } from "@/store/authStore";
 
 const signUp = async (
   email,
@@ -46,38 +48,39 @@ const signIn = async (email, password) => {
 };
 
 const signOutUser = async () => {
-  const { error } = await supabase.auth.signOut();
-  if (error) throw error;
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+  } finally {
+    useAuthStore.getState().clearAuth();
+    queryClient.clear();
+  }
 };
 
 const getUserProfile = async (uid) => {
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', uid)
-    .single();
-  
-  if (error) {
-    if (error.code === 'PGRST116') return null; // 404 Not Found equivalent
+  try {
+    const response = await api.get(`/users/${uid}`);
+    const data = response.data;
+    return {
+      uid: data.id || data.uid,
+      id: data.id || data.uid,
+      email: data.email,
+      displayName: data.displayName || data.display_name,
+      role: data.role,
+      phone: data.phoneNumber || data.phone,
+      avatarUrl: data.avatarUrl || data.avatar_url || "",
+      isVerified: data.isVerified || data.is_verified || false,
+      requestedRole: data.requestedRole || data.requested_role || null,
+      latitude: data.latitude ?? null,
+      longitude: data.longitude ?? null,
+      serviceRadiusKm: data.serviceRadiusKm ?? data.service_radius_km ?? 15,
+      alertsEnabled: data.alertsEnabled ?? data.alerts_enabled ?? true,
+      createdAt: data.createdAt || data.created_at
+    };
+  } catch (error) {
+    if (error?.response?.status === 404) return null;
     throw error;
   }
-  
-  return {
-    uid: data.id,
-    id: data.id,
-    email: data.email,
-    displayName: data.display_name,
-    role: data.role,
-    phone: data.phone,
-    avatarUrl: data.avatar_url || "",
-    isVerified: data.is_verified || false,
-    requestedRole: data.requested_role || null,
-    latitude: data.latitude ?? null,
-    longitude: data.longitude ?? null,
-    serviceRadiusKm: data.service_radius_km ?? 15,
-    alertsEnabled: data.alerts_enabled ?? true,
-    createdAt: data.created_at
-  };
 };
 
 const updateUserProfile = async (uid, updateData) => {

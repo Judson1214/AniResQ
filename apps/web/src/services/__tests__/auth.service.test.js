@@ -5,6 +5,7 @@ import { getUserProfile, updateUserProfile, signUp } from '../auth.service';
 
 vi.mock('@/lib/api', () => ({
   default: {
+    get: vi.fn(),
     patch: vi.fn(),
   },
 }));
@@ -33,20 +34,17 @@ describe('Auth Service', () => {
     const mockDbUser = {
       id: 'user-1',
       email: 'user@example.com',
-      display_name: 'Jane Doe',
+      displayName: 'Jane Doe',
       role: 'CITIZEN',
       phone: '1234567890',
-      avatar_url: 'https://example.com/avatar.jpg',
-      created_at: '2026-10-31T00:00:00Z',
+      avatarUrl: 'https://example.com/avatar.jpg',
+      createdAt: '2026-10-31T00:00:00Z',
     };
 
-    const singleMock = vi.fn().mockResolvedValueOnce({ data: mockDbUser, error: null });
-    const eqMock = vi.fn().mockReturnValue({ single: singleMock });
-    const selectMock = vi.fn().mockReturnValue({ eq: eqMock });
-    supabase.from.mockReturnValue({ select: selectMock });
+    api.get.mockResolvedValueOnce({ data: mockDbUser });
 
     const profile = await getUserProfile('user-1');
-    expect(supabase.from).toHaveBeenCalledWith('users');
+    expect(api.get).toHaveBeenCalledWith('/users/user-1');
     expect(profile).toEqual({
       uid: 'user-1',
       id: 'user-1',

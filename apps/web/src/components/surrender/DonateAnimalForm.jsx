@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 import { surrenderAnimal } from "@/services/animal.service";
+import { validateFile } from "@/services/storage.service";
 
 // Schema for surrendering/donating an animal
 const donateSchema = z.object({
@@ -28,6 +29,13 @@ const DonateAnimalForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Cleanup object URLs to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      photoPreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [photoPreviews]);
   
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(donateSchema),
@@ -37,6 +45,23 @@ const DonateAnimalForm = () => {
   const handlePhotoChange = (e) => {
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files).slice(0, 3);
+      // Validate each file
+      for (const file of selectedFiles) {
+        try {
+          validateFile(file);
+        } catch (err) {
+          toast({
+            title: "Invalid Photo",
+            description: err.message,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      // Revoke previous previews
+      photoPreviews.forEach((url) => URL.revokeObjectURL(url));
+
       setPhotos(selectedFiles);
       const previews = selectedFiles.map((file) => URL.createObjectURL(file));
       setPhotoPreviews(previews);
@@ -60,7 +85,11 @@ const DonateAnimalForm = () => {
       navigate("/animals");
     } catch (error) {
       console.error(error);
-      toast({ title: "Error", description: "Failed to submit animal surrender request.", variant: "destructive" });
+      toast({ 
+        title: "Error", 
+        description: error?.response?.data?.detail || "Failed to submit animal surrender request.", 
+        variant: "destructive" 
+      });
     } finally {
       setIsSubmitting(false);
     }

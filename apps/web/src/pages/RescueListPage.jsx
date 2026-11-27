@@ -69,19 +69,21 @@ function RescueListPage() {
             
             <div className="flex gap-2">
               <select
-    className="border rounded-md px-3 py-1 text-sm"
-    value={statusFilter}
-    onChange={(e) => setStatusFilter(e.target.value)}
-  >
+                aria-label="Filter rescues by status"
+                className="border rounded-md px-3 py-1 text-sm"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
                 <option value="">All Statuses</option>
                 {Object.values(RescueStatus).map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
               </select>
               
               <select
-    className="border rounded-md px-3 py-1 text-sm"
-    value={severityFilter}
-    onChange={(e) => setSeverityFilter(e.target.value)}
-  >
+                aria-label="Filter rescues by severity"
+                className="border rounded-md px-3 py-1 text-sm"
+                value={severityFilter}
+                onChange={(e) => setSeverityFilter(e.target.value)}
+              >
                 <option value="">All Severities</option>
                 {Object.values(RescueSeverity).map((s) => <option key={s} value={s}>{s}</option>)}
               </select>

@@ -1,4 +1,3 @@
-import pytest
 from unittest.mock import MagicMock
 from starlette.testclient import TestClient
 from main import app

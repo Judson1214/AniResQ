@@ -69,6 +69,11 @@ def get_or_create_user(email: str, password: str, display_name: str, role: str) 
     return user_id
 
 def main():
+    env_mode = (os.getenv("ENV") or os.getenv("ENVIRONMENT") or "").lower()
+    if env_mode == "production":
+        print("SECURITY ERROR: seed_users.py is disabled in production environments.")
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(description="Seed initial admin and test users into Supabase.")
     parser.add_argument("--admin-email", default=os.getenv("SEED_ADMIN_EMAIL", "admin@aniresq.com"))
     parser.add_argument("--admin-password", default=os.getenv("SEED_ADMIN_PASSWORD") or os.getenv("ADMIN_PASSWORD"))
@@ -85,7 +90,17 @@ def main():
             print("Error: Admin password must be supplied via SEED_ADMIN_PASSWORD env var or --admin-password flag.")
             sys.exit(1)
 
-    citizen_pwd = args.citizen_password or admin_pwd
+    citizen_pwd = args.citizen_password
+    if not citizen_pwd:
+        if sys.stdin.isatty():
+            citizen_pwd = getpass.getpass("Enter password for demo citizen user (SEED_CITIZEN_PASSWORD not set): ")
+        else:
+            print("Error: Citizen password must be supplied via SEED_CITIZEN_PASSWORD env var or --citizen-password flag.")
+            sys.exit(1)
+
+    if citizen_pwd == admin_pwd:
+        print("SECURITY ERROR: Demo citizen password cannot be identical to administrator password.")
+        sys.exit(1)
 
     print("=== AniResQ Supabase User Seeder ===")
     

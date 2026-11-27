@@ -44,7 +44,7 @@ const CommentsDialog = ({ post }) => {
           replies?.map((reply) => (
             <div key={reply.id} className="bg-[#131B2C] border border-slate-800 p-3 rounded-lg">
               <div className="flex justify-between items-start mb-1">
-                <span className="font-bold text-sm text-blue-400">{reply.userName}</span>
+                <span className="font-bold text-sm text-blue-400">{reply.userName || "Deleted User"}</span>
                 <span className="text-xs text-slate-500">{formatRelativeTime(reply.createdAt)}</span>
               </div>
               <p className="text-sm text-slate-300">{reply.text}</p>

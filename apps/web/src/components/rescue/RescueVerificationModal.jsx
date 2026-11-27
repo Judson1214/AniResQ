@@ -96,7 +96,12 @@ export const RescueVerificationModal = ({ isOpen, onClose, onConfirm, isSubmitti
   const busy = isUploading || isSubmitting;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+    <div 
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="rescue-verification-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200"
+    >
       <div className="relative w-full max-w-lg bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6">
         
         {/* Header */}
@@ -106,7 +111,7 @@ export const RescueVerificationModal = ({ isOpen, onClose, onConfirm, isSubmitti
               <CheckCircle2 size={22} />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">Resolve Emergency SOS</h3>
+              <h3 id="rescue-verification-title" className="text-lg font-bold text-white">Resolve Emergency SOS</h3>
               <p className="text-xs text-slate-400">Submit on-scene verification proof & care summary</p>
             </div>
           </div>

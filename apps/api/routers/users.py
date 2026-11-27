@@ -2,10 +2,10 @@ import os
 import re
 import logging
 from typing import Optional, List, Literal
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from supabase_config import supabase
-from auth import get_current_user
+from auth import get_current_user, invalidate_user_cache
 from validators import validate_avatar_url
 from rate_limiter import limiter
 from .notifications import create_system_notification
@@ -255,7 +255,7 @@ def list_users(
         if has_requested_role:
             query = query.not_.is_("requested_role", "null")
             
-        res = query.order("created_at", desc=True).range(offset, offset + limit - 1).execute()
+        res = query.order("created_at", desc=True).order("id", desc=True).range(offset, offset + limit - 1).execute()
         users_data = res.data or []
         
         return [
@@ -423,7 +423,8 @@ def update_user_profile(uid: str, profile: UserProfileUpdate, current_user: dict
             clean_bio = clean_bio.split("]", 1)[1].strip() if "]" in clean_bio else ""
         update_data["bio"] = clean_bio
     if profile.avatarUrl is not None: 
-        update_data["avatar_url"] = validate_avatar_url(profile.avatarUrl)
+        caller_id = current_user["uid"] if current_user.get("role") != "ADMIN" else None
+        update_data["avatar_url"] = validate_avatar_url(profile.avatarUrl, caller_uid=caller_id)
     if profile.latitude is not None:
         if not (-90.0 <= profile.latitude <= 90.0):
             raise HTTPException(status_code=422, detail="Latitude must be between -90 and 90")
@@ -585,6 +586,10 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
     except Exception as audit_err:
         logger.warning(f"Failed to record audit log for clearance request: {audit_err}")
     
+    # Evict cached profile to ensure role updates and clearance states reflect immediately
+    invalidate_user_cache(uid)
+
+    invalidate_user_cache(uid)
     row_data = {**(res.data[0] if (res.data and isinstance(res.data[0], dict)) else {}), **update_data}
     return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
 
@@ -681,6 +686,10 @@ def withdraw_role_clearance_request(current_user: dict = Depends(get_current_use
     except Exception as audit_err:
         logger.warning(f"Failed to record audit log for clearance withdrawal: {audit_err}")
 
+    # Evict cached profile to ensure role updates and clearance states reflect immediately
+    invalidate_user_cache(uid)
+
+    invalidate_user_cache(uid)
     row_data = {**(res.data[0] if (res.data and isinstance(res.data[0], dict)) else {}), **update_data}
     return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
 
@@ -833,6 +842,7 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
         logger.info(
             f"AUDIT: Role changed for user {uid} from '{prev_role}' to '{target_role}' by admin '{current_user['uid']}'"
         )
+        invalidate_user_cache(uid)
             
         row_data = {**updated_row, "role": target_role, "requested_role": None}
         return map_user(row_data, can_view_contact=True, can_view_sensitive=True)
@@ -944,6 +954,7 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
         logger.info(
             f"AUDIT: Role request for {requested_role} by user {uid} declined by admin '{current_user['uid']}'. Role preserved as '{current_role}'."
         )
+        invalidate_user_cache(uid)
 
         row_data = {**updated_row, "requested_role": None}
         return map_user(row_data, can_view_contact=True, can_view_sensitive=True)

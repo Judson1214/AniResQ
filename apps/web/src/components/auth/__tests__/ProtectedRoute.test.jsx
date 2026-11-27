@@ -23,12 +23,13 @@ describe('ProtectedRoute allowedRoles guard', () => {
     useLocation.mockReturnValue({ pathname: '/admin' });
   });
 
-  it('redirects unauthenticated users to /login', () => {
+  it('redirects unauthenticated users to /login with safe returnTo', () => {
     useAuth.mockReturnValue({
       user: null,
       isAuthenticated: false,
       isLoading: false,
     });
+    useLocation.mockReturnValue({ pathname: '/admin', search: '' });
 
     const element = ProtectedRoute({
       children: React.createElement('div', null, 'Secret Content'),
@@ -36,8 +37,42 @@ describe('ProtectedRoute allowedRoles guard', () => {
     });
 
     expect(element.type).toBe(Navigate);
-    expect(element.props.to).toBe('/login');
+    expect(element.props.to).toBe('/login?returnTo=%2Fadmin');
     expect(element.props.replace).toBe(true);
+  });
+
+  it('sanitizes open redirect vectors in returnTo for unauthenticated users', () => {
+    useAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+    });
+    useLocation.mockReturnValue({ pathname: '//evil.com/hack', search: '' });
+
+    const element = ProtectedRoute({
+      children: React.createElement('div', null, 'Secret Content'),
+      allowedRoles: [UserRole.ADMIN],
+    });
+
+    expect(element.type).toBe(Navigate);
+    expect(element.props.to).toBe('/login?returnTo=%2Fdashboard');
+  });
+
+  it('renders accessible loading screen while auth is initializing', () => {
+    useAuth.mockReturnValue({
+      user: null,
+      isAuthenticated: false,
+      isLoading: true,
+    });
+
+    const element = ProtectedRoute({
+      children: React.createElement('div', null, 'Secret Content'),
+      allowedRoles: [UserRole.ADMIN],
+    });
+
+    expect(element.type).not.toBe(Navigate);
+    expect(element.props.role).toBe('status');
+    expect(element.props['aria-live']).toBe('polite');
   });
 
   it('redirects unauthorized role to /unauthorized when allowedRoles is specified', () => {
