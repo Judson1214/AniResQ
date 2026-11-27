@@ -28,6 +28,15 @@ CREATE OR REPLACE FUNCTION auth.role() RETURNS TEXT LANGUAGE sql STABLE AS $$
                          (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')), '')::text
 $$;
 
+-- supabase_migrations schema used by Supabase CLI
+CREATE SCHEMA IF NOT EXISTS supabase_migrations;
+CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+  version TEXT PRIMARY KEY,
+  statements TEXT[],
+  name TEXT,
+  inserted_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- storage schema
 CREATE SCHEMA IF NOT EXISTS storage;
 CREATE TABLE IF NOT EXISTS storage.buckets (
