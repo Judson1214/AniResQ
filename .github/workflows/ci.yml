@@ -55,6 +55,12 @@ jobs:
           pip install ruff==0.9.9
           ruff check apps/api --config apps/api/ruff.toml
 
+      - name: Run ShellCheck on Ops & Verification Scripts
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck scripts/verify_live.sh
+
   web-test:
     name: Frontend Tests & Build
     runs-on: ubuntu-latest

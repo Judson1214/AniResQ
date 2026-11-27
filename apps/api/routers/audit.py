@@ -6,6 +6,7 @@ from supabase_config import supabase
 from auth import require_roles
 
 router = APIRouter(prefix="/api/audit-logs", tags=["audit"])
+audit_alias = APIRouter(prefix="/api/audit", tags=["audit"])
 logger = logging.getLogger("audit")
 
 class AuditLogResponse(BaseModel):
@@ -68,6 +69,9 @@ def map_audit_log(row: dict) -> dict:
     }
 
 @router.get("", response_model=List[AuditLogResponse])
+@router.get("/", response_model=List[AuditLogResponse], include_in_schema=False)
+@audit_alias.get("", response_model=List[AuditLogResponse], include_in_schema=False)
+@audit_alias.get("/", response_model=List[AuditLogResponse], include_in_schema=False)
 def list_audit_logs(
     action: Optional[str] = None,
     entity_type: Optional[str] = None,

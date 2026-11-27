@@ -81,6 +81,7 @@ def map_post_to_camel(data: dict, can_view_contact: bool = False) -> dict:
         "updatedAt": data.get("updated_at"),
     }
 
+@router.get("", response_model=List[LostFoundResponse], include_in_schema=False)
 @router.get("/", response_model=List[LostFoundResponse])
 def get_lost_found(
     type: Optional[str] = None,

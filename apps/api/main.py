@@ -134,6 +134,7 @@ app.include_router(adoptions.router)
 app.include_router(lostfound.router)
 app.include_router(notifications.router)
 app.include_router(audit.router)
+app.include_router(audit.audit_alias)
 app.include_router(settings.router)
 
 # -----------------------------------------------------------------------------

@@ -59,6 +59,7 @@ def sync_settings_from_db():
         logger.warning(f"Failed to sync system_settings from db: {e}")
 
 @router.get("", response_model=SystemSettings)
+@router.get("/", response_model=SystemSettings, include_in_schema=False)
 def get_system_settings(admin_user: dict = Depends(require_roles(["ADMIN"]))):
     """Admin-only endpoint to retrieve global system configuration and telemetry from database."""
     try:
@@ -78,7 +79,7 @@ def get_system_settings(admin_user: dict = Depends(require_roles(["ADMIN"]))):
             appendOnlyAuditEnforced=True,
             directMutationProtection=True,
             platformVersion="1.0.0",
-            environment="Localhost Environment",
+            environment=os.getenv("ENV", "Localhost Environment"),
             activeAdminCount=max(admin_count, 1),
             totalOperatorsCount=operators_count,
         )
