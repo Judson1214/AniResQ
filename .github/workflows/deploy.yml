@@ -239,6 +239,7 @@ jobs:
 
       - name: Build Web Bundle
         env:
+          CHECK_HEADERS: "1"
           VITE_API_URL: ${{ vars.API_URL }}
           VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
