@@ -4,8 +4,19 @@ import { useAuthStore } from '@/store/authStore';
 import { queryClient } from '@/lib/queryClient';
 import { sanitizeReturnTo } from '@/lib/utils';
 
+export function resolveApiBaseUrl(rawUrl = import.meta.env?.VITE_API_URL) {
+  if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) {
+    return '/api';
+  }
+  const clean = rawUrl.trim().replace(/\/+$/, '');
+  if (clean.endsWith('/api')) {
+    return clean;
+  }
+  return `${clean}/api`;
+}
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: resolveApiBaseUrl(),
 });
 
 // Add a request interceptor to automatically attach the Supabase JWT token

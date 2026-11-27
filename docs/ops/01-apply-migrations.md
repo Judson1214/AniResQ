@@ -50,6 +50,11 @@ Migrations must strictly be applied in chronological sequence. If applying updat
    supabase db push
    ```
 
+> [!TIP]
+> **Automated Deployments & Audit Connection**:
+> The automated deployment workflow (`.github/workflows/deploy.yml`) uses the repository secret `SUPABASE_DB_URL` to run post-migration database audits via `psql`.
+> Copy this connection string from Supabase Dashboard: **Project Settings** > **Database** > **Connection string** > **URI** (choose Transaction mode / port 6543, and ensure any special characters in the database password are URL-encoded).
+
 ### Method B: Supabase Dashboard SQL Editor (Manual Fallback)
 
 If the Supabase CLI is unavailable:

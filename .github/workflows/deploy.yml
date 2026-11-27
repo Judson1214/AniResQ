@@ -98,7 +98,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
         with:
-          version: latest
+          version: 2.99.0 # Pinned to stable release v2.99.0
 
       - name: Pre-Flight Migration List Comparison
         env:
@@ -120,9 +120,13 @@ jobs:
 
       - name: Run Live Database Audit Checks
         env:
-          DATABASE_URL: "postgresql://postgres.${{ vars.SUPABASE_PROJECT_REF }}:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-us-east-1.pooler.supabase.com:6543/postgres"
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
           echo "Running post-migration live database audit..."
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::SUPABASE_DB_URL secret is not configured. Required for post-migration verification."
+            exit 1
+          fi
           # Execute live_audit.sql via psql and fail if any check reports FAIL
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
           AUDIT_OUTPUT=$(psql "$DATABASE_URL" -f supabase/ops/live_audit.sql -v ON_ERROR_STOP=1)
@@ -137,6 +141,9 @@ jobs:
     needs: deploy-database
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
+      packages: write
     timeout-minutes: 20
     steps:
       - name: Checkout repository
@@ -147,14 +154,28 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      - name: Build API Docker Image
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push API Docker Image
         env:
           COMMIT_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
         run: |
+          LOWER_REPO=$(echo "$REPO" | tr '[:upper:]' '[:lower:]')
+          IMAGE_URI="ghcr.io/$LOWER_REPO:$COMMIT_SHA"
+          echo "Building container image $IMAGE_URI..."
           docker build \
             --build-arg COMMIT_SHA="$COMMIT_SHA" \
+            -t "$IMAGE_URI" \
             -t "aniresq-api:$COMMIT_SHA" \
             -f Dockerfile .
+          echo "Pushing container image to GitHub Container Registry..."
+          docker push "$IMAGE_URI"
 
       - name: Deploy API Service
         env:
@@ -165,7 +186,7 @@ jobs:
           if [ -n "$API_DEPLOY_WEBHOOK_URL" ]; then
             curl -fsS -X POST "$API_DEPLOY_WEBHOOK_URL"
           else
-            echo "Note: API_DEPLOY_WEBHOOK_URL not configured. Container image built successfully."
+            echo "Note: API_DEPLOY_WEBHOOK_URL not configured. Container image built and pushed successfully."
           fi
 
       - name: Await API Service Health
@@ -173,8 +194,8 @@ jobs:
           API_URL: ${{ vars.API_URL }}
         run: |
           if [ -z "$API_URL" ]; then
-            echo "API_URL variable not set, skipping live readiness poll."
-            exit 0
+            echo "::error::API_URL repository variable is not set! Cannot verify service health."
+            exit 1
           fi
           echo "Polling $API_URL/health and /ready..."
           for i in {1..30}; do

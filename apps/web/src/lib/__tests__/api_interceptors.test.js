@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import api from '@/lib/api';
+import api, { resolveApiBaseUrl } from '@/lib/api';
 import { queryClient } from '@/lib/queryClient';
 import { useAuthStore } from '@/store/authStore';
 import { supabase } from '@/config/supabase';
@@ -112,5 +112,32 @@ describe('lib/api interceptors and queryClient retry policies', () => {
     const updatedConfig = await requestInterceptor(config);
 
     expect(updatedConfig.headers.Authorization).toBeUndefined();
+  });
+
+  describe('resolveApiBaseUrl configuration', () => {
+    it('falls back to /api when input is unset, empty, or whitespace', () => {
+      expect(resolveApiBaseUrl(undefined)).toBe('/api');
+      expect(resolveApiBaseUrl(null)).toBe('/api');
+      expect(resolveApiBaseUrl('')).toBe('/api');
+      expect(resolveApiBaseUrl('   ')).toBe('/api');
+    });
+
+    it('normalizes custom API host by appending /api and stripping trailing slashes', () => {
+      expect(resolveApiBaseUrl('https://api.aniresq.com')).toBe('https://api.aniresq.com/api');
+      expect(resolveApiBaseUrl('https://api.aniresq.com/')).toBe('https://api.aniresq.com/api');
+      expect(resolveApiBaseUrl('https://api.aniresq.com///')).toBe('https://api.aniresq.com/api');
+      expect(resolveApiBaseUrl('http://127.0.0.1:8000')).toBe('http://127.0.0.1:8000/api');
+    });
+
+    it('does not double-append /api if already present in custom URL', () => {
+      expect(resolveApiBaseUrl('https://api.aniresq.com/api')).toBe('https://api.aniresq.com/api');
+      expect(resolveApiBaseUrl('https://api.aniresq.com/api/')).toBe('https://api.aniresq.com/api');
+      expect(resolveApiBaseUrl('/api')).toBe('/api');
+      expect(resolveApiBaseUrl('/api/')).toBe('/api');
+    });
+
+    it('axios default baseURL matches resolved api base url', () => {
+      expect(api.defaults.baseURL).toBe(resolveApiBaseUrl());
+    });
   });
 });

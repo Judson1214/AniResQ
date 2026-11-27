@@ -67,3 +67,31 @@ Navigate to **Actions** > **General**:
 3. **Environment protection**: Create an environment named `production` under **Environments** (`https://github.com/<OWNER>/<REPO>/settings/environments/new`):
    - Add **Required reviewers** (select project owner and senior ops engineers).
    - Configure **Deployment branches** to `Selected branches: main` only.
+
+---
+
+## 5. Repository Secrets & Variables Configuration
+
+Navigate to **Settings** > **Secrets and variables** > **Actions**:
+
+### Repository Secrets (Confidential)
+
+| Secret Name | Description & Dashboard Source |
+|---|---|
+| `SUPABASE_DB_URL` | Full PostgreSQL connection URI. Copy from Supabase Dashboard > **Project Settings** > **Database** > **Connection string** > **URI** (select **Transaction** pooler mode, port 6543, and URL-encode special characters in the password). Required by `.github/workflows/deploy.yml` for automated migration audits. |
+| `SUPABASE_ACCESS_TOKEN` | Supabase CLI personal access token. Generate at `https://supabase.com/dashboard/account/tokens`. |
+| `SUPABASE_DB_PASSWORD` | Production database superuser password. |
+| `SUPABASE_ANON_KEY` | Public client anon key. Copy from **Project Settings** > **API**. |
+| `API_DEPLOY_WEBHOOK_URL` | (Optional) Hosting webhook to trigger API container redeployment after GHCR image push. |
+| `WEB_DEPLOY_WEBHOOK_URL` | (Optional) Hosting webhook to trigger static frontend deploy (e.g., Vercel / Netlify / Cloudflare Pages). |
+
+### Repository Variables (Non-Secret)
+
+| Variable Name | Description & Usage Recommendation |
+|---|---|
+| `SUPABASE_PROJECT_REF` | 20-character Supabase reference string (e.g. `abcdefghijklmnopqrst`). |
+| `SUPABASE_URL` | Base Supabase HTTPS URL (e.g. `https://<PROJECT-REF>.supabase.co`). |
+| `API_URL` | Public production API URL (e.g. `https://api.aniresq.com`). Used by healthcheck probe and live verification. |
+| `WEB_URL` | Public production frontend URL (e.g. `https://app.aniresq.com`). |
+| `VITE_API_URL` | **API Base URL Selection Strategy**: <br>• **Separate Domains** (Recommended for standalone API hosting, e.g. AWS ECS / Fly.io with frontend on Vercel): Set `VITE_API_URL="https://api.aniresq.com"`. The frontend will automatically strip any trailing slash and ensure `/api` is cleanly appended.<br>• **Unified Reverse Proxy** (If a CDN/proxy routes `/api/*` to the backend on the same domain): Leave `VITE_API_URL` **unset** or blank. The frontend will default to relative `/api`. |
+
