@@ -72,9 +72,46 @@ def test_metrics_endpoint_unauthorized_returns_401(monkeypatch):
     res_no_auth = client.get("/metrics")
     assert res_no_auth.status_code == 401
 
-    # Wrong header
-    res_wrong_auth = client.get("/metrics", headers={"Authorization": "Bearer wrong-token"})
-    assert res_wrong_auth.status_code == 401
+    # Wrong header (different length and same length)
+    res_wrong_len = client.get("/metrics", headers={"Authorization": "Bearer wrong"})
+    assert res_wrong_len.status_code == 401
+    
+    res_same_len = client.get("/metrics", headers={"Authorization": "Bearer super-secret-metrics-token-99999"})
+    assert res_same_len.status_code == 401
+
+def test_metrics_cardinality_bounded_under_5000_random_requests():
+    """Verify that 5000 requests to random paths produce at most 1000 keys and dict does not grow past cap."""
+    metrics_collector.reset()
+
+    # Simulate 5000 distinct random endpoints
+    for i in range(5000):
+        metrics_collector.record("GET", f"/random-path-cardinality-test-{i}", 200, 0.001)
+
+    # Must be strictly capped at 1000 distinct metric keys
+    assert len(metrics_collector._metrics) <= 1000
+    # Must have aggregated into __overflow__
+    overflow_keys = [k for k in metrics_collector._metrics if k[1] == "__overflow__"]
+    assert len(overflow_keys) >= 1
+    # Total count across metrics must equal 5000
+    total_recorded = sum(val[0] for val in metrics_collector._metrics.values())
+    assert total_recorded == 5000
+
+def test_metrics_records_route_template_for_parameterized_paths():
+    """Verify that /api/animals/123 and /api/animals/456 record route template /api/animals/{id} as a single label."""
+    metrics_collector.reset()
+
+    # Both requests hit /api/animals/{id} route (FastAPI router matches template)
+    res1 = client.get("/api/animals/123")
+    res2 = client.get("/api/animals/456")
+
+    summary = metrics_collector.get_summary_dict()
+    routes = [r["route"] for r in summary["routes"]]
+
+    # Parameterized route template must be recorded
+    assert "/api/animals/{id}" in routes
+    # Raw IDs must NOT be recorded as separate route labels
+    assert not any("123" in r for r in routes)
+    assert not any("456" in r for r in routes)
 
 def test_metrics_endpoint_authorized_returns_prometheus_and_json(monkeypatch):
     """Authorized GET /metrics returns Prometheus text format and JSON format."""
