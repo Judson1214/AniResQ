@@ -48,6 +48,7 @@ Thumbs.db
 *.gpr
 
 # Temporary presentation and archive files
+supabase/.temp/
 *.pptx
 *.zip
 *.pdf
