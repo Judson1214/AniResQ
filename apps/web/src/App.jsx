@@ -2,6 +2,7 @@ import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { AuthInitializer } from "@/components/auth/AuthInitializer";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { UserRole } from "@aniresq/shared-types";
 
 const HomePage = lazy(() => import("@/pages/HomePage"));
@@ -43,7 +44,14 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/animals" element={<AnimalsPage />} />
           <Route path="/animals/:id" element={<AnimalDetailPage />} />
-          <Route path="/lost-found" element={<LostFoundPage />} />
+          <Route
+            path="/lost-found"
+            element={
+              <ErrorBoundary title="Failed to load Lost & Found directory.">
+                <LostFoundPage />
+              </ErrorBoundary>
+            }
+          />
           <Route path="/donate" element={<DonationPage />} />
 
           {/* Protected Routes - Any authenticated user */}
@@ -67,7 +75,19 @@ function App() {
             path="/report-rescue"
             element={
               <ProtectedRoute>
-                <ReportRescuePage />
+                <ErrorBoundary title="Failed to load Rescue Report form.">
+                  <ReportRescuePage />
+                </ErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/report"
+            element={
+              <ProtectedRoute>
+                <ErrorBoundary title="Failed to load Rescue Report form.">
+                  <ReportRescuePage />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />
@@ -97,12 +117,21 @@ function App() {
           />
 
           {/* Public & Community Rescue Map */}
-          <Route path="/rescue" element={<RescueListPage />} />
+          <Route
+            path="/rescue"
+            element={
+              <ErrorBoundary title="Failed to load Community Rescue Map.">
+                <RescueListPage />
+              </ErrorBoundary>
+            }
+          />
           <Route
             path="/rescue/:id"
             element={
               <ProtectedRoute>
-                <RescueDetailPage />
+                <ErrorBoundary title="Failed to load Rescue Incident details.">
+                  <RescueDetailPage />
+                </ErrorBoundary>
               </ProtectedRoute>
             }
           />
@@ -141,7 +170,23 @@ function App() {
             }
           />
           <Route
+            path="/admin/operator-registry"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <OperatorRegistryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/dashboard/settings"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <SystemSettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/system-settings"
             element={
               <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
                 <SystemSettingsPage />

@@ -5,7 +5,7 @@ import React from 'react';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useRealtimeCollection } from '@/hooks/useRealtimeCollection';
+import { useRealtimeCollection, calculatePollingInterval } from '@/hooks/useRealtimeCollection';
 import * as storageService from '@/services/storage.service';
 import * as notifService from '@/services/notification.service';
 import { useAuthStore } from '@/store/authStore';
@@ -137,12 +137,37 @@ describe('Frontend Custom Hooks Coverage', () => {
   });
 
   describe('useRealtimeCollection polling and visibility backoff', () => {
-    it('pauses polling when tab is hidden and applies exponential backoff on error', () => {
+    it('calculates polling interval based on auth, visibility, and exponential error backoff', () => {
+      // Never poll when logged out
+      expect(calculatePollingInterval(null, false, false)).toBe(false);
+
+      // Pause when tab/document is hidden
+      expect(calculatePollingInterval(null, true, true)).toBe(false);
+
+      // Active and healthy: polls every 10 seconds
+      expect(calculatePollingInterval({ error: null }, false, true)).toBe(10000);
+
+      // Exponential error backoff capped at 60 seconds
+      expect(calculatePollingInterval({ error: new Error(), errorUpdateCount: 1 }, false, true)).toBe(5000);
+      expect(calculatePollingInterval({ error: new Error(), errorUpdateCount: 2 }, false, true)).toBe(10000);
+      expect(calculatePollingInterval({ error: new Error(), errorUpdateCount: 3 }, false, true)).toBe(20000);
+      expect(calculatePollingInterval({ error: new Error(), errorUpdateCount: 4 }, false, true)).toBe(40000);
+      expect(calculatePollingInterval({ error: new Error(), errorUpdateCount: 5 }, false, true)).toBe(60000);
+      expect(calculatePollingInterval({ error: new Error(), errorUpdateCount: 6 }, false, true)).toBe(60000); // capped
+    });
+
+    it('pauses polling when tab is hidden and applies exponential backoff on error with fake timers', () => {
+      vi.useFakeTimers();
+      useAuthStore.getState().setUser({ uid: 'u-poll-1', email: 'poll@test.com' });
+
       const { result } = renderHook(
         () => useRealtimeCollection('/api/test', {}, true),
         { wrapper: createWrapper() }
       );
       expect(result.current.data).toBeDefined();
+
+      vi.advanceTimersByTime(10000);
+      vi.useRealTimers();
     });
   });
 
