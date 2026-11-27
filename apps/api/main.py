@@ -12,11 +12,16 @@ from errors import AppError
 from logging_config import setup_logging, request_id_ctx_var
 from rate_limiter import RateLimitMiddleware, limiter, get_client_ip
 from config_validator import validate_production_config
+from metrics import MetricsMiddleware, handle_metrics_endpoint
+from sentry import init_sentry
 from supabase_config import supabase
 from routers import rescues, users, animals, adoptions, lostfound, notifications, audit, settings
 
 # Validate production environment security configuration
 validate_production_config()
+
+# Initialize optional Sentry monitoring if SENTRY_DSN is configured
+init_sentry()
 
 # Configure structured JSON logging
 setup_logging(level=logging.INFO)
@@ -92,8 +97,9 @@ class SecurityHeadersAndBodySizeMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersAndBodySizeMiddleware)
 
 # -----------------------------------------------------------------------------
-# 3. Rate Limit Middleware
+# 3. Rate Limit Middleware & Metrics Middleware
 # -----------------------------------------------------------------------------
+app.add_middleware(MetricsMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
 # -----------------------------------------------------------------------------
@@ -178,6 +184,11 @@ async def readiness_check(request: Request):
             status_code=503,
             content={"status": "unavailable", "detail": "Database connection unavailable"}
         )
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics_endpoint(request: Request):
+    """Operational metrics endpoint protected by METRICS_TOKEN."""
+    return handle_metrics_endpoint(request)
 
 @app.get("/")
 async def root():

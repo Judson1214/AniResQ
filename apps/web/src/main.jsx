@@ -6,6 +6,10 @@ import { queryClient } from "@/lib/queryClient";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import App from "./App";
 import "./styles/globals.css";
+import { initFrontendSentry } from "@/lib/sentry";
+
+// Initialize optional frontend error monitoring
+initFrontendSentry();
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
