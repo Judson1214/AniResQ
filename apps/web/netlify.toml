@@ -2,9 +2,10 @@
   command = "pnpm run build"
   publish = "dist"
 
+# TODO: Replace YOUR-API-HOST with your deployed backend API domain (e.g. api.aniresq.com)
 [[redirects]]
   from = "/api/*"
-  to = "http://127.0.0.1:8000/api/:splat"
+  to = "https://YOUR-API-HOST/api/:splat"
   status = 200
 
 [[redirects]]

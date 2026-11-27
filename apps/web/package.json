@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "check:deploy": "node scripts/check-deploy-config.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
