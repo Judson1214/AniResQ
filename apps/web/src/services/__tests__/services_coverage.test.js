@@ -292,14 +292,14 @@ describe('Frontend Services Comprehensive Test Suite', () => {
 
   describe('storage.service.js', () => {
     it('validates file formats, sizes, and deletes files', async () => {
-      const validFile = new File(['valid content'], 'photo.jpg', { type: 'image/jpeg' });
-      expect(storageService.validateFile(validFile)).toBe(true);
+      const validFile = new File([new Uint8Array([0xFF, 0xD8, 0xFF, 0x00])], 'photo.jpg', { type: 'image/jpeg' });
+      await expect(storageService.validateFile(validFile)).resolves.toBe(true);
 
-      const hugeFile = new File(['x'.repeat(100)], 'large.jpg', { type: 'image/jpeg' });
-      expect(() => storageService.validateFile(hugeFile, { maxSize: 10 })).toThrow(/exceeds maximum allowed size/i);
+      const hugeFile = new File([new Uint8Array([0xFF, 0xD8, 0xFF, 0x00])], 'large.jpg', { type: 'image/jpeg' });
+      await expect(storageService.validateFile(hugeFile, { maxSize: 2 })).rejects.toThrow(/exceeds maximum allowed size/i);
 
       const invalidTypeFile = new File(['data'], 'script.exe', { type: 'application/x-msdownload' });
-      expect(() => storageService.validateFile(invalidTypeFile)).toThrow(/invalid format/i);
+      await expect(storageService.validateFile(invalidTypeFile)).rejects.toThrow(/invalid format/i);
 
       vi.spyOn(supabase.storage, 'from').mockReturnValue({
         remove: vi.fn().mockResolvedValue({ error: null }),
@@ -320,7 +320,7 @@ describe('Frontend Services Comprehensive Test Suite', () => {
         getPublicUrl: vi.fn().mockReturnValue({ data: { publicUrl: 'https://test.co/file.jpg' } }),
       });
 
-      const testFile = new File(['image content'], 'test.jpg', { type: 'image/jpeg' });
+      const testFile = new File([new Uint8Array([0xFF, 0xD8, 0xFF, 0x00])], 'test.jpg', { type: 'image/jpeg' });
       const publicUrl = await storageService.uploadFile('pets/dog.jpg', testFile);
       expect(publicUrl).toBe('https://test.co/file.jpg');
 
@@ -345,7 +345,7 @@ describe('Frontend Services Comprehensive Test Suite', () => {
         drawImage: vi.fn(),
       });
       HTMLCanvasElement.prototype.toBlob = function (callback) {
-        callback(new Blob(['fake-jpg'], { type: 'image/jpeg' }));
+        callback(new Blob([new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x01])], { type: 'image/jpeg' }));
       };
 
       try {

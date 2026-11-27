@@ -42,13 +42,13 @@ const DonateAnimalForm = () => {
     defaultValues: { species: Species.DOG }
   });
 
-  const handlePhotoChange = (e) => {
+  const handlePhotoChange = async (e) => {
     if (e.target.files) {
       const selectedFiles = Array.from(e.target.files).slice(0, 3);
       // Validate each file
       for (const file of selectedFiles) {
         try {
-          validateFile(file);
+          await validateFile(file);
         } catch (err) {
           toast({
             title: "Invalid Photo",

@@ -3,7 +3,14 @@ import { supabase } from "@/config/supabase";
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const DEFAULT_ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-export const validateFile = (file, options = {}) => {
+const MIME_EXTENSION_MAP = {
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/png": ["png"],
+  "image/webp": ["webp"],
+  "application/pdf": ["pdf"],
+};
+
+export const validateFile = async (file, options = {}) => {
   const maxSize = options.maxSize || MAX_FILE_SIZE;
   const allowedTypes = options.allowedTypes || DEFAULT_ALLOWED_TYPES;
 
@@ -11,21 +18,72 @@ export const validateFile = (file, options = {}) => {
     throw new Error("No file provided for upload");
   }
 
+  // Reject zero-byte files
+  if (file.size === 0) {
+    throw new Error(`File "${file.name}" is empty (0 bytes)`);
+  }
+
   if (file.size > maxSize) {
     const sizeInMb = (maxSize / (1024 * 1024)).toFixed(0);
     throw new Error(`File "${file.name}" exceeds maximum allowed size of ${sizeInMb}MB`);
   }
 
+  // Reject double extensions like photo.php.jpg
+  const nameParts = file.name.split(".");
+  if (nameParts.length > 2) {
+    throw new Error(`File "${file.name}" contains multiple extensions, which is not permitted`);
+  }
+  if (nameParts.length < 2) {
+    throw new Error(`File "${file.name}" is missing a file extension`);
+  }
+
+  const ext = nameParts[nameParts.length - 1].toLowerCase();
+
+  // Validate declared MIME type against allowlist
   if (!allowedTypes.includes(file.type)) {
     const acceptedList = allowedTypes.map(t => t.split('/')[1]?.toUpperCase() || t).join(', ');
     throw new Error(`File "${file.name}" has invalid format "${file.type}". Allowed formats: ${acceptedList}`);
+  }
+
+  // Check file extension against allow-list matching the MIME type
+  const expectedExtensions = MIME_EXTENSION_MAP[file.type] || [];
+  if (!expectedExtensions.includes(ext)) {
+    throw new Error(`File extension ".${ext}" does not match declared MIME type "${file.type}"`);
+  }
+
+  // Magic bytes inspection
+  const buffer = await file.slice(0, 12).arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  if (file.type === "image/jpeg") {
+    if (bytes.length < 3 || bytes[0] !== 0xFF || bytes[1] !== 0xD8 || bytes[2] !== 0xFF) {
+      throw new Error(`File "${file.name}" does not have valid JPEG header signatures`);
+    }
+  } else if (file.type === "image/png") {
+    const pngMagic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    const isPng = bytes.length >= pngMagic.length && pngMagic.every((b, i) => bytes[i] === b);
+    if (!isPng) {
+      throw new Error(`File "${file.name}" does not have valid PNG header signatures`);
+    }
+  } else if (file.type === "image/webp") {
+    const isRiff = bytes.length >= 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46;
+    const isWebp = bytes.length >= 12 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+    if (!isRiff || !isWebp) {
+      throw new Error(`File "${file.name}" does not have valid WEBP header signatures`);
+    }
+  } else if (file.type === "application/pdf") {
+    const pdfMagic = [0x25, 0x50, 0x44, 0x46, 0x2D];
+    const isPdf = bytes.length >= pdfMagic.length && pdfMagic.every((b, i) => bytes[i] === b);
+    if (!isPdf) {
+      throw new Error(`File "${file.name}" does not have valid PDF header signatures`);
+    }
   }
 
   return true;
 };
 
 const uploadFile = async (path, file, onProgress) => {
-  validateFile(file);
+  await validateFile(file);
   // Ensure the upload path is strictly scoped under {auth.uid()}/... to satisfy storage RLS policies
   const { data: { session } } = await supabase.auth.getSession();
   const userId = session?.user?.id;
@@ -92,12 +150,15 @@ const compressImage = (file, maxWidth = 800) => {
 };
 
 const uploadMultipleFiles = async (basePath, files, onProgress) => {
+  if (files.length > 5) {
+    throw new Error("Maximum 5 files allowed per upload");
+  }
   const totalFiles = files.length;
   if (totalFiles === 0) return [];
   
   // Validate all files before processing
   for (const file of files) {
-    validateFile(file);
+    await validateFile(file);
   }
 
   let overallProgress = 0;
@@ -149,7 +210,7 @@ const deleteFile = async (url) => {
 };
 
 const uploadIdDocument = async (file, onProgress) => {
-  validateFile(file, {
+  await validateFile(file, {
     maxSize: MAX_FILE_SIZE,
     allowedTypes: [...DEFAULT_ALLOWED_TYPES, "application/pdf"],
   });

@@ -179,11 +179,11 @@ const LostFoundForm = ({ onSuccess }) => {
             accept="image/jpeg,image/png,image/webp" 
             multiple 
             className="bg-slate-900 border-slate-700 text-white" 
-            onChange={(e) => {
+            onChange={async (e) => {
               const selected = Array.from(e.target.files || []).slice(0, 3);
               for (const file of selected) {
                 try {
-                  validateFile(file);
+                  await validateFile(file);
                 } catch (err) {
                   toast({
                     title: "Invalid File",
