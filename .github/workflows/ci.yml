@@ -60,6 +60,12 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
           shellcheck scripts/verify_live.sh
+          shellcheck scripts/tests/test_verify_live.sh
+
+      - name: Run Mock API Tests for verify_live.sh
+        run: |
+          chmod +x scripts/verify_live.sh scripts/tests/test_verify_live.sh
+          bash scripts/tests/test_verify_live.sh
 
   web-test:
     name: Frontend Tests & Build

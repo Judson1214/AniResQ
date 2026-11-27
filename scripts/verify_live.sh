@@ -10,24 +10,30 @@
 #   WEB_URL           (e.g., https://app.aniresq.com)
 #   SUPABASE_URL      (e.g., https://<YOUR-PROJECT-REF>.supabase.co)
 #   SUPABASE_ANON_KEY (Public anonymous client key)
+#   TEST_USER_TOKEN   (Optional: valid user JWT to test 422 schema sanitization)
 #   API_ONLY          (Optional: set to 1 to run only local API tests)
 # ==============================================================================
 
 set -euo pipefail
-set +x # Ensure secrets are never echoed in logs or terminal traces
+set +x # Ensure secrets and tokens are never echoed in logs or terminal traces
 
+PASSED_CHECKS=0
 FAILED_CHECKS=0
-TOTAL_CHECKS=0
+SKIPPED_CHECKS=0
 
 pass() {
-  TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
+  PASSED_CHECKS=$((PASSED_CHECKS + 1))
   echo "PASS: $1"
 }
 
 fail() {
-  TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
   FAILED_CHECKS=$((FAILED_CHECKS + 1))
   echo "FAIL: $1 - $2"
+}
+
+skip() {
+  SKIPPED_CHECKS=$((SKIPPED_CHECKS + 1))
+  echo "SKIP: $1"
 }
 
 info() {
@@ -38,6 +44,7 @@ API_URL="${API_URL:-}"
 WEB_URL="${WEB_URL:-}"
 SUPABASE_URL="${SUPABASE_URL:-}"
 SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}"
+TEST_USER_TOKEN="${TEST_USER_TOKEN:-}"
 API_ONLY="${API_ONLY:-0}"
 
 if [ -z "$API_URL" ]; then
@@ -69,9 +76,22 @@ fi
 # 2 & 3. Supabase PostgREST Direct Access Revocation Checks
 # ------------------------------------------------------------------------------
 if [ "$API_ONLY" -eq 1 ] || [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-  echo "NOTICE: Skipping Supabase PostgREST checks (SUPABASE_URL / SUPABASE_ANON_KEY not set or API_ONLY=1)"
+  skip "Supabase PostgREST checks (SUPABASE_URL / SUPABASE_ANON_KEY not set or API_ONLY=1)"
 else
-  info "Checking Supabase PostgREST direct access blocks with anon key..."
+  info "Verifying Supabase PostgREST root accessibility and table-level access blocks..."
+  
+  # First verify root PostgREST endpoint is live with valid anon key
+  ROOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+    -H "apikey: $SUPABASE_ANON_KEY" \
+    -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+    "$SUPABASE_URL/rest/v1/")
+
+  if [ "$ROOT_STATUS" -eq 200 ]; then
+    pass "PostgREST root reachable with anon key (HTTP 200)"
+  else
+    fail "PostgREST root connection" "GET $SUPABASE_URL/rest/v1/ returned $ROOT_STATUS (expected 200 with anon key; verify SUPABASE_URL and SUPABASE_ANON_KEY)"
+  fi
+
   TABLES=("lost_and_found" "users" "audit_logs" "system_settings" "rescues")
 
   for tbl in "${TABLES[@]}"; do
@@ -79,24 +99,25 @@ else
       -H "apikey: $SUPABASE_ANON_KEY" \
       -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
       "$SUPABASE_URL/rest/v1/$tbl?select=*")
-    if [ "$STATUS" -eq 401 ] || [ "$STATUS" -eq 403 ] || [ "$STATUS" -eq 404 ]; then
+    # Must strictly be 401 or 403; 404 is NOT accepted
+    if [ "$STATUS" -eq 401 ] || [ "$STATUS" -eq 403 ]; then
       pass "PostgREST direct SELECT blocked on $tbl (HTTP $STATUS)"
     else
-      fail "PostgREST direct SELECT on $tbl" "Expected 401/403/404, got $STATUS (Data leak risk!)"
+      fail "PostgREST direct SELECT on $tbl" "Expected 401 or 403, got $STATUS (Data leak risk!)"
     fi
   done
 
-  # Test direct mutations on users table
+  # Test direct mutations on users table (must reject with 401, 403, or 405)
   PATCH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH \
     -H "apikey: $SUPABASE_ANON_KEY" \
     -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
     -H "Content-Type: application/json" \
     -d '{"role":"ADMIN"}' \
     "$SUPABASE_URL/rest/v1/users?id=eq.fake-id")
-  if [ "$PATCH_STATUS" -eq 401 ] || [ "$PATCH_STATUS" -eq 403 ] || [ "$PATCH_STATUS" -eq 404 ] || [ "$PATCH_STATUS" -eq 405 ]; then
+  if [ "$PATCH_STATUS" -eq 401 ] || [ "$PATCH_STATUS" -eq 403 ] || [ "$PATCH_STATUS" -eq 405 ]; then
     pass "PostgREST direct PATCH on users rejected (HTTP $PATCH_STATUS)"
   else
-    fail "PostgREST direct PATCH on users" "Expected 401/403/404/405, got $PATCH_STATUS"
+    fail "PostgREST direct PATCH on users" "Expected 401/403/405, got $PATCH_STATUS"
   fi
 
   POST_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
@@ -105,10 +126,10 @@ else
     -H "Content-Type: application/json" \
     -d '{"email":"attacker@test.com"}' \
     "$SUPABASE_URL/rest/v1/users")
-  if [ "$POST_STATUS" -eq 401 ] || [ "$POST_STATUS" -eq 403 ] || [ "$POST_STATUS" -eq 404 ] || [ "$POST_STATUS" -eq 405 ]; then
+  if [ "$POST_STATUS" -eq 401 ] || [ "$POST_STATUS" -eq 403 ] || [ "$POST_STATUS" -eq 405 ]; then
     pass "PostgREST direct POST on users rejected (HTTP $POST_STATUS)"
   else
-    fail "PostgREST direct POST on users" "Expected 401/403/404/405, got $POST_STATUS"
+    fail "PostgREST direct POST on users" "Expected 401/403/405, got $POST_STATUS"
   fi
 fi
 
@@ -121,8 +142,6 @@ LF_HTTP_CODE=$(echo "$LF_RESPONSE" | tail -n 1)
 LF_BODY=$(echo "$LF_RESPONSE" | sed '$d')
 
 if [ "$LF_HTTP_CODE" -eq 200 ]; then
-  # Verify contactPhone and contactEmail contain no exposed characters
-  # Regex looks for "contactPhone":"[^\"]+" with non-empty contents
   LEAKED_PHONE=$(echo "$LF_BODY" | grep -oE '"contactPhone":"[^"]+"' || true)
   LEAKED_EMAIL=$(echo "$LF_BODY" | grep -oE '"contactEmail":"[^"]+"' || true)
 
@@ -157,7 +176,7 @@ fi
 # 6. Web Application Security Headers & CSP
 # ------------------------------------------------------------------------------
 if [ "$API_ONLY" -eq 1 ] || [ -z "$WEB_URL" ]; then
-  echo "NOTICE: Skipping frontend web headers checks (WEB_URL not set or API_ONLY=1)"
+  skip "Frontend web headers checks (WEB_URL not set or API_ONLY=1)"
 else
   info "Checking Web security headers on $WEB_URL..."
   HEADERS=$(curl -s -I "$WEB_URL")
@@ -195,7 +214,7 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# 7. API Security Headers, Cache-Control, and Sanitized Validation Errors
+# 7. API Security Headers, Cache-Control, and Validation Error Sanitization
 # ------------------------------------------------------------------------------
 info "Checking API response headers and validation error sanitization..."
 API_HEADERS=$(curl -s -D - "$API_URL/api/lostfound" -o /dev/null)
@@ -212,12 +231,34 @@ else
   fail "API Cache-Control" "Cache-Control does not specify no-store"
 fi
 
-# Trigger validation error via POST with empty body
-VAL_RESP=$(curl -s -X POST -H "Content-Type: application/json" -d '{}' "$API_URL/api/rescues/")
-if echo "$VAL_RESP" | grep -q '"input"'; then
-  fail "API validation error sanitization" "Response body leaked raw 'input' field: $VAL_RESP"
+# A. Unauthenticated mutation rejection check
+UNAUTH_RESCUE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d '{}' "$API_URL/api/rescues/")
+if [ "$UNAUTH_RESCUE_STATUS" -eq 401 ]; then
+  pass "POST /api/rescues/ without token rejected with HTTP 401 Unauthorized"
 else
-  pass "API validation error JSON does not leak raw input field"
+  fail "POST /api/rescues/ unauthenticated" "Expected HTTP 401, got $UNAUTH_RESCUE_STATUS"
+fi
+
+# B. Authenticated validation error sanitization check (requires TEST_USER_TOKEN)
+if [ -n "$TEST_USER_TOKEN" ]; then
+  VAL_RESP=$(curl -s -w "\n%{http_code}" -X POST \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TEST_USER_TOKEN" \
+    -d '{}' "$API_URL/api/rescues/")
+  VAL_CODE=$(echo "$VAL_RESP" | tail -n 1)
+  VAL_BODY=$(echo "$VAL_RESP" | sed '$d')
+
+  if [ "$VAL_CODE" -eq 422 ]; then
+    if echo "$VAL_BODY" | grep -q '"input"' || echo "$VAL_BODY" | grep -q '"ctx"'; then
+      fail "API 422 validation sanitization" "Response body leaked raw 'input' or 'ctx' field"
+    else
+      pass "API validation error returns HTTP 422 and sanitizes raw input/ctx fields"
+    fi
+  else
+    fail "API 422 validation check" "Expected HTTP 422 with valid token, got $VAL_CODE"
+  fi
+else
+  skip "API 422 validation error sanitization (TEST_USER_TOKEN not provided)"
 fi
 
 # ------------------------------------------------------------------------------
@@ -249,8 +290,9 @@ fi
 # ------------------------------------------------------------------------------
 # Final Verification Summary
 # ------------------------------------------------------------------------------
+TOTAL_EVALUATED=$((PASSED_CHECKS + FAILED_CHECKS))
 echo "=============================================================================="
-echo "Verification Complete: $TOTAL_CHECKS checks executed. ($FAILED_CHECKS failed)"
+echo "RESULT: $PASSED_CHECKS/$TOTAL_EVALUATED passed, $SKIPPED_CHECKS skipped"
 echo "=============================================================================="
 
 if [ "$FAILED_CHECKS" -gt 0 ]; then
@@ -258,5 +300,5 @@ if [ "$FAILED_CHECKS" -gt 0 ]; then
   exit 1
 fi
 
-echo "VERIFICATION STATUS: PASS (All checks passed successfully)"
+echo "VERIFICATION STATUS: PASS (All evaluated checks passed successfully)"
 exit 0
