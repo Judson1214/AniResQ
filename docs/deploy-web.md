@@ -59,3 +59,21 @@ pnpm --filter @aniresq/web run check:deploy
 ```
 
 When run with `NODE_ENV=production` and `CHECK_DEPLOY=1`, the check fails if `127.0.0.1`, `localhost`, or `YOUR-API-HOST` are detected in either deployment config file. In local development or default CI checks, this script exits successfully to prevent blocking dev workflows.
+
+---
+
+## 4. Content Security Policy (CSP) & Header Architecture
+
+The Content Security Policy is strictly generated from `apps/web/scripts/generate-headers.mjs` and injected between marker comments in `vercel.json` and `netlify.toml`.
+
+### Directives Rationale:
+- **`default-src 'self'`, `script-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'`**: Restrict executable code and framing to first-party origins.
+- **`style-src 'self'`, `style-src-elem 'self'`, `style-src-attr 'unsafe-inline'`**:
+  - All Tailwind stylesheets are compiled into hashed external `.css` files loaded via `<link>` elements (`style-src-elem 'self'`).
+  - `'unsafe-inline'` is restricted strictly to inline element style attributes (`style-src-attr 'unsafe-inline'`). This is required for Leaflet map canvas dimension calculations (`minHeight`, `transform: translate3d`) and dynamic SVG background gradients in `HomePage.jsx` and `RescueMap.jsx`. No inline `<style>` tags are permitted.
+- **`img-src` & `connect-src`**:
+  - Strictly pinned to the exact project Supabase host read from `VITE_SUPABASE_URL` (wildcards such as `https://*.supabase.co` are blocked).
+  - Explicit OpenStreetMap tile subdomains (`https://tile.openstreetmap.org`, `https://a.tile.openstreetmap.org`, `https://b.tile.openstreetmap.org`, `https://c.tile.openstreetmap.org`) matching Leaflet `{s}` resolution.
+- **`Cross-Origin-Opener-Policy: same-origin` & `Cross-Origin-Resource-Policy: same-site`**:
+  - Isolates browsing context against Spectre and side-channel cross-origin data leaks.
+  - `Cross-Origin-Embedder-Policy` (COEP) is deliberately **omitted**, as enabling `require-corp` blocks third-party tile rendering from OpenStreetMap.
