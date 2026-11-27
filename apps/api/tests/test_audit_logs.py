@@ -527,7 +527,8 @@ def test_id_card_pii_not_leaked_in_bio_or_notifications(monkeypatch):
         assert len(update_calls) > 0
         update_payload = update_calls[0].args[0]
         assert "[ID:" not in update_payload.get("bio", "")
-        assert update_payload.get("id_card_number") == "9999-8888-7777"
+        assert update_payload.get("id_card_last4") == "7777"
+        assert "id_card_number" not in update_payload
         assert update_payload.get("id_card_type") == "Aadhaar Card"
         assert update_payload.get("id_card_url") == "op-1/aadhaar.png"
 
@@ -818,7 +819,8 @@ def test_request_clearance_guards_and_validation(monkeypatch):
         assert res_ok.status_code == 200
         data = res_ok.json()
         assert data["requestedRole"] == "VOLUNTEER"
-        assert data["idCardNumber"] == "DL-1420110012345"
+        assert data.get("idCardNumber") is None
+        assert data.get("idCardLast4") == "2345"
         assert data["idCardType"] == "Government Photo ID"
 
         # 10b. Concurrent / repeat attempt where requested_role is already set returns 409
@@ -1037,7 +1039,8 @@ def test_withdraw_role_clearance_request(monkeypatch):
         assert res_reapply.status_code == 200
         reapply_data = res_reapply.json()
         assert reapply_data["requestedRole"] == "NGO"
-        assert reapply_data["idCardNumber"] == "NGO-998877"
+        assert reapply_data.get("idCardNumber") is None
+        assert reapply_data.get("idCardLast4") == "8877"
 
         # 4. Concurrent race condition: if an admin approved / cleared between select and update -> 409
         mock_db["user-pending"]["requested_role"] = "NGO"

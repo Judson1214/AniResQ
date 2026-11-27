@@ -15,7 +15,7 @@ from config_validator import validate_production_config
 from metrics import MetricsMiddleware, handle_metrics_endpoint
 from sentry import init_sentry
 from supabase_config import supabase
-from routers import rescues, users, animals, adoptions, lostfound, notifications, audit, settings
+from routers import rescues, users, animals, adoptions, lostfound, notifications, audit, settings, reports
 
 # Validate production environment security configuration
 validate_production_config()
@@ -146,6 +146,7 @@ app.include_router(notifications.router)
 app.include_router(audit.router)
 app.include_router(audit.audit_alias)
 app.include_router(settings.router)
+app.include_router(reports.router)
 
 # -----------------------------------------------------------------------------
 # 6. Liveness and Readiness Endpoints

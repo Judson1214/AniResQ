@@ -724,6 +724,116 @@
         }
       }
     },
+    "/api/users/me": {
+      "delete": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Delete My Account",
+        "description": "Self-service account deletion: deletes caller's private objects, purges profile & auth user.\nRefuses if caller is the last active ADMIN.",
+        "operationId": "delete_my_account_api_users_me_delete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/export": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Export My Data",
+        "description": "Data export: returns caller's complete profile and personal activity records.\nNever includes other users' data or raw ID verification storage URLs.",
+        "operationId": "export_my_data_api_users_me_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/users/me/consent": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Accept Terms Consent",
+        "description": "Records terms of service and privacy consent timestamp and version.",
+        "operationId": "accept_terms_consent_api_users_me_consent_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/api/users/{uid}": {
       "get": {
         "tags": [
@@ -986,6 +1096,98 @@
                 "schema": {
                   "$ref": "#/components/schemas/UserResponse"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{uid}/disable": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Disable User",
+        "description": "Admin-only: Disables user account, clears auth cache, and blocks user session in Supabase Auth.",
+        "operationId": "disable_user_api_users__uid__disable_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/{uid}/enable": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Enable User",
+        "description": "Admin-only: Re-enables a disabled user account, restores auth privileges, and clears cache.",
+        "operationId": "enable_user_api_users__uid__enable_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -2080,6 +2282,52 @@
         }
       }
     },
+    "/api/lostfound/replies/{reply_id}": {
+      "delete": {
+        "tags": [
+          "lostfound"
+        ],
+        "summary": "Delete Lost Found Reply",
+        "description": "Allows reply author or administrator to delete a lost & found comment/reply.",
+        "operationId": "delete_lost_found_reply_api_lostfound_replies__reply_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reply_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Reply Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/notifications/": {
       "get": {
         "tags": [
@@ -2467,6 +2715,191 @@
         ]
       }
     },
+    "/api/reports/": {
+      "post": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Submit Content Report",
+        "description": "Authenticated users can report spam, fake, abuse, or privacy violations.\nRate limited to 10 reports per hour per user.",
+        "operationId": "submit_content_report_api_reports__post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "List Content Reports",
+        "description": "Admin-only: query moderation reports with optional status filtering and pagination.",
+        "operationId": "list_content_reports_api_reports__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ReportResponse"
+                  },
+                  "title": "Response List Content Reports Api Reports  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reports/{id}": {
+      "patch": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Update Report Status",
+        "description": "Admin-only: transition a report status to REVIEWED, ACTIONED, or DISMISSED with full audit logging.",
+        "operationId": "update_report_status_api_reports__id__patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": [
@@ -2493,7 +2926,7 @@
           "system"
         ],
         "summary": "Readiness Check",
-        "description": "Readiness probe: verifies operational connectivity to database.",
+        "description": "Readiness probe: verifies operational connectivity to database with rate limit (30/min per IP).",
         "operationId": "readiness_check_ready_get",
         "responses": {
           "200": {
@@ -2526,6 +2959,19 @@
   },
   "components": {
     "schemas": {
+      "AccountDeleteRequest": {
+        "properties": {
+          "confirm": {
+            "type": "string",
+            "title": "Confirm"
+          }
+        },
+        "type": "object",
+        "required": [
+          "confirm"
+        ],
+        "title": "AccountDeleteRequest"
+      },
       "AdoptionCreate": {
         "properties": {
           "animalId": {
@@ -3392,6 +3838,21 @@
         ],
         "title": "AuditLogResponse"
       },
+      "ConsentRequest": {
+        "properties": {
+          "termsVersion": {
+            "type": "string",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Termsversion"
+          }
+        },
+        "type": "object",
+        "required": [
+          "termsVersion"
+        ],
+        "title": "ConsentRequest"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -3800,6 +4261,155 @@
           "createdAt"
         ],
         "title": "PublicRescueResponse"
+      },
+      "ReportCreate": {
+        "properties": {
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "RESCUE",
+              "LOST_FOUND",
+              "LOST_FOUND_REPLY",
+              "USER",
+              "ANIMAL"
+            ],
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "title": "Targetid"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "SPAM",
+              "FAKE",
+              "ABUSE",
+              "PRIVACY",
+              "OTHER"
+            ],
+            "title": "Reason"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "targetType",
+          "targetId",
+          "reason"
+        ],
+        "title": "ReportCreate"
+      },
+      "ReportResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "reporterId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reporterid"
+          },
+          "targetType": {
+            "type": "string",
+            "title": "Targettype"
+          },
+          "targetId": {
+            "type": "string",
+            "title": "Targetid"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "handledBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handledby"
+          },
+          "handledAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Handledat"
+          },
+          "createdAt": {
+            "type": "string",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "targetType",
+          "targetId",
+          "reason",
+          "status",
+          "createdAt"
+        ],
+        "title": "ReportResponse"
+      },
+      "ReportStatusUpdate": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "REVIEWED",
+              "ACTIONED",
+              "DISMISSED"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "ReportStatusUpdate"
       },
       "RescueAssignResponse": {
         "properties": {
@@ -4460,6 +5070,17 @@
             ],
             "title": "Idcardnumber"
           },
+          "idCardLast4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idcardlast4"
+          },
           "idCardUrl": {
             "anyOf": [
               {
@@ -4585,6 +5206,39 @@
               }
             ],
             "title": "Alertsenabled"
+          },
+          "termsAcceptedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Termsacceptedat"
+          },
+          "termsVersion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Termsversion"
+          },
+          "isDisabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isdisabled"
           }
         },
         "type": "object",

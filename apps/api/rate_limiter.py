@@ -158,10 +158,17 @@ class SharedSlidingWindowRateLimiter:
                 )
             self.store = self.local_fallback
 
-    def get_tier_limit(self, tier: str) -> int:
-        """Returns the configured request limit per minute for the given tier."""
+    def get_tier_config(self, tier: str) -> Tuple[int, int]:
+        """Returns configured (limit, window_seconds) for the given rate tier."""
+        tier_windows = {
+            "user_export": 3600,   # 3 per hour
+            "user_delete": 3600,   # 3 per hour
+            "report_post": 3600,   # 10 per hour
+        }
+        window = tier_windows.get(tier, self.window_seconds)
+
         if tier == "read" and self.default_limit != 120:
-            return self.default_limit
+            return self.default_limit, window
 
         # 1. Check dynamic runtime settings from system_settings if module available
         try:
@@ -169,7 +176,7 @@ class SharedSlidingWindowRateLimiter:
             setting_key = f"rateLimit_{tier}"
             runtime_val = get_system_setting(setting_key)
             if runtime_val is not None:
-                return int(runtime_val)
+                return int(runtime_val), window
         except Exception:
             pass
 
@@ -180,8 +187,15 @@ class SharedSlidingWindowRateLimiter:
             "clearance_request": int(os.getenv("RATE_LIMIT_CLEARANCE_REQUEST", "10")),
             "mutation": int(os.getenv("RATE_LIMIT_MUTATION", "40")),
             "read": int(os.getenv("RATE_LIMIT_READ", os.getenv("RATE_LIMIT_PER_MINUTE", "120"))),
+            "user_export": int(os.getenv("RATE_LIMIT_USER_EXPORT", "3")),
+            "user_delete": int(os.getenv("RATE_LIMIT_USER_DELETE", "3")),
+            "report_post": int(os.getenv("RATE_LIMIT_REPORT_POST", "10")),
         }
-        return defaults.get(tier, defaults["read"])
+        return defaults.get(tier, defaults["read"]), window
+
+    def get_tier_limit(self, tier: str) -> int:
+        """Returns the configured request limit for backwards compatibility."""
+        return self.get_tier_config(tier)[0]
 
     def resolve_tier(self, path: str, method: str) -> str:
         method_upper = method.upper()
@@ -192,24 +206,30 @@ class SharedSlidingWindowRateLimiter:
             return "intake_post"
         if norm_path == "/api/users/request-clearance" and method_upper in ["POST", "DELETE"]:
             return "clearance_request"
+        if norm_path == "/api/users/me/export" and method_upper == "GET":
+            return "user_export"
+        if norm_path == "/api/users/me" and method_upper == "DELETE":
+            return "user_delete"
+        if norm_path == "/api/reports" and method_upper == "POST":
+            return "report_post"
         if method_upper in ["POST", "PATCH", "DELETE"]:
             return "mutation"
         return "read"
 
     def is_allowed(self, identifier: str, path: str = "/", method: str = "GET") -> Tuple[bool, int]:
         tier = self.resolve_tier(path, method)
-        limit = self.get_tier_limit(tier)
+        limit, window_sec = self.get_tier_config(tier)
         rate_key = f"{identifier}:{tier}"
 
         try:
-            return self.store.is_allowed(rate_key, limit, self.window_seconds)
+            return self.store.is_allowed(rate_key, limit, window_sec)
         except Exception as err:
             logger.error(f"Rate limit store failure for key {rate_key}: {err}")
             # Sensitive tiers: fail closed by falling back to local node limiter
-            if tier in ("surrender", "intake_post", "clearance_request", "mutation"):
+            if tier in ("surrender", "intake_post", "clearance_request", "mutation", "user_export", "user_delete", "report_post"):
                 try:
                     logger.warning(f"Falling back to local in-memory limiter for sensitive tier '{tier}'")
-                    return self.local_fallback.is_allowed(rate_key, limit, self.window_seconds)
+                    return self.local_fallback.is_allowed(rate_key, limit, window_sec)
                 except Exception as fallback_err:
                     logger.error(f"Local rate limiter fallback failed: {fallback_err}")
                     return False, 60

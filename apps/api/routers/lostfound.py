@@ -274,3 +274,24 @@ def add_lost_found_reply(id: str, reply: LostFoundReply, user: dict = Depends(ge
     except Exception as e:
         logger.error(f"Error adding reply to post {id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to submit reply")
+
+@router.delete("/replies/{reply_id}")
+def delete_lost_found_reply(reply_id: str, user: dict = Depends(get_current_user)):
+    """Allows reply author or administrator to delete a lost & found comment/reply."""
+    try:
+        reply_res = supabase.table("lost_and_found_replies").select("*").eq("id", reply_id).execute()
+        if not reply_res.data:
+            raise HTTPException(status_code=404, detail="Reply not found")
+        reply = reply_res.data[0]
+        is_author = reply.get("user_id") == user["uid"]
+        is_admin = user.get("role") == "ADMIN"
+        if not (is_author or is_admin):
+            raise HTTPException(status_code=403, detail="Forbidden: Only the reply author or admin can delete this reply")
+        supabase.table("lost_and_found_replies").delete().eq("id", reply_id).execute()
+        return {"id": reply_id, "deleted": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting reply {reply_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete reply")
+

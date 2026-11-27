@@ -201,13 +201,44 @@ class FakeRPC:
 class FakeStorageBucket:
     def __init__(self, name: str):
         self.name = name
+        self.objects = []
 
     def create_signed_url(self, path: str, expires_in: int):
         return {"signedURL": f"https://mock-storage.test/{self.name}/{path}?token=mock"}
 
+    def list(self, path: str = "", options: Optional[dict] = None):
+        return [{"name": obj} for obj in self.objects if obj.startswith(path)]
+
+    def remove(self, paths: List[str]):
+        self.objects = [o for o in self.objects if o not in paths]
+        return [{"name": p} for p in paths]
+
 class FakeStorage:
+    def __init__(self):
+        self._buckets = {}
+
     def from_(self, bucket: str):
-        return FakeStorageBucket(bucket)
+        if bucket not in self._buckets:
+            self._buckets[bucket] = FakeStorageBucket(bucket)
+        return self._buckets[bucket]
+
+class FakeAuthAdmin:
+    def __init__(self):
+        self.users = {}
+        self.banned_users = {}
+
+    def update_user_by_id(self, uid: str, attributes: dict):
+        if "ban_duration" in attributes:
+            self.banned_users[uid] = attributes["ban_duration"]
+        return {"id": uid, "attributes": attributes}
+
+    def delete_user(self, uid: str, should_soft_delete: bool = False):
+        self.users.pop(uid, None)
+        return None
+
+class FakeAuth:
+    def __init__(self):
+        self.admin = FakeAuthAdmin()
 
 class FakeSupabaseClient:
     def __init__(self, initial_tables: Optional[Dict[str, List[Dict[str, Any]]]] = None):
@@ -215,6 +246,7 @@ class FakeSupabaseClient:
         self.rpc_handlers = {}
         self.rpc = FakeRPC(self.rpc_handlers)
         self.storage = FakeStorage()
+        self.auth = FakeAuth()
 
     def table(self, name: str) -> FakeQueryBuilder:
         return FakeQueryBuilder(name, self.tables)

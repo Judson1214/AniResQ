@@ -135,6 +135,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete My Account
+         * @description Self-service account deletion: deletes caller's private objects, purges profile & auth user.
+         *     Refuses if caller is the last active ADMIN.
+         */
+        delete: operations["delete_my_account_api_users_me_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/me/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export My Data
+         * @description Data export: returns caller's complete profile and personal activity records.
+         *     Never includes other users' data or raw ID verification storage URLs.
+         */
+        get: operations["export_my_data_api_users_me_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/me/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Terms Consent
+         * @description Records terms of service and privacy consent timestamp and version.
+         */
+        post: operations["accept_terms_consent_api_users_me_consent_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{uid}": {
         parameters: {
             query?: never;
@@ -206,6 +268,46 @@ export interface paths {
         put?: never;
         /** Decline Role Request */
         post: operations["decline_role_request_api_users__uid__role_request_decline_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{uid}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable User
+         * @description Admin-only: Disables user account, clears auth cache, and blocks user session in Supabase Auth.
+         */
+        post: operations["disable_user_api_users__uid__disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{uid}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable User
+         * @description Admin-only: Re-enables a disabled user account, restores auth privileges, and clears cache.
+         */
+        post: operations["enable_user_api_users__uid__enable_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -412,6 +514,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/lostfound/replies/{reply_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Lost Found Reply
+         * @description Allows reply author or administrator to delete a lost & found comment/reply.
+         */
+        delete: operations["delete_lost_found_reply_api_lostfound_replies__reply_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/notifications/": {
         parameters: {
             query?: never;
@@ -524,6 +646,51 @@ export interface paths {
         patch: operations["update_system_settings_api_settings_patch"];
         trace?: never;
     };
+    "/api/reports/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Content Reports
+         * @description Admin-only: query moderation reports with optional status filtering and pagination.
+         */
+        get: operations["list_content_reports_api_reports__get"];
+        put?: never;
+        /**
+         * Submit Content Report
+         * @description Authenticated users can report spam, fake, abuse, or privacy violations.
+         *     Rate limited to 10 reports per hour per user.
+         */
+        post: operations["submit_content_report_api_reports__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Report Status
+         * @description Admin-only: transition a report status to REVIEWED, ACTIONED, or DISMISSED with full audit logging.
+         */
+        patch: operations["update_report_status_api_reports__id__patch"];
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -553,7 +720,7 @@ export interface paths {
         };
         /**
          * Readiness Check
-         * @description Readiness probe: verifies operational connectivity to database.
+         * @description Readiness probe: verifies operational connectivity to database with rate limit (30/min per IP).
          */
         get: operations["readiness_check_ready_get"];
         put?: never;
@@ -585,6 +752,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AccountDeleteRequest */
+        AccountDeleteRequest: {
+            /** Confirm */
+            confirm: string;
+        };
         /** AdoptionCreate */
         AdoptionCreate: {
             /** Animalid */
@@ -861,6 +1033,11 @@ export interface components {
             /** Createdat */
             createdAt: string;
         };
+        /** ConsentRequest */
+        ConsentRequest: {
+            /** Termsversion */
+            termsVersion: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1007,6 +1184,54 @@ export interface components {
             location?: components["schemas"]["Location"] | null;
             /** Createdat */
             createdAt: string;
+        };
+        /** ReportCreate */
+        ReportCreate: {
+            /**
+             * Targettype
+             * @enum {string}
+             */
+            targetType: "RESCUE" | "LOST_FOUND" | "LOST_FOUND_REPLY" | "USER" | "ANIMAL";
+            /** Targetid */
+            targetId: string;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "SPAM" | "FAKE" | "ABUSE" | "PRIVACY" | "OTHER";
+            /** Details */
+            details?: string | null;
+        };
+        /** ReportResponse */
+        ReportResponse: {
+            /** Id */
+            id: string;
+            /** Reporterid */
+            reporterId?: string | null;
+            /** Targettype */
+            targetType: string;
+            /** Targetid */
+            targetId: string;
+            /** Reason */
+            reason: string;
+            /** Details */
+            details?: string | null;
+            /** Status */
+            status: string;
+            /** Handledby */
+            handledBy?: string | null;
+            /** Handledat */
+            handledAt?: string | null;
+            /** Createdat */
+            createdAt: string;
+        };
+        /** ReportStatusUpdate */
+        ReportStatusUpdate: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "REVIEWED" | "ACTIONED" | "DISMISSED";
         };
         /** RescueAssignResponse */
         RescueAssignResponse: {
@@ -1245,6 +1470,8 @@ export interface components {
             idCardType?: string | null;
             /** Idcardnumber */
             idCardNumber?: string | null;
+            /** Idcardlast4 */
+            idCardLast4?: string | null;
             /** Idcardurl */
             idCardUrl?: string | null;
             /**
@@ -1282,6 +1509,12 @@ export interface components {
             serviceRadiusKm?: number | null;
             /** Alertsenabled */
             alertsEnabled?: boolean | null;
+            /** Termsacceptedat */
+            termsAcceptedAt?: string | null;
+            /** Termsversion */
+            termsVersion?: string | null;
+            /** Isdisabled */
+            isDisabled?: boolean | null;
         };
         /** UserRoleUpdate */
         UserRoleUpdate: {
@@ -1648,6 +1881,90 @@ export interface operations {
             };
         };
     };
+    delete_my_account_api_users_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccountDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_my_data_api_users_me_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    accept_terms_consent_api_users_me_consent_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConsentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_user_profile_api_users__uid__get: {
         parameters: {
             query?: never;
@@ -1820,6 +2137,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_user_api_users__uid__disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_user_api_users__uid__enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                uid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -2430,6 +2809,37 @@ export interface operations {
             };
         };
     };
+    delete_lost_found_reply_api_lostfound_replies__reply_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                reply_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_notifications_api_notifications__get: {
         parameters: {
             query?: {
@@ -2620,6 +3030,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemSettings"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_content_reports_api_reports__get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_content_report_api_reports__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_report_status_api_reports__id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReportStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportResponse"];
                 };
             };
             /** @description Validation Error */

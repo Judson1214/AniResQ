@@ -1,6 +1,7 @@
 import os
 import re
 import logging
+from datetime import datetime, timezone
 from typing import Optional, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -68,6 +69,12 @@ class UserProfileUpdate(BaseModel):
 class UserRoleUpdate(BaseModel):
     role: str
 
+class AccountDeleteRequest(BaseModel):
+    confirm: str
+
+class ConsentRequest(BaseModel):
+    termsVersion: str = Field(..., min_length=1, max_length=20)
+
 class UserResponse(BaseModel):
     id: str
     uid: str
@@ -75,7 +82,8 @@ class UserResponse(BaseModel):
     role: str = "CITIZEN"
     requestedRole: Optional[str] = None
     idCardType: Optional[str] = None
-    idCardNumber: Optional[str] = None
+    idCardNumber: Optional[str] = None # Deprecated - always None
+    idCardLast4: Optional[str] = None
     idCardUrl: Optional[str] = None
     avatarUrl: Optional[str] = ""
     createdAt: Optional[str] = None
@@ -87,6 +95,9 @@ class UserResponse(BaseModel):
     longitude: Optional[float] = None
     serviceRadiusKm: Optional[int] = None
     alertsEnabled: Optional[bool] = None
+    termsAcceptedAt: Optional[str] = None
+    termsVersion: Optional[str] = None
+    isDisabled: Optional[bool] = None
 
 def notify_admins_of_role_request(
     user_id: str,
@@ -135,31 +146,13 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
         alerts_val = True
     alerts_enabled = alerts_val if can_view_sensitive else None
 
-    # Parse identification card proof
+    # Parse identification card proof: Minimization enforces only idCardLast4 is stored/returned
     id_card_type = data.get("id_card_type") or data.get("idCardType")
-    id_card_number = data.get("id_card_number") or data.get("idCardNumber")
+    id_card_last4 = data.get("id_card_last4") or data.get("idCardLast4")
     id_card_url = data.get("id_card_url") or data.get("idCardUrl")
 
     bio_text = data.get("bio") or ""
     if "[ID:" in bio_text:
-        try:
-            if not id_card_number:
-                raw_id = bio_text.split("[ID:")[1].split("]")[0].strip()
-                if " | " in raw_id:
-                    parts = raw_id.split(" | ")
-                    id_card_type = parts[0].strip()
-                    id_card_number = parts[1].strip()
-                    if len(parts) > 2 and parts[2].strip():
-                        id_card_url = parts[2].strip()
-                elif " - " in raw_id:
-                    parts = raw_id.split(" - ")
-                    id_card_type = parts[0].strip()
-                    id_card_number = parts[1].strip()
-                else:
-                    id_card_type = "ID Document"
-                    id_card_number = raw_id
-        except Exception:
-            pass
         # Never leak ID credentials in bio to any user/client
         bio_text = bio_text.split("]", 1)[1].strip() if "]" in bio_text else ""
 
@@ -191,7 +184,6 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
                 logger.warning(f"Could not generate signed URL for ID card ({clean_path}): {sign_err}")
                 signed_id_url = None
         else:
-            # Reject non-storage paths or malicious schemes; never fall back to raw string
             signed_id_url = None
 
     return {
@@ -201,7 +193,8 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
         "role": data.get("role") or "CITIZEN",
         "requestedRole": (data.get("requested_role") if "requested_role" in data else data.get("requestedRole")) if can_view_sensitive else None,
         "idCardType": id_card_type if can_view_sensitive else None,
-        "idCardNumber": id_card_number if can_view_sensitive else None,
+        "idCardNumber": None,
+        "idCardLast4": id_card_last4 if can_view_sensitive else None,
         "idCardUrl": signed_id_url if can_view_sensitive else None,
         "avatarUrl": data.get("avatar_url") or data.get("avatarUrl") or "",
         "createdAt": data.get("created_at") or data.get("createdAt"),
@@ -213,6 +206,9 @@ def map_user(data: dict, can_view_contact: bool = True, can_view_sensitive: bool
         "longitude": lon,
         "serviceRadiusKm": service_radius,
         "alertsEnabled": alerts_enabled,
+        "termsAcceptedAt": data.get("terms_accepted_at") or data.get("termsAcceptedAt"),
+        "termsVersion": data.get("terms_version") or data.get("termsVersion"),
+        "isDisabled": bool(data.get("is_disabled", False)) if ("is_disabled" in data or "isDisabled" in data) else None,
     }
 
 @router.get("", response_model=List[UserResponse])
@@ -237,14 +233,15 @@ def list_users(
         if is_admin:
             selected_columns = (
                 "id, display_name, email, phone, role, requested_role, "
-                "id_card_type, id_card_number, id_card_url, avatar_url, created_at, "
-                "address, bio, latitude, longitude, service_radius_km, alerts_enabled"
+                "id_card_type, id_card_last4, id_card_url, avatar_url, created_at, "
+                "address, bio, latitude, longitude, service_radius_km, alerts_enabled, "
+                "terms_accepted_at, terms_version, is_disabled"
             )
         else:
             selected_columns = (
                 "id, display_name, email, phone, role, requested_role, "
                 "avatar_url, created_at, address, bio, latitude, longitude, "
-                "service_radius_km, alerts_enabled"
+                "service_radius_km, alerts_enabled, is_disabled"
             )
 
         query = supabase.table("users").select(selected_columns)
@@ -328,6 +325,165 @@ def check_staff_has_active_case_with_user(staff_id: str, target_user_id: str) ->
     except Exception as e:
         logger.warning(f"Error checking staff relationship for {staff_id} -> {target_user_id}: {e}")
         return False
+
+@router.delete("/me", status_code=204)
+def delete_my_account(req: AccountDeleteRequest, current_user: dict = Depends(get_current_user)):
+    """Self-service account deletion: deletes caller's private objects, purges profile & auth user.
+    Refuses if caller is the last active ADMIN.
+    """
+    uid = current_user["uid"]
+    if req.confirm != "DELETE MY ACCOUNT":
+        raise HTTPException(
+            status_code=422,
+            detail="Confirmation phrase must exactly match 'DELETE MY ACCOUNT'"
+        )
+
+    # Rate limiting: 3 per hour per user
+    user_key = f"user:{uid}"
+    allowed, retry_after = limiter.is_allowed(user_key, path="/api/users/me", method="DELETE")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many account deletion requests. Please retry in {retry_after} seconds."
+        )
+
+    # Guard: Refuse (409) if the caller is the last active ADMIN
+    if current_user.get("role") == "ADMIN":
+        admin_check = (
+            supabase.table("users")
+            .select("id", count="exact")
+            .eq("role", "ADMIN")
+            .eq("is_disabled", False)
+            .execute()
+        )
+        active_admins = admin_check.count if admin_check.count is not None else len(admin_check.data or [])
+        if active_admins <= 1:
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete the last active administrator account"
+            )
+
+    # Purge caller's files under their folder in id-verification and uploads buckets
+    for bucket in ["id-verification", "uploads"]:
+        try:
+            obj_list = supabase.storage.from_(bucket).list(uid)
+            if obj_list and isinstance(obj_list, list):
+                paths = []
+                for item in obj_list:
+                    name = item.get("name") if isinstance(item, dict) else getattr(item, "name", "")
+                    if name:
+                        paths.append(f"{uid}/{name}")
+                if paths:
+                    supabase.storage.from_(bucket).remove(paths)
+                    logger.info(f"Purged {len(paths)} objects from '{bucket}' for deleted user {uid}")
+        except Exception as st_err:
+            logger.warning(f"Could not purge storage objects for {uid} in {bucket}: {st_err}")
+
+    # Delete auth user with service-role admin API (cascades to public.users and triggers PII redaction)
+    try:
+        supabase.auth.admin.delete_user(uid)
+    except Exception as auth_del_err:
+        logger.warning(f"auth.admin.delete_user error for {uid}: {auth_del_err}")
+
+    # Explicit public.users delete fallback for local/test environments
+    try:
+        supabase.table("users").delete().eq("id", uid).execute()
+    except Exception as db_del_err:
+        logger.warning(f"public.users delete fallback error for {uid}: {db_del_err}")
+
+    # Write audit event ACCOUNT_DELETED containing ONLY the user ID (no email, no phone)
+    try:
+        log_audit_event(
+            action="ACCOUNT_DELETED",
+            entity_type="USER",
+            entity_id=uid,
+            performed_by=uid,
+            old_value=None,
+            new_value={"user_id": uid},
+            fail_closed=False
+        )
+    except Exception as audit_err:
+        logger.warning(f"Failed to record audit log for account deletion: {audit_err}")
+
+    # Clear auth cache for that user
+    invalidate_user_cache(uid)
+    return None
+
+@router.get("/me/export")
+def export_my_data(current_user: dict = Depends(get_current_user)):
+    """Data export: returns caller's complete profile and personal activity records.
+    Never includes other users' data or raw ID verification storage URLs.
+    """
+    uid = current_user["uid"]
+
+    # Rate limiting: 3 per hour per user
+    user_key = f"user:{uid}"
+    allowed, retry_after = limiter.is_allowed(user_key, path="/api/users/me/export", method="GET")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Too many export requests. Please retry in {retry_after} seconds."
+        )
+
+    # 1. Profile (strictly remove id_card_url and id_card_number)
+    user_res = supabase.table("users").select("*").eq("id", uid).execute()
+    profile_data = user_res.data[0] if user_res.data else {}
+    clean_profile = {
+        k: v for k, v in profile_data.items()
+        if k not in ("id_card_url", "id_card_number")
+    }
+
+    # 2. Rescues (reported or assigned to caller)
+    reported_rescues = supabase.table("rescues").select("*").eq("reporter_id", uid).execute().data or []
+    assigned_rescues = supabase.table("rescues").select("*").eq("assigned_to", uid).execute().data or []
+    rescues_map = {r["id"]: r for r in (reported_rescues + assigned_rescues)}
+
+    # 3. Lost & Found posts
+    lf_posts = supabase.table("lost_and_found").select("*").eq("reporter_id", uid).execute().data or []
+
+    # 4. Lost & Found replies
+    lf_replies = supabase.table("lost_and_found_replies").select("*").eq("user_id", uid).execute().data or []
+
+    # 5. Adoption applications
+    adoptions = supabase.table("adoption_applications").select("*").eq("applicant_id", uid).execute().data or []
+
+    # 6. Notifications
+    notifs = supabase.table("notifications").select("*").eq("user_id", uid).execute().data or []
+
+    return {
+        "exportDate": datetime.now(timezone.utc).isoformat(),
+        "profile": clean_profile,
+        "rescues": list(rescues_map.values()),
+        "lostAndFoundPosts": lf_posts,
+        "lostAndFoundReplies": lf_replies,
+        "adoptionApplications": adoptions,
+        "notifications": notifs,
+    }
+
+@router.post("/me/consent")
+def accept_terms_consent(req: ConsentRequest, current_user: dict = Depends(get_current_user)):
+    """Records terms of service and privacy consent timestamp and version."""
+    uid = current_user["uid"]
+    now_iso = datetime.now(timezone.utc).isoformat()
+    clean_version = req.termsVersion.strip()[:20]
+
+    res = (
+        supabase.table("users")
+        .update({
+            "terms_accepted_at": now_iso,
+            "terms_version": clean_version
+        })
+        .eq("id", uid)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    invalidate_user_cache(uid)
+    return {
+        "termsAcceptedAt": now_iso,
+        "termsVersion": clean_version
+    }
 
 @router.get("/{uid}", response_model=UserResponse)
 def get_user_profile(uid: str, current_user: dict = Depends(get_current_user)):
@@ -530,13 +686,16 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
     if not clean_id_number:
         raise HTTPException(status_code=422, detail="ID card number cannot be blank")
 
+    # ID Minimization: extract strictly the last 4 characters; never store or log full number
+    id_card_last4 = clean_id_number[-4:] if clean_id_number else ""
+
     curr_bio = user_row.get("bio", "") or ""
     clean_bio = curr_bio.split("]", 1)[1].strip() if "[ID:" in curr_bio and "]" in curr_bio else curr_bio
     
     update_data = {
         "requested_role": target_role,
         "id_card_type": req.idCardType,
-        "id_card_number": clean_id_number,
+        "id_card_last4": id_card_last4,
         "bio": clean_bio
     }
     if req.idCardUrl is not None:
@@ -568,11 +727,10 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
         user_name=u_name,
         user_email=u_email,
         req_role=target_role,
-        id_card_type=req.idCardType,
-        id_card_number=clean_id_number
+        id_card_type=req.idCardType
     )
 
-    # Log audit event for clearance request submission
+    # Log audit event for clearance request submission (strictly minimizes PII)
     try:
         log_audit_event(
             action="CLEARANCE_REQUESTED",
@@ -580,7 +738,7 @@ def submit_role_clearance_request(req: RoleClearanceRequest, current_user: dict 
             entity_id=uid,
             performed_by=uid,
             old_value={"requested_role": None},
-            new_value={"requested_role": target_role, "id_card_type": req.idCardType},
+            new_value={"requested_role": target_role, "id_card_type": req.idCardType, "id_card_last4": id_card_last4},
             fail_closed=False
         )
     except Exception as audit_err:
@@ -620,6 +778,7 @@ def withdraw_role_clearance_request(current_user: dict = Depends(get_current_use
         "requested_role": None,
         "id_card_type": None,
         "id_card_number": None,
+        "id_card_last4": None,
         "id_card_url": None,
     }
 
@@ -710,13 +869,35 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
             
     try:
         # Fetch current role and requested role for audit log and user notification
-        current_rec = supabase.table("users").select("id, role, requested_role").eq("id", uid).execute()
+        current_rec = supabase.table("users").select("id, role, requested_role, id_card_url").eq("id", uid).execute()
         if not current_rec.data:
             raise HTTPException(status_code=404, detail="User not found")
             
         user_row = current_rec.data[0]
         prev_role = user_row.get("role", "UNKNOWN")
         prev_requested = user_row.get("requested_role")
+
+        # ID Minimization: purge uploaded verification document upon clearance decision
+        doc_deleted = False
+        prev_doc_url = user_row.get("id_card_url")
+        if prev_doc_url:
+            clean_path = str(prev_doc_url).strip()
+            if "/id-verification/" in clean_path:
+                clean_path = clean_path.split("/id-verification/", 1)[1]
+            elif clean_path.startswith("id-verification/"):
+                clean_path = clean_path.split("id-verification/", 1)[1]
+            clean_path = clean_path.split("?")[0].strip()
+            if clean_path:
+                try:
+                    supabase.storage.from_("id-verification").remove([clean_path])
+                    doc_deleted = True
+                    logger.info(f"Purged ID document '{clean_path}' for user {uid} upon role clearance decision")
+                except Exception as st_err:
+                    logger.warning(f"Could not purge ID document {clean_path} on role update: {st_err}")
+            try:
+                supabase.table("users").update({"id_card_url": None}).eq("id", uid).execute()
+            except Exception as db_err:
+                logger.warning(f"Could not reset id_card_url for user {uid}: {db_err}")
 
         updated_row = None
         # Primary transactional path: atomic update + audit log via PostgreSQL RPC
@@ -770,13 +951,16 @@ def update_user_role(uid: str, req: UserRoleUpdate, current_user: dict = Depends
 
             try:
                 # Audit role change in database audit_logs (performed_by records real admin)
+                audit_new_val = {"role": target_role}
+                if doc_deleted:
+                    audit_new_val["document_deleted"] = True
                 log_audit_event(
                     action="ROLE_CHANGE",
                     entity_type="USER",
                     entity_id=uid,
                     performed_by=current_user["uid"],
                     old_value={"role": prev_role},
-                    new_value={"role": target_role},
+                    new_value=audit_new_val,
                     fail_closed=True,
                 )
             except Exception:
@@ -858,7 +1042,7 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
         raise HTTPException(status_code=403, detail="Forbidden: Only administrators can decline role requests")
         
     try:
-        current_rec = supabase.table("users").select("id, role, requested_role").eq("id", uid).execute()
+        current_rec = supabase.table("users").select("id, role, requested_role, id_card_url").eq("id", uid).execute()
         if not current_rec.data:
             raise HTTPException(status_code=404, detail="User not found")
             
@@ -868,6 +1052,28 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
 
         if not requested_role:
             raise HTTPException(status_code=400, detail="User has no pending role request to decline")
+
+        # ID Minimization: purge uploaded verification document upon clearance decline
+        doc_deleted = False
+        prev_doc_url = user_row.get("id_card_url")
+        if prev_doc_url:
+            clean_path = str(prev_doc_url).strip()
+            if "/id-verification/" in clean_path:
+                clean_path = clean_path.split("/id-verification/", 1)[1]
+            elif clean_path.startswith("id-verification/"):
+                clean_path = clean_path.split("id-verification/", 1)[1]
+            clean_path = clean_path.split("?")[0].strip()
+            if clean_path:
+                try:
+                    supabase.storage.from_("id-verification").remove([clean_path])
+                    doc_deleted = True
+                    logger.info(f"Purged ID document '{clean_path}' for user {uid} upon clearance decline")
+                except Exception as st_err:
+                    logger.warning(f"Could not purge ID document {clean_path} on clearance decline: {st_err}")
+            try:
+                supabase.table("users").update({"id_card_url": None}).eq("id", uid).execute()
+            except Exception as db_err:
+                logger.warning(f"Could not reset id_card_url for user {uid}: {db_err}")
 
         updated_row = None
         # Primary transactional path: atomic update + audit log via PostgreSQL RPC
@@ -919,13 +1125,16 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
 
             try:
                 # Audit role request decline
+                audit_new_val = {"requested_role": None, "role": current_role}
+                if doc_deleted:
+                    audit_new_val["document_deleted"] = True
                 log_audit_event(
                     action="ROLE_REQUEST_DECLINED",
                     entity_type="USER",
                     entity_id=uid,
                     performed_by=current_user["uid"],
                     old_value={"requested_role": requested_role, "role": current_role},
-                    new_value={"requested_role": None, "role": current_role},
+                    new_value=audit_new_val,
                     fail_closed=True,
                 )
             except Exception:
@@ -963,4 +1172,83 @@ def decline_role_request(uid: str, current_user: dict = Depends(get_current_user
     except Exception as e:
         logger.error(f"Error declining role request for user {uid}: {e}")
         raise HTTPException(status_code=500, detail="Failed to decline role request")
+
+@router.post("/{uid}/disable")
+def disable_user(uid: str, current_user: dict = Depends(get_current_user)):
+    """Admin-only: Disables user account, clears auth cache, and blocks user session in Supabase Auth."""
+    if current_user.get("role") != "ADMIN":
+        raise HTTPException(status_code=403, detail="Forbidden: Only administrators can disable user accounts")
+    if current_user["uid"] == uid:
+        raise HTTPException(status_code=400, detail="Cannot disable your own administrator account")
+
+    target_res = supabase.table("users").select("id, role, is_disabled").eq("id", uid).execute()
+    if not target_res.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    target_user = target_res.data[0]
+
+    if target_user.get("role") == "ADMIN":
+        admin_check = supabase.table("users").select("id", count="exact").eq("role", "ADMIN").eq("is_disabled", False).execute()
+        active_admins = admin_check.count if admin_check.count is not None else len(admin_check.data or [])
+        if active_admins <= 1:
+            raise HTTPException(status_code=409, detail="Cannot disable the last active administrator")
+
+    supabase.table("users").update({"is_disabled": True}).eq("id", uid).execute()
+
+    # Block Supabase auth user so existing refresh tokens stop working
+    try:
+        supabase.auth.admin.update_user_by_id(uid, {"ban_duration": "876000h"})
+    except Exception as ban_err:
+        logger.warning(f"Could not set ban_duration in Supabase Auth for {uid}: {ban_err}")
+
+    invalidate_user_cache(uid)
+
+    try:
+        log_audit_event(
+            action="USER_DISABLED",
+            entity_type="USER",
+            entity_id=uid,
+            performed_by=current_user["uid"],
+            old_value={"is_disabled": False},
+            new_value={"is_disabled": True},
+            fail_closed=False
+        )
+    except Exception as audit_err:
+        logger.warning(f"Failed to record audit log for USER_DISABLED: {audit_err}")
+
+    return {"id": uid, "isDisabled": True, "message": "Account disabled successfully"}
+
+@router.post("/{uid}/enable")
+def enable_user(uid: str, current_user: dict = Depends(get_current_user)):
+    """Admin-only: Re-enables a disabled user account, restores auth privileges, and clears cache."""
+    if current_user.get("role") != "ADMIN":
+        raise HTTPException(status_code=403, detail="Forbidden: Only administrators can enable user accounts")
+
+    target_res = supabase.table("users").select("id, role, is_disabled").eq("id", uid).execute()
+    if not target_res.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    supabase.table("users").update({"is_disabled": False}).eq("id", uid).execute()
+
+    # Unblock Supabase auth user
+    try:
+        supabase.auth.admin.update_user_by_id(uid, {"ban_duration": "none"})
+    except Exception as ban_err:
+        logger.warning(f"Could not reset ban_duration in Supabase Auth for {uid}: {ban_err}")
+
+    invalidate_user_cache(uid)
+
+    try:
+        log_audit_event(
+            action="USER_ENABLED",
+            entity_type="USER",
+            entity_id=uid,
+            performed_by=current_user["uid"],
+            old_value={"is_disabled": True},
+            new_value={"is_disabled": False},
+            fail_closed=False
+        )
+    except Exception as audit_err:
+        logger.warning(f"Failed to record audit log for USER_ENABLED: {audit_err}")
+
+    return {"id": uid, "isDisabled": False, "message": "Account enabled successfully"}
 
