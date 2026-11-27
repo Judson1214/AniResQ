@@ -24,6 +24,8 @@ __pycache__/
 coverage/
 *.lcov
 .nyc_output/
+test-results/
+playwright-report/
 
 # Environment files and credentials
 .env

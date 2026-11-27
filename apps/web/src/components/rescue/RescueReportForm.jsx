@@ -80,6 +80,13 @@ const RescueReportForm = () => {
   });
 
   useEffect(() => {
+    if (position) {
+      setValue("latitude", position.lat);
+      setValue("longitude", position.lng);
+    }
+  }, [position, setValue]);
+
+  useEffect(() => {
     if (geoPosition) {
       setPosition(geoPosition);
       // Auto-fill address from GPS coordinates
