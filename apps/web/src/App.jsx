@@ -23,6 +23,11 @@ const OperatorRegistryPage = lazy(() => import("@/pages/OperatorRegistryPage"));
 const SystemSettingsPage = lazy(() => import("@/pages/SystemSettingsPage"));
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const PrivacyPage = lazy(() => import("@/pages/PrivacyPage"));
+const TermsPage = lazy(() => import("@/pages/TermsPage"));
+const SafetyPage = lazy(() => import("@/pages/SafetyPage"));
+const ContactPage = lazy(() => import("@/pages/ContactPage"));
+const AdminReportsPage = lazy(() => import("@/pages/AdminReportsPage"));
 const UnauthorizedPage = lazy(() => import("@/pages/UnauthorizedPage"));
 const NotFoundPage = lazy(() => import("@/pages/NotFoundPage"));
 
@@ -40,6 +45,10 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/" element={<HomePage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/safety" element={<SafetyPage />} />
+          <Route path="/contact" element={<ContactPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/animals" element={<AnimalsPage />} />
@@ -137,6 +146,16 @@ function App() {
           />
 
           {/* Admin Protected Routes */}
+          <Route
+            path="/admin/reports"
+            element={
+              <ProtectedRoute allowedRoles={[UserRole.ADMIN]}>
+                <ErrorBoundary title="Failed to load Content Moderation Reports.">
+                  <AdminReportsPage />
+                </ErrorBoundary>
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/admin"
             element={

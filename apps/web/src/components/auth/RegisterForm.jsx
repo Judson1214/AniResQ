@@ -10,9 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Info } from "lucide-react";
 import { UserRole } from "@aniresq/shared-types";
+import api from "@/lib/api";
 
 const RegisterForm = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [termsError, setTermsError] = useState("");
   const { signUp } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -28,6 +31,10 @@ const RegisterForm = () => {
   });
 
   const onSubmit = async (data) => {
+    if (!acceptedTerms) {
+      setTermsError("You must accept the Terms of Service and Privacy Policy to create an account.");
+      return;
+    }
     setIsLoading(true);
     try {
       await signUp(
@@ -36,6 +43,11 @@ const RegisterForm = () => {
         data.displayName,
         data.phone
       );
+      try {
+        await api.post("/users/me/consent", { termsVersion: "2026-11-27" });
+      } catch (consentErr) {
+        console.warn("Could not record consent post-registration:", consentErr);
+      }
       toast({
         title: "Account Created",
         description: "Welcome to AniResQ!"
@@ -98,6 +110,33 @@ const RegisterForm = () => {
               All accounts start with standard Citizen access. Responders, Shelters, NGOs, and Veterinarians can upload verified credentials and request role clearance from their Profile after signing in.
             </p>
           </div>
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-start gap-2.5 pt-1">
+            <input
+              id="acceptTerms"
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => {
+                setAcceptedTerms(e.target.checked);
+                if (e.target.checked) setTermsError("");
+              }}
+              className="mt-1 h-4 w-4 rounded border-slate-700 bg-slate-950 accent-emerald-500 cursor-pointer"
+            />
+            <label htmlFor="acceptTerms" className="text-xs text-slate-300 leading-normal cursor-pointer">
+              I agree to the{" "}
+              <Link to="/terms" target="_blank" className="text-emerald-400 underline hover:text-emerald-300">
+                Terms of Service
+              </Link>{" "}
+              and acknowledge the{" "}
+              <Link to="/privacy" target="_blank" className="text-emerald-400 underline hover:text-emerald-300">
+                Privacy Policy
+              </Link>
+              . <span className="text-rose-400">*</span>
+            </label>
+          </div>
+          {termsError && <p className="text-xs text-rose-500">{termsError}</p>}
         </div>
 
         <Button 

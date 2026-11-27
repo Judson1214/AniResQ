@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -7,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { 
   User, 
   Mail, 
@@ -20,13 +28,18 @@ import {
   MapPin,
   BellRing,
   Navigation,
-  Info
+  Info,
+  Lock,
+  Download,
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
 import { updateUserProfile } from "@/services/auth.service";
 import { requestClearance, withdrawClearance } from "@/services/user.service";
 import { uploadIdDocument } from "@/services/storage.service";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuthStore } from "@/store/authStore";
+import api from "@/lib/api";
 
 const ALLOWED_REQUESTED_ROLES = [
   { value: "VOLUNTEER", label: "Field Rescue Responder", description: "Receive emergency dispatch alerts and assist on-site." },
@@ -38,7 +51,8 @@ const ALLOWED_REQUESTED_ROLES = [
 const RADIUS_OPTIONS = [5, 10, 15, 25, 50];
 
 const ProfilePage = () => {
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const { setUser } = useAuthStore();
   const { toast } = useToast();
   
@@ -47,6 +61,10 @@ const ProfilePage = () => {
   const [isSubmittingRole, setIsSubmittingRole] = useState(false);
   const [isWithdrawingClearance, setIsWithdrawingClearance] = useState(false);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   const handleIdFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -125,10 +143,11 @@ const ProfilePage = () => {
   };
 
   const handleRoleRequest = async () => {
-    if (!idCardNumber.trim()) {
+    const trimmedLast4 = idCardNumber.trim();
+    if (!trimmedLast4) {
       toast({
         title: "ID Number Required",
-        description: "Please enter your ID, license, or registration number.",
+        description: "Please enter the last 4 characters of your ID, license, or registration number.",
         variant: "destructive"
       });
       return;
@@ -139,7 +158,8 @@ const ProfilePage = () => {
       const updatedUser = await requestClearance({
         requestedRole: selectedRole,
         idCardType,
-        idCardNumber: idCardNumber.trim(),
+        idCardNumber: trimmedLast4,
+        idCardLast4: trimmedLast4,
         idCardUrl: idCardUrl.trim() || undefined,
       });
       setUser({ ...user, requestedRole: updatedUser.requestedRole || selectedRole });
@@ -155,6 +175,69 @@ const ProfilePage = () => {
       });
     } finally {
       setIsSubmittingRole(false);
+    }
+  };
+
+  const handleExportData = async () => {
+    setIsExporting(true);
+    try {
+      const res = await api.get("/users/me/export");
+      const jsonStr = JSON.stringify(res.data, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `aniresq-data-export-${user?.uid || "me"}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: "Data Archive Downloaded",
+        description: "Your complete personal data export has been downloaded.",
+      });
+    } catch (err) {
+      toast({
+        title: "Export Failed",
+        description: err.response?.data?.detail || err.message || "Failed to export data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== "DELETE MY ACCOUNT") {
+      toast({
+        title: "Confirmation Required",
+        description: 'You must type "DELETE MY ACCOUNT" exactly to confirm.',
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDeletingAccount(true);
+    try {
+      await api.delete("/users/me", { data: { confirm: "DELETE MY ACCOUNT" } });
+      toast({
+        title: "Account Permanently Deleted",
+        description: "Your account and personal data have been removed from AniResQ.",
+      });
+      setShowDeleteDialog(false);
+      if (signOut) {
+        await signOut();
+      }
+      navigate("/");
+    } catch (err) {
+      toast({
+        title: "Deletion Failed",
+        description: err.response?.data?.detail || err.message || "Could not delete account",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeletingAccount(false);
     }
   };
 
@@ -600,16 +683,20 @@ const ProfilePage = () => {
 
                     <div>
                       <label htmlFor="id-card-number-input" className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">
-                        ID / License / Reg Number *
+                        Last 4 Characters of ID / License *
                       </label>
                       <input
                         id="id-card-number-input"
                         type="text"
+                        maxLength={4}
                         value={idCardNumber}
-                        onChange={(e) => setIdCardNumber(e.target.value)}
-                        placeholder="e.g. DL-1420110012345 or NGO/2023/8921"
-                        className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500"
+                        onChange={(e) => setIdCardNumber(e.target.value.slice(0, 4))}
+                        placeholder="e.g. 1234"
+                        className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-emerald-500 font-mono tracking-widest"
                       />
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        🔒 Privacy Notice: Full ID numbers are never stored in our database. We only record the last 4 characters for verification matching. The uploaded document is stored in a private restricted bucket and will be permanently deleted once an administrator reviews your request.
+                      </p>
                     </div>
                   </div>
 
@@ -660,7 +747,118 @@ const ProfilePage = () => {
             )}
           </CardContent>
         </Card>
+
+        {/* Privacy and Data Rights Section */}
+        <Card className="bg-[#0A0F1C] border-slate-800 text-white">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Lock className="w-5 h-5 text-emerald-400" /> Privacy and Data
+            </CardTitle>
+            <CardDescription className="text-slate-400">
+              Manage your personal data rights, download a complete archive of your platform activity, or permanently delete your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-800 bg-slate-900/40 gap-4">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                  <Download className="w-4 h-4 text-blue-400" /> Download My Data
+                </h4>
+                <p className="text-xs text-slate-400">
+                  Export a full machine-readable JSON copy of your profile, rescue reports, lost &amp; found sightings, and notification history.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleExportData}
+                disabled={isExporting}
+                className="bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200 text-xs shrink-0"
+              >
+                {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Download className="w-3.5 h-3.5 mr-1.5" />}
+                Download JSON
+              </Button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-rose-500/20 bg-rose-500/5 gap-4">
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-rose-300 flex items-center gap-1.5">
+                  <Trash2 className="w-4 h-4 text-rose-400" /> Delete My Account
+                </h4>
+                <p className="text-xs text-slate-400">
+                  Permanently purge your account, authentication credentials, uploaded verification documents, and personal details.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setShowDeleteDialog(true)}
+                className="bg-rose-600 hover:bg-rose-500 text-white text-xs shrink-0"
+              >
+                Delete Account
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent className="max-w-md bg-[#0A0F1C] text-white border-slate-800">
+          <DialogHeader>
+            <DialogTitle className="text-rose-400 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-rose-500" /> Permanent Account Deletion
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2 text-xs text-slate-300 leading-relaxed">
+            <p>
+              This action is <strong className="text-white">permanent and irreversible</strong>. Your account credentials, uploaded verification files, and personal contact details will be completely removed.
+            </p>
+            <p className="text-slate-400">
+              To proceed, please type <strong className="text-rose-400 font-mono">DELETE MY ACCOUNT</strong> in the field below:
+            </p>
+            <input
+              id="confirm-delete-input"
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE MY ACCOUNT"
+              className="w-full bg-[#131B2C] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:border-rose-500 font-mono"
+            />
+          </div>
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setShowDeleteDialog(false);
+                setDeleteConfirmText("");
+              }}
+              disabled={isDeletingAccount}
+              className="border-slate-700 text-slate-300 hover:bg-slate-800"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteAccount}
+              disabled={deleteConfirmText !== "DELETE MY ACCOUNT" || isDeletingAccount}
+              className="bg-rose-600 hover:bg-rose-500 text-white font-bold"
+            >
+              {isDeletingAccount ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> Deleting...
+                </>
+              ) : (
+                "Permanently Delete"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

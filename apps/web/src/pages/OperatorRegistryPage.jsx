@@ -21,8 +21,10 @@ import {
   RefreshCw,
   Edit2,
   CreditCard,
-  ExternalLink
+  ExternalLink,
+  UserX
 } from "lucide-react";
+import api from "@/lib/api";
 
 const ROLES = ["ALL", "VOLUNTEER", "NGO", "SHELTER", "VET", "CITIZEN", "ADMIN"];
 const ASSIGNABLE_ROLES = ["CITIZEN", "VOLUNTEER", "NGO", "SHELTER", "VET", "ADMIN"];
@@ -33,6 +35,8 @@ export default function OperatorRegistryPage() {
 
   const [selectedRole, setSelectedRole] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+  const [targetActionUser, setTargetActionUser] = useState(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [onlyPending, setOnlyPending] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [targetRole, setTargetRole] = useState("");
@@ -88,6 +92,48 @@ export default function OperatorRegistryPage() {
       toast({
         title: "Decline Action Failed",
         description: err.response?.data?.detail || err.message || "Failed to decline clearance request.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: (uid) => api.post(`/users/${uid}/disable`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(["operator-registry-users"]);
+      queryClient.invalidateQueries(["admin-users"]);
+      toast({
+        title: "Account Disabled",
+        description: "The user account has been disabled and session revoked.",
+      });
+      setShowConfirmDialog(false);
+      setTargetActionUser(null);
+    },
+    onError: (err) => {
+      toast({
+        title: "Disable Action Failed",
+        description: err.response?.data?.detail || err.message || "Failed to disable account",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const enableMutation = useMutation({
+    mutationFn: (uid) => api.post(`/users/${uid}/enable`),
+    onSuccess: () => {
+      queryClient.invalidateQueries(["operator-registry-users"]);
+      queryClient.invalidateQueries(["admin-users"]);
+      toast({
+        title: "Account Enabled",
+        description: "The user account has been re-enabled.",
+      });
+      setShowConfirmDialog(false);
+      setTargetActionUser(null);
+    },
+    onError: (err) => {
+      toast({
+        title: "Enable Action Failed",
+        description: err.response?.data?.detail || err.message || "Failed to enable account",
         variant: "destructive",
       });
     },
@@ -356,6 +402,11 @@ export default function OperatorRegistryPage() {
                               <Shield size={12} />
                               {u.role || "CITIZEN"}
                             </span>
+                            {u.isDisabled && (
+                              <span className="ml-1.5 inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                                DISABLED
+                              </span>
+                            )}
                           </td>
 
                           {/* Pending Request */}
@@ -392,7 +443,17 @@ export default function OperatorRegistryPage() {
 
                           {/* ID Verification */}
                           <td className="py-4 px-4 text-xs">
-                            {u.idCardNumber || u.idCardType ? (
+                            {u.idCardLast4 ? (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="inline-flex items-center gap-1 font-bold text-slate-200">
+                                  <CreditCard size={12} className="text-purple-400" />
+                                  {u.idCardType || "Government Photo ID"}
+                                </span>
+                                <span className="text-[11px] font-mono text-purple-300">
+                                  Ending in: {u.idCardLast4}
+                                </span>
+                              </div>
+                            ) : u.idCardNumber || u.idCardType ? (
                               <div className="flex flex-col gap-0.5">
                                 <span className="inline-flex items-center gap-1 font-bold text-slate-200">
                                   <CreditCard size={12} className="text-purple-400" />
@@ -433,18 +494,35 @@ export default function OperatorRegistryPage() {
                           </td>
 
                           {/* Actions */}
-                          <td className="py-4 px-6 text-right">
-                            <button
-                              onClick={() => {
-                                setEditingUser(u);
-                                setTargetRole(u.role || "CITIZEN");
-                                setAdminConfirmText("");
-                              }}
-                              className="px-3 py-1.5 rounded-lg bg-[#131B2C] hover:bg-purple-600/20 text-slate-300 hover:text-purple-300 border border-slate-700 hover:border-purple-500/30 text-xs font-bold transition-all inline-flex items-center gap-1.5"
-                            >
-                              <Edit2 size={12} />
-                              Manage
-                            </button>
+                          <td className="py-4 px-6 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setTargetActionUser(u);
+                                  setShowConfirmDialog(true);
+                                }}
+                                className={`px-2.5 py-1.5 rounded-lg border text-xs font-bold transition-all inline-flex items-center gap-1 ${
+                                  u.isDisabled
+                                    ? "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                                    : "bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border-rose-500/30"
+                                }`}
+                                title={u.isDisabled ? "Enable User Account" : "Disable User Account"}
+                              >
+                                {u.isDisabled ? <UserCheck size={12} /> : <UserX size={12} />}
+                                {u.isDisabled ? "Enable" : "Disable"}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingUser(u);
+                                  setTargetRole(u.role || "CITIZEN");
+                                  setAdminConfirmText("");
+                                }}
+                                className="px-3 py-1.5 rounded-lg bg-[#131B2C] hover:bg-purple-600/20 text-slate-300 hover:text-purple-300 border border-slate-700 hover:border-purple-500/30 text-xs font-bold transition-all inline-flex items-center gap-1.5"
+                              >
+                                <Edit2 size={12} />
+                                Manage
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -480,6 +558,64 @@ export default function OperatorRegistryPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Disable / Enable Confirm Modal */}
+        {showConfirmDialog && targetActionUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-[#0A0F1C] border border-slate-800 rounded-3xl p-6 max-w-sm w-full shadow-2xl relative space-y-4">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center ${targetActionUser.isDisabled ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-rose-500/10 text-rose-400 border border-rose-500/20"}`}>
+                  {targetActionUser.isDisabled ? <UserCheck size={20} /> : <UserX size={20} />}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    {targetActionUser.isDisabled ? "Enable Account?" : "Disable Account?"}
+                  </h3>
+                  <p className="text-xs text-slate-400 truncate max-w-[200px]">
+                    {targetActionUser.displayName || targetActionUser.email}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-300 leading-relaxed">
+                {targetActionUser.isDisabled
+                  ? "Re-enabling this account will restore platform access and allow the operator to authenticate."
+                  : "Disabling this account will immediately revoke all authentication sessions and block API access for this operator."}
+              </p>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowConfirmDialog(false);
+                    setTargetActionUser(null);
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (targetActionUser.isDisabled) {
+                      enableMutation.mutate(targetActionUser.id);
+                    } else {
+                      disableMutation.mutate(targetActionUser.id);
+                    }
+                  }}
+                  disabled={disableMutation.isPending || enableMutation.isPending}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition ${
+                    targetActionUser.isDisabled
+                      ? "bg-emerald-600 hover:bg-emerald-500"
+                      : "bg-rose-600 hover:bg-rose-500"
+                  }`}
+                >
+                  {disableMutation.isPending || enableMutation.isPending ? "Processing..." : targetActionUser.isDisabled ? "Confirm Enable" : "Confirm Disable"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Manage Role Modal Dialog */}
         {editingUser && (

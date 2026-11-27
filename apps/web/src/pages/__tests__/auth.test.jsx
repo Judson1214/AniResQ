@@ -73,6 +73,8 @@ describe('Auth workflows: Login, Register, Logout & Cache Clearing', () => {
     await user.type(nameInput, 'New Operator');
     await user.type(emailInput, 'newoperator@aniresq.org');
     await user.type(passwordInput, 'SecurePass123!');
+    const checkbox = screen.getByLabelText(/I agree to the/i);
+    await user.click(checkbox);
     await user.click(submitBtn);
 
     await waitFor(() => {

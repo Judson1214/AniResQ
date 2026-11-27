@@ -9,11 +9,13 @@ import { LostFoundStatus, LostFoundType } from "@aniresq/shared-types";
 import { formatRelativeTime } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { updatePostStatus, getReplies, addReply } from "@/services/lostfound.service";
-import { MapPin, Phone, MessageCircle, Send } from "lucide-react";
+import { MapPin, Phone, MessageCircle, Send, Flag } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { ReportContentModal } from "@/components/common/ReportContentModal";
 
 const CommentsDialog = ({ post }) => {
   const [text, setText] = useState("");
+  const [reportingReply, setReportingReply] = useState(null);
   const queryClient = useQueryClient();
   const { user } = useAuth();
   
@@ -45,7 +47,20 @@ const CommentsDialog = ({ post }) => {
             <div key={reply.id} className="bg-[#131B2C] border border-slate-800 p-3 rounded-lg">
               <div className="flex justify-between items-start mb-1">
                 <span className="font-bold text-sm text-blue-400">{reply.userName || "Deleted User"}</span>
-                <span className="text-xs text-slate-500">{formatRelativeTime(reply.createdAt)}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500">{formatRelativeTime(reply.createdAt)}</span>
+                  {user && (
+                    <button
+                      type="button"
+                      onClick={() => setReportingReply(reply)}
+                      className="text-slate-500 hover:text-rose-400 transition-colors p-0.5"
+                      title="Report reply"
+                      aria-label="Report reply"
+                    >
+                      <Flag size={12} />
+                    </button>
+                  )}
+                </div>
               </div>
               <p className="text-sm text-slate-300">{reply.text}</p>
             </div>
@@ -71,12 +86,23 @@ const CommentsDialog = ({ post }) => {
           Please login to reply.
         </div>
       )}
+
+      {reportingReply && (
+        <ReportContentModal
+          isOpen={!!reportingReply}
+          onClose={() => setReportingReply(null)}
+          targetType="LOST_FOUND_REPLY"
+          targetId={reportingReply.id}
+          targetTitle="Reply"
+        />
+      )}
     </DialogContent>
   );
 };
 
 const LostFoundCard = ({ post, onUpdate }) => {
   const { user } = useAuth();
+  const [showReportModal, setShowReportModal] = useState(false);
   const isOwner = user?.uid === post.reporterId;
   
   const handleResolve = async () => {
@@ -155,8 +181,32 @@ const LostFoundCard = ({ post, onUpdate }) => {
               {post.type === LostFoundType.LOST ? "Mark as Found" : "Mark as Returned"}
             </Button>
           )}
+
+          {user && (
+            <Button
+              variant="outline"
+              size="icon"
+              type="button"
+              onClick={() => setShowReportModal(true)}
+              className="bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-400 hover:text-rose-400 shrink-0"
+              title="Report post"
+              aria-label="Report post"
+            >
+              <Flag size={15} />
+            </Button>
+          )}
         </div>
       </CardContent>
+
+      {showReportModal && (
+        <ReportContentModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          targetType="LOST_FOUND"
+          targetId={post.id}
+          targetTitle={post.title || "Post"}
+        />
+      )}
     </Card>
   );
 };

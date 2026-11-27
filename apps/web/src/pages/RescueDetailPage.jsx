@@ -12,14 +12,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { formatRelativeTime } from "@/lib/utils";
 import { RescueStatus, UserRole } from "@aniresq/shared-types";
-import { PawPrint, MapPin, FileText, CheckCircle2, ShieldCheck } from "lucide-react";
+import { PawPrint, MapPin, FileText, CheckCircle2, ShieldCheck, Flag } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { ReportContentModal } from "@/components/common/ReportContentModal";
 
 function RescueDetailPage() {
   const { id } = useParams();
   const { user } = useAuth();
   const { toast } = useToast();
   const [showReport, setShowReport] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [showResolveModal, setShowResolveModal] = useState(false);
   const [isResolving, setIsResolving] = useState(false);
 
@@ -107,14 +109,26 @@ function RescueDetailPage() {
             <RescueStatusBadge status={rescue.status} />
           </div>
 
-          {canViewReport && (
-            <Button
-              onClick={() => setShowReport(true)}
-              className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl flex items-center gap-2 self-start sm:self-auto text-sm font-semibold h-10 px-4"
-            >
-              <FileText size={16} /> Generate SOS Incident Report
-            </Button>
-          )}
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {user && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowReportModal(true)}
+                className="bg-slate-900 border-slate-700 text-slate-300 hover:text-rose-400 hover:border-rose-500/50 rounded-xl flex items-center gap-1.5 text-xs font-semibold h-10 px-3"
+              >
+                <Flag size={14} className="text-rose-400" /> Report Incident
+              </Button>
+            )}
+            {canViewReport && (
+              <Button
+                onClick={() => setShowReport(true)}
+                className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 rounded-xl flex items-center gap-2 text-sm font-semibold h-10 px-4"
+              >
+                <FileText size={16} /> Generate SOS Incident Report
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -266,6 +280,17 @@ function RescueDetailPage() {
           onClose={() => setShowResolveModal(false)}
           onConfirm={handleConfirmResolve}
           isSubmitting={isResolving}
+        />
+      )}
+
+      {/* Incident Content Report Modal */}
+      {showReportModal && (
+        <ReportContentModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          targetType="RESCUE"
+          targetId={rescue.id}
+          targetTitle={rescue.title || "Rescue Incident"}
         />
       )}
     </MainLayout>

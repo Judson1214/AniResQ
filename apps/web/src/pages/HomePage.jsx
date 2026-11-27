@@ -5,6 +5,7 @@ import { Heart, Home, Radio, ArrowRight, ShieldCheck, MapPin, Search } from "luc
 import { useQuery } from "@tanstack/react-query";
 import { getFeaturedAnimals } from "@/services/animal.service";
 import { AnimalCard } from "@/components/animals/AnimalCard";
+import { EmergencyNoticeBanner } from "@/components/common/EmergencyNoticeBanner";
 import { motion } from "framer-motion";
 
 const fadeInUp = {
@@ -29,6 +30,7 @@ function HomePage() {
 
   return (
     <MainLayout>
+      <EmergencyNoticeBanner />
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-emerald-50 via-teal-50 to-white overflow-hidden py-24 lg:py-40">
         <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: "radial-gradient(#14b8a6 2px, transparent 2px)", backgroundSize: "40px 40px" }} />
