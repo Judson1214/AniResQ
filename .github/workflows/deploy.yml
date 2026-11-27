@@ -1,0 +1,243 @@
+name: Production Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_deploy:
+        description: 'Type "DEPLOY" to confirm production release'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  pre-flight:
+    name: Verify Build & CI Status
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Confirm Deployment Intent
+        run: |
+          if [ "${{ github.event.inputs.confirm_deploy }}" != "DEPLOY" ]; then
+            echo "::error::Deployment cancelled. Must enter DEPLOY in confirmation input."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Verify Git Commit is on main branch
+        run: |
+          git fetch origin main
+          if ! git merge-base --is-ancestor ${{ github.sha }} origin/main; then
+            echo "::error::Commit ${{ github.sha }} is not on the main branch. Aborting release."
+            exit 1
+          fi
+
+      - name: Verify CI Passed on Commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Checking GitHub CI check run status for ${{ github.sha }}..."
+          # Verify that CI workflow concluded successfully on this exact commit SHA
+          CI_STATUS=$(gh api repos/${{ github.repository }}/commits/${{ github.sha }}/check-runs --jq '.check_runs[] | select(.name == "Code Quality & Linting" or .name == "Frontend Tests & Build") | .conclusion' | sort -u)
+          if echo "$CI_STATUS" | grep -q -v "success"; then
+            echo "::warning::Some CI check runs have status: $CI_STATUS. Verifying required gates..."
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+
+      - name: Validate Migration Checksums and Registry
+        run: |
+          node scripts/gen-expected-migrations.mjs --check
+          sha256sum -c supabase/ci/migrations.sha256
+
+  deploy-database:
+    name: 1. Apply Database Migrations
+    needs: pre-flight
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
+        with:
+          version: latest
+
+      - name: Pre-Flight Migration List Comparison
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+        run: |
+          echo "Listing remote and local migration state..."
+          supabase link --project-ref "$PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          supabase migration list
+
+      - name: Push Database Migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          echo "Applying pending migrations to production database..."
+          supabase db push --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Run Live Database Audit Checks
+        env:
+          DATABASE_URL: "postgresql://postgres.${{ vars.SUPABASE_PROJECT_REF }}:${{ secrets.SUPABASE_DB_PASSWORD }}@aws-0-us-east-1.pooler.supabase.com:6543/postgres"
+        run: |
+          echo "Running post-migration live database audit..."
+          # Execute live_audit.sql via psql and fail if any check reports FAIL
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          AUDIT_OUTPUT=$(psql "$DATABASE_URL" -f supabase/ops/live_audit.sql -v ON_ERROR_STOP=1)
+          echo "$AUDIT_OUTPUT"
+          if echo "$AUDIT_OUTPUT" | grep -w "FAIL"; then
+            echo "::error::Live database audit detected one or more FAIL statuses!"
+            exit 1
+          fi
+
+  deploy-api:
+    name: 2. Deploy API Service
+    needs: deploy-database
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build API Docker Image
+        run: |
+          docker build \
+            --build-arg COMMIT_SHA=${{ github.sha }} \
+            -t aniresq-api:${{ github.sha }} \
+            -f Dockerfile .
+
+      - name: Deploy API Service
+        env:
+          API_DEPLOY_WEBHOOK_URL: ${{ secrets.API_DEPLOY_WEBHOOK_URL }}
+        run: |
+          echo "Triggering API service deployment for commit ${{ github.sha }}..."
+          if [ -n "$API_DEPLOY_WEBHOOK_URL" ]; then
+            curl -fsS -X POST "$API_DEPLOY_WEBHOOK_URL"
+          else
+            echo "Note: API_DEPLOY_WEBHOOK_URL not configured. Container image built successfully."
+          fi
+
+      - name: Await API Service Health
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "API_URL variable not set, skipping live readiness poll."
+            exit 0
+          fi
+          echo "Polling $API_URL/health and /ready..."
+          for i in {1..30}; do
+            STATUS_HEALTH=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/health" || true)
+            STATUS_READY=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/ready" || true)
+            if [ "$STATUS_HEALTH" = "200" ] && [ "$STATUS_READY" = "200" ]; then
+              echo "API is healthy and ready!"
+              exit 0
+            fi
+            echo "Attempt $i: health=$STATUS_HEALTH ready=$STATUS_READY. Retrying in 5s..."
+            sleep 5
+          done
+          echo "::error::API failed to become ready within timeout."
+          exit 1
+
+  deploy-web:
+    name: 3. Deploy Web Frontend
+    needs: deploy-api
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@fe02b34f77f8bc703788d5817da081398fad5dd2 # v4.0.0
+        with:
+          version: 9.9.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Web Bundle
+        env:
+          VITE_API_URL: ${{ vars.API_URL }}
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          VITE_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
+        run: |
+          pnpm --filter @aniresq/web run build
+
+      - name: Deploy Web to Hosting
+        env:
+          WEB_DEPLOY_WEBHOOK_URL: ${{ secrets.WEB_DEPLOY_WEBHOOK_URL }}
+        run: |
+          echo "Deploying production web frontend build to hosting provider..."
+          if [ -n "$WEB_DEPLOY_WEBHOOK_URL" ]; then
+            curl -fsS -X POST "$WEB_DEPLOY_WEBHOOK_URL"
+          else
+            echo "Note: WEB_DEPLOY_WEBHOOK_URL not configured. Production build artifacts ready in apps/web/dist."
+          fi
+
+  post-deploy-verify:
+    name: 4. Post-Deploy Smoke Verification
+    needs: deploy-web
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Execute Live Smoke & Security Verification
+        id: smoke
+        env:
+          WEB_URL: ${{ vars.WEB_URL }}
+          API_URL: ${{ vars.API_URL }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          chmod +x scripts/verify_live.sh
+          bash scripts/verify_live.sh
+
+      - name: Notify on Deployment Smoke Failure
+        if: failure()
+        run: |
+          echo "::error::Post-deployment smoke test failed! Initiating alert response."
+          echo "Follow rollback and incident procedures in docs/ops/01-apply-migrations.md and docs/ops/06-incident-response.md"

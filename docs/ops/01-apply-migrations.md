@@ -78,16 +78,34 @@ Immediately following migration application:
 
 ---
 
-## 5. Rollback and Recovery Strategy
+## 5. Backward-Compatible Migration Design & Rollback Strategy
 
-If a migration fails or [`supabase/ops/live_audit.sql`](file:///d:/AniResQ/supabase/ops/live_audit.sql) reports any `FAIL` items:
+### A. Backward-Compatible Migration Principles (Expand and Contract)
 
-1. **STOP IMMEDIATELY**: Do not proceed with subsequent migrations or application code deployments.
-2. **Review Error**: Note the exact SQL statement and error code from the execution output.
-3. **Point-In-Time Restore (PITR)**:
-   - For Supabase Pro/Team plans: Navigate to **Database > Backups > Point in Time** and initiate restore to the timestamp immediately preceding the migration start.
-   - For custom backups: Restore the pre-migration snapshot:
-     ```bash
-     pg_restore --clean --if-exists --dbname="$DATABASE_URL" backup_pre_migration_<TIMESTAMP>.dump
-     ```
-4. **Notify Team**: Post an incident update following [`docs/ops/06-incident-response.md`](file:///d:/AniResQ/docs/ops/06-incident-response.md).
+All schema changes in AniResQ must follow the **Expand and Contract** pattern so that migrations are strictly non-breaking for running services:
+1. **Adding Columns**: Always add new columns as `NULL` or with a safe `DEFAULT`. Never add a `NOT NULL` column without a default in a single release.
+2. **Dropping/Renaming Columns**: Never drop or rename columns in the same release as code changes.
+   - *Phase 1 (Expand)*: Stop reading/writing the old column in application code; deploy API.
+   - *Phase 2 (Contract)*: In a subsequent release migration, drop the deprecated column.
+3. **Enum Modifications**: Use `ALTER TYPE ... ADD VALUE IF NOT EXISTS` so older code can safely coexist.
+4. **Security & Policies**: Add policies that permit required operations without invalidating current API role assumptions.
+
+### B. Scenario: API Deploy Fails After Database Migrations Succeeded
+
+If the database migration step succeeds in `.github/workflows/deploy.yml` but the subsequent API deployment step fails:
+1. **No Panic — Previous API Remains Operational**: Because all migrations are backward-compatible, the currently active API container will continue serving traffic without schema incompatibility errors.
+2. **Do Not Revert Database Migration Hastily**: Rolling back the database schema can cause downtime or data loss if new traffic arrived in the interim.
+3. **Diagnose API Failure**:
+   - Inspect the GitHub Actions `2. Deploy API Service` log for container build errors, missing environment variables (e.g., `SUPABASE_JWT_SECRET`), or healthcheck timeouts.
+   - Verify container runtime logs on your hosting provider (e.g., Cloud Run, ECS, Fly.io).
+4. **Fix Forward vs Rollback**:
+   - **Fix Forward (Preferred)**: Push a corrective API commit or update the missing secret/config in GitHub Repository Secrets. Re-run `deploy.yml`.
+   - **Database Rollback (If Schema Itself Caused Broken Functionality)**:
+     - Check [`supabase/ops/live_audit.sql`](file:///d:/AniResQ/supabase/ops/live_audit.sql).
+     - If the schema change itself introduced bugs for the existing API, restore from the pre-migration Point-In-Time Restore (PITR) snapshot:
+       Navigate to Supabase Dashboard > **Database** > **Backups** > **Point in Time** and select the timestamp captured before deployment began.
+     - Alternatively, run `pg_restore`:
+       ```bash
+       pg_restore --clean --if-exists --dbname="$DATABASE_URL" backup_pre_migration_<TIMESTAMP>.dump
+       ```
+5. **Incident Communication**: Follow [`docs/ops/06-incident-response.md`](file:///d:/AniResQ/docs/ops/06-incident-response.md) to log and track the incident.
