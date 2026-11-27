@@ -42,7 +42,7 @@ def verify_token_locally(token: str) -> dict:
     except Exception:
         raise HTTPException(
             status_code=401,
-            detail="Invalid authentication token format",
+            detail="Invalid authentication token",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -76,10 +76,10 @@ def verify_token_locally(token: str) -> dict:
                     detail="Authentication token has expired",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
-            except InvalidTokenError as ite:
+            except InvalidTokenError:
                 raise HTTPException(
                     status_code=401,
-                    detail=f"Invalid authentication token: {ite}",
+                    detail="Invalid authentication token",
                     headers={"WWW-Authenticate": "Bearer"},
                 )
 
@@ -102,10 +102,10 @@ def verify_token_locally(token: str) -> dict:
                 detail="Authentication token has expired",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        except InvalidTokenError as ite:
+        except InvalidTokenError:
             raise HTTPException(
                 status_code=401,
-                detail=f"Invalid authentication token: {ite}",
+                detail="Invalid authentication token",
                 headers={"WWW-Authenticate": "Bearer"},
             )
         except Exception as jwks_err:

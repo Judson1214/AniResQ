@@ -23,9 +23,12 @@ from auth import (
 from rate_limiter import (
     BaseRateLimitStore,
     MemoryRateLimitStore,
+    RedisRateLimitStore,
     SharedSlidingWindowRateLimiter,
     limiter,
-    get_client_ip
+    get_client_ip,
+    mask_redis_url,
+    LUA_SLIDING_WINDOW
 )
 from validators import (
     validate_photo_url,
@@ -370,3 +373,103 @@ def test_payload_too_large_rejected_with_413():
     res = client.post("/api/rescues/", headers=huge_payload_headers, content=b"{}")
     assert res.status_code == 413
     assert res.json()["code"] == "PAYLOAD_TOO_LARGE"
+
+
+# =============================================================================
+# 6. Task 5 Review Hardening Tests
+# =============================================================================
+
+def test_mask_redis_url_masks_passwords():
+    """Verify that Redis URLs with passwords have the password masked in logs."""
+    assert mask_redis_url("redis://:secretpassword@redis.internal:6379/0") == "redis://:***@redis.internal:6379/0"
+    assert mask_redis_url("redis://appuser:supersecret@10.0.0.5:6379/2") == "redis://appuser:***@10.0.0.5:6379/2"
+    assert mask_redis_url("redis://localhost:6379/0") == "redis://localhost:6379/0"
+    assert mask_redis_url("") == ""
+    assert mask_redis_url(None) == ""
+
+
+def test_rate_limiter_startup_masks_redis_password_in_logs(caplog, monkeypatch):
+    """Verify that initializing SharedSlidingWindowRateLimiter does not leak Redis password in logs."""
+    secret_url = "redis://admin:super_secret_cleartext_password@10.0.0.1:6379/0"
+    monkeypatch.setenv("REDIS_URL", secret_url)
+
+    import logging
+    with caplog.at_level(logging.INFO):
+        # We expect connection failure since 10.0.0.1 is unreachable
+        lim = SharedSlidingWindowRateLimiter()
+        # Verify cleartext password is NOT in any log record
+        for record in caplog.records:
+            assert "super_secret_cleartext_password" not in record.message
+            if "10.0.0.1" in record.message:
+                assert "***" in record.message
+
+
+def test_generic_invalid_authentication_token():
+    """Verify that token validation errors return generic 'Invalid authentication token' message."""
+    # 1. Tampered signature
+    valid_token = generate_test_jwt()
+    tampered_token = valid_token[:-4] + "abcd"
+    res_tampered = client.get("/api/users/profile", headers={"Authorization": f"Bearer {tampered_token}"})
+    assert res_tampered.status_code == 401
+    assert res_tampered.json()["detail"] == "Invalid authentication token"
+
+    # 2. Malformed token format
+    res_malformed = client.get("/api/users/profile", headers={"Authorization": "Bearer not-a-valid-jwt"})
+    assert res_malformed.status_code == 401
+    assert res_malformed.json()["detail"] == "Invalid authentication token"
+
+    # 3. Wrong secret
+    wrong_token = generate_test_jwt(secret="wrong-secret-key-32-chars-length!")
+    res_wrong = client.get("/api/users/profile", headers={"Authorization": f"Bearer {wrong_token}"})
+    assert res_wrong.status_code == 401
+    assert res_wrong.json()["detail"] == "Invalid authentication token"
+
+
+def test_readiness_probe_rate_limit_30_per_min():
+    """Verify that /ready probe is rate limited to 30 requests per minute per IP."""
+    limiter.reset()
+
+    # 30 requests succeed (or return 503 if dummy db offline, but not 429)
+    for _ in range(30):
+        res = client.get("/ready")
+        assert res.status_code in [200, 503]
+
+    # 31st request should be rate limited with 429
+    res_exceeded = client.get("/ready")
+    assert res_exceeded.status_code == 429
+    assert res_exceeded.json()["code"] == "RATE_LIMIT_EXCEEDED"
+    assert "Retry-After" in res_exceeded.headers
+
+
+def test_redis_rate_limit_unique_member_and_lua_script():
+    """Verify RedisRateLimitStore passes a unique member ID to prevent member collision in sorted set."""
+    mock_redis = MagicMock()
+    recorded_calls = []
+
+    def mock_script_runner(keys, args):
+        recorded_calls.append({"keys": keys, "args": args})
+        return [1, 0]
+
+    mock_script = MagicMock(side_effect=mock_script_runner)
+    mock_redis.register_script.return_value = mock_script
+
+    store = RedisRateLimitStore(mock_redis)
+
+    # Invoke multiple times at the same timestamp
+    allowed1, _ = store.is_allowed("user-test-key", limit=10, window_seconds=60)
+    allowed2, _ = store.is_allowed("user-test-key", limit=10, window_seconds=60)
+
+    assert allowed1 is True
+    assert allowed2 is True
+    assert len(recorded_calls) == 2
+
+    # Check that ARGV has 4 arguments and ARGV[4] (random_id) is unique between calls
+    args1 = recorded_calls[0]["args"]
+    args2 = recorded_calls[1]["args"]
+    assert len(args1) == 4
+    assert len(args2) == 4
+    assert args1[3] != args2[3]  # random_id differs between distinct calls
+
+    # Verify Lua script string constructs member as now:random_id
+    assert "local member = tostring(now) .. ':' .. tostring(random_id)" in LUA_SLIDING_WINDOW
+    assert "redis.call('ZADD', key, now, member)" in LUA_SLIDING_WINDOW

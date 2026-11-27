@@ -10,7 +10,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from errors import AppError
 from logging_config import setup_logging, request_id_ctx_var
-from rate_limiter import RateLimitMiddleware
+from rate_limiter import RateLimitMiddleware, limiter, get_client_ip
 from supabase_config import supabase
 from routers import rescues, users, animals, adoptions, lostfound, notifications, audit, settings
 
@@ -145,8 +145,25 @@ async def health_check():
     return {"status": "ok", "service": "aniresq-api"}
 
 @app.get("/ready", tags=["system"])
-async def readiness_check():
-    """Readiness probe: verifies operational connectivity to database."""
+async def readiness_check(request: Request):
+    """Readiness probe: verifies operational connectivity to database with rate limit (30/min per IP)."""
+    client_ip = get_client_ip(request)
+    try:
+        allowed, retry_after = limiter.store.is_allowed(f"ready:{client_ip}", 30, 60)
+    except Exception:
+        allowed, retry_after = limiter.local_fallback.is_allowed(f"ready:{client_ip}", 30, 60)
+    if not allowed:
+        req_id = request_id_ctx_var.get() or getattr(request.state, "request_id", "")
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": "Too many requests to readiness probe. Please slow down and try again later.",
+                "code": "RATE_LIMIT_EXCEEDED",
+                "requestId": req_id
+            },
+            headers={"Retry-After": str(retry_after)}
+        )
+
     try:
         res = supabase.table("users").select("id").limit(1).execute()
         return {"status": "ready", "database": "connected"}

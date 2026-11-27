@@ -16,13 +16,15 @@ local key = KEYS[1]
 local now = tonumber(ARGV[1])
 local window = tonumber(ARGV[2])
 local limit = tonumber(ARGV[3])
+local random_id = ARGV[4] or tostring(math.random(100000, 999999))
+local member = tostring(now) .. ':' .. tostring(random_id)
 local clear_before = now - window
 
 redis.call('ZREMRANGEBYSCORE', key, 0, clear_before)
 local current_requests = redis.call('ZCARD', key)
 
 if current_requests < limit then
-    redis.call('ZADD', key, now, now)
+    redis.call('ZADD', key, now, member)
     redis.call('EXPIRE', key, math.ceil(window) + 1)
     return {1, 0}
 else
@@ -32,6 +34,20 @@ else
     return {0, retry_after}
 end
 """
+
+def mask_redis_url(url: str) -> str:
+    """Mask password in Redis connection URL to prevent leaking credentials in logs."""
+    if not url:
+        return ""
+    try:
+        from urllib.parse import urlsplit, urlunsplit
+        parsed = urlsplit(url)
+        if parsed.password:
+            netloc = parsed.netloc.replace(f":{parsed.password}@", ":***@")
+            return urlunsplit(parsed._replace(netloc=netloc))
+        return url
+    except Exception:
+        return "redis://***"
 
 class BaseRateLimitStore:
     def is_allowed(self, key: str, limit: int, window_seconds: int) -> Tuple[bool, int]:
@@ -91,8 +107,10 @@ class RedisRateLimitStore(BaseRateLimitStore):
 
     def is_allowed(self, key: str, limit: int, window_seconds: int) -> Tuple[bool, int]:
         now = time.time()
+        import uuid
+        random_id = uuid.uuid4().hex[:12]
         # Redis returns [allowed (1/0), retry_after]
-        res = self._script(keys=[f"ratelimit:{key}"], args=[now, window_seconds, limit])
+        res = self._script(keys=[f"ratelimit:{key}"], args=[now, window_seconds, limit, random_id])
         allowed = bool(res[0])
         retry_after = int(res[1])
         return allowed, retry_after
@@ -121,15 +139,16 @@ class SharedSlidingWindowRateLimiter:
         if store is not None:
             self.store = store
         elif redis_url:
+            masked_url = mask_redis_url(redis_url)
             try:
                 import redis
                 redis_client = redis.Redis.from_url(redis_url, decode_responses=True, socket_timeout=1.5)
                 # Test connectivity
                 redis_client.ping()
                 self.store = RedisRateLimitStore(redis_client)
-                logger.info(f"Connected shared rate limiter to Redis at {redis_url}")
+                logger.info(f"Connected shared rate limiter to Redis at {masked_url}")
             except Exception as e:
-                logger.error(f"Failed to connect to Redis at {redis_url}: {e}. Falling back to in-memory store.")
+                logger.error(f"Failed to connect to Redis at {masked_url}: {e}. Falling back to in-memory store.")
                 self.store = self.local_fallback
         else:
             if env_mode == "production":
