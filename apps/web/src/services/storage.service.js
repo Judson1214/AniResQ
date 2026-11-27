@@ -10,12 +10,29 @@ const MIME_EXTENSION_MAP = {
   "application/pdf": ["pdf"],
 };
 
+const DANGEROUS_EXTENSIONS = new Set([
+  "php", "phtml", "php3", "php4", "php5", "phar",
+  "js", "mjs", "html", "htm", "svg",
+  "exe", "dll", "sh", "bat", "cmd", "com", "jar",
+  "py", "pl", "cgi", "asp", "aspx", "jsp"
+]);
+
 export const validateFile = async (file, options = {}) => {
   const maxSize = options.maxSize || MAX_FILE_SIZE;
   const allowedTypes = options.allowedTypes || DEFAULT_ALLOWED_TYPES;
 
   if (!file) {
     throw new Error("No file provided for upload");
+  }
+
+  // Reject file names longer than 120 characters
+  if (file.name.length > 120) {
+    throw new Error(`File name "${file.name}" exceeds maximum allowed length of 120 characters`);
+  }
+
+  // Reject names with path separators, null bytes, or control characters
+  if (/[/\\\x00-\x1F\x7F]/.test(file.name)) {
+    throw new Error(`File name "${file.name}" contains invalid characters (path separators, null bytes, or control characters)`);
   }
 
   // Reject zero-byte files
@@ -28,13 +45,17 @@ export const validateFile = async (file, options = {}) => {
     throw new Error(`File "${file.name}" exceeds maximum allowed size of ${sizeInMb}MB`);
   }
 
-  // Reject double extensions like photo.php.jpg
   const nameParts = file.name.split(".");
-  if (nameParts.length > 2) {
-    throw new Error(`File "${file.name}" contains multiple extensions, which is not permitted`);
-  }
-  if (nameParts.length < 2) {
+  if (nameParts.length < 2 || !nameParts[nameParts.length - 1].trim()) {
     throw new Error(`File "${file.name}" is missing a file extension`);
+  }
+
+  // Reject names where an earlier dot-separated segment is a dangerous executable extension
+  for (let i = 1; i < nameParts.length - 1; i++) {
+    const segment = nameParts[i].toLowerCase();
+    if (DANGEROUS_EXTENSIONS.has(segment)) {
+      throw new Error(`File "${file.name}" contains dangerous executable extension segment ".${nameParts[i]}"`);
+    }
   }
 
   const ext = nameParts[nameParts.length - 1].toLowerCase();

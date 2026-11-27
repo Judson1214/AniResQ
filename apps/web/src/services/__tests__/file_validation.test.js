@@ -50,12 +50,51 @@ describe('Client-Side Storage File Validation', () => {
     await expect(validateFile(svgFile)).rejects.toThrow(/invalid format/);
   });
 
-  it('rejects double extensions like photo.php.jpg', async () => {
-    const doubleExtFile = createJpegFile('photo.php.jpg');
-    await expect(validateFile(doubleExtFile)).rejects.toThrow(/multiple extensions/);
+  it('accepts files with dots in the base name and uppercase extensions', async () => {
+    const multiDotJpeg = createJpegFile('IMG.2024.jpg');
+    const multiDotPng = createPngFile('my.cat.photo.png');
+    const uppercaseExtFile = createJpegFile('CAMERA_001.JPG');
 
-    const evilPng = createPngFile('trojan.exe.png');
-    await expect(validateFile(evilPng)).rejects.toThrow(/multiple extensions/);
+    await expect(validateFile(multiDotJpeg)).resolves.toBe(true);
+    await expect(validateFile(multiDotPng)).resolves.toBe(true);
+    await expect(validateFile(uppercaseExtFile)).resolves.toBe(true);
+  });
+
+  it('rejects dangerous executable segments in multi-dot file names like photo.php.jpg', async () => {
+    const phpInName = createJpegFile('photo.php.jpg');
+    await expect(validateFile(phpInName)).rejects.toThrow(/dangerous executable extension segment/);
+
+    const exeInName = createPngFile('trojan.exe.png');
+    await expect(validateFile(exeInName)).rejects.toThrow(/dangerous executable extension segment/);
+
+    const jsInName = createJpegFile('script.js.jpeg');
+    await expect(validateFile(jsInName)).rejects.toThrow(/dangerous executable extension segment/);
+  });
+
+  it('rejects file names with path separators, null bytes, or control characters', async () => {
+    const slashFile = createJpegFile('a/b.jpg');
+    await expect(validateFile(slashFile)).rejects.toThrow(/invalid characters/);
+
+    const backslashFile = createJpegFile('a\\b.jpg');
+    await expect(validateFile(backslashFile)).rejects.toThrow(/invalid characters/);
+
+    const nullByteFile = createJpegFile('..\x00.jpg');
+    await expect(validateFile(nullByteFile)).rejects.toThrow(/invalid characters/);
+  });
+
+  it('rejects file names longer than 120 characters', async () => {
+    // 121 characters total: 117 chars + '.jpg'
+    const longName = 'a'.repeat(117) + '.jpg';
+    expect(longName.length).toBe(121);
+    const longNamedFile = createJpegFile(longName);
+
+    await expect(validateFile(longNamedFile)).rejects.toThrow(/exceeds maximum allowed length of 120 characters/);
+
+    // 120 characters total: 116 chars + '.jpg'
+    const validMaxName = 'a'.repeat(116) + '.jpg';
+    expect(validMaxName.length).toBe(120);
+    const validMaxFile = createJpegFile(validMaxName);
+    await expect(validateFile(validMaxFile)).resolves.toBe(true);
   });
 
   it('rejects files without an extension', async () => {
